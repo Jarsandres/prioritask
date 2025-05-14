@@ -1,0 +1,18 @@
+[project]
+name = 'prioritask'
+version = '0.1.0'
+requires-python = '>=3.12'
+dependencies = [
+  'fastapi~=0.115',
+  'uvicorn[standard]',
+  'sqlmodel~=0.0.24',
+  'pydantic-settings',
+  'python-jose[cryptography]',
+  'passlib[bcrypt]',
+  'sentence-transformers>=2.7.0',
+  'celery[redis]',
+  'python-dotenv'
+]
+
+[tool.pytest.ini_options]
+addopts = '-q'
