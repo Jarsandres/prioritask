@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.status import HTTP_401_UNAUTHORIZED
+from sqlalchemy import select
 
 from app.schemas.user import UsuarioCreate, UsuarioRead, UsuarioLogin
 from app.services import auth as auth_srv
