@@ -4,16 +4,12 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from alembic import context
+from app.core.config import settings     # tu DATABASE_URL
+from sqlmodel import SQLModel
 
 #Configuración de logging
 config = context.config
 fileConfig(config.config_file_name)
-
-#Importa SETTINGS y MODELOS
-from app.core.config import settings     # tu DATABASE_URL
-from sqlmodel import SQLModel
-# luego, cuando añadas más modelos:
-# from app.models import room, task, asignacion
 
 # Metadata para autogenerate
 target_metadata = SQLModel.metadata
