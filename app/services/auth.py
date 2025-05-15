@@ -4,7 +4,7 @@ from jose import jwt
 from passlib.context import CryptContext
 
 from app.models.user import Usuario
-from app.db.session import get_session
+from app.db.session import get_session, async_session
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = "HS256"
@@ -20,8 +20,7 @@ def create_access_token(sub: str, secret: str, expires_minutes: int = 60) -> str
     return jwt.encode({"sub": sub, "exp": exp}, secret, algorithm=ALGORITHM)
 
 async def create_user(data, secret_key: str):
-
-    async with get_session() as session:
+    async with async_session() as session:
         user = Usuario(
             email=data.email,
             nombre=data.nombre,
