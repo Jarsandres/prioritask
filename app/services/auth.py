@@ -4,7 +4,7 @@ from jose import jwt
 from passlib.context import CryptContext
 
 from app.models.user import Usuario
-from app.db.session import get_session, async_session
+from app.db.session import async_session
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = "HS256"
