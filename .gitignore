@@ -1,0 +1,62 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cython debug symbols
+cython_debug/
+
+# Pytest
+.cache/
+.pytest_cache/
+.coverage
+
+# VSCode
+.vscode/
+
+# SQLite database files
+*.db
+*.sqlite3
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Migration files (optional, remove if you want to version control migrations)
+alembic/versions/*.pyc
+
+# Logs
+*.log
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Test output
+htmlcov/
+coverage.xml
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+
+# Pydantic cache
+.pdm.toml
+
+# FastAPI static and media
+/static/
+/media/
+
+# Other Python package management
+Pipfile.lock
+poetry.lock
+
+# Editor/IDE files
+.idea/
+*.sublime-workspace
+*.sublime-project
