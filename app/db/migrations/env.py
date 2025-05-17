@@ -6,6 +6,9 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from alembic import context
 from app.core.config import settings     # tu DATABASE_URL
 from sqlmodel import SQLModel
+from app.models.room import Room # noqa: F401
+
+target_metadata = SQLModel.metadata
 
 #Configuración de logging
 config = context.config

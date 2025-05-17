@@ -7,4 +7,7 @@ prioritask.egg-info/SOURCES.txt
 prioritask.egg-info/dependency_links.txt
 prioritask.egg-info/requires.txt
 prioritask.egg-info/top_level.txt
+tests/test_auth_endpoints.py
+tests/test_main.py
+tests/test_rooms_persistence.py
 tests/test_sample.py

@@ -4,6 +4,8 @@ import pytest
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine
 from app.db.session import engine as prod_engine, async_session
+from app.models.user import Usuario # noqa: F401
+from app.models.room import Room # noqa: F401
 
 TEST_DB = "sqlite+aiosqlite:///./prioritask.db"
 

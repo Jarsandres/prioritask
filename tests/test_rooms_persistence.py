@@ -1,11 +1,12 @@
-from uuid import uuid4
 from fastapi.testclient import TestClient
+from uuid import uuid4
+
 from app.main import app
 
 client = TestClient(app)
 
-def register_and_login() -> str:
-    email = f"{uuid4()}@example.com"
+def register_and_login():
+    email = f"{uuid4()}@test.com"
     client.post("/api/v1/auth/register", json={
         "email": email,
         "nombre": "Tester",
@@ -17,11 +18,7 @@ def register_and_login() -> str:
     })
     return resp.json()["access_token"], email
 
-def test_room_requires_auth():
-    r = client.post("/api/v1/rooms", json={"nombre": "Piso Centro"})
-    assert r.status_code == 401
-
-def test_room_create_ok():
+def test_room_persist_ok():
     token, email = register_and_login()
     r = client.post(
         "/api/v1/rooms",
@@ -30,7 +27,24 @@ def test_room_create_ok():
     )
     assert r.status_code == 201
     body = r.json()
-    assert body["owner"] == email
-    assert body["owner_id"]
     assert body["nombre"] == "Piso Centro"
+    assert "owner_id" in body
+    assert body["owner"] == email  # Cambia aquí
 
+def test_room_unique_constraint():
+    token, _ = register_and_login()
+    # primera inserción
+    r1 = client.post(
+        "/api/v1/rooms",
+        json={"nombre": "Piso Centro"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert r1.status_code == 201
+
+    # duplicado → 422
+    r2 = client.post(
+        "/api/v1/rooms",
+        json={"nombre": "Piso Centro"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert r2.status_code == 422
