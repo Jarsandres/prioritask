@@ -1,5 +1,4 @@
-import pytest
-from datetime import timedelta, datetime, timezone
+from datetime import datetime, timezone
 from app.services.auth import hash_password, verify_password, create_access_token
 
 SECRET = "test-secret"
