@@ -31,4 +31,6 @@ def test_room_create_ok():
     assert r.status_code == 201
     body = r.json()
     assert body["owner"] == email
+    assert body["owner_id"]
     assert body["nombre"] == "Piso Centro"
+

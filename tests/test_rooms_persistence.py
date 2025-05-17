@@ -27,9 +27,9 @@ def test_room_persist_ok():
     )
     assert r.status_code == 201
     body = r.json()
-
     assert body["nombre"] == "Piso Centro"
     assert "owner_id" in body
+    assert body["owner"] == email  # Cambia aquí
 
 def test_room_unique_constraint():
     token, _ = register_and_login()
