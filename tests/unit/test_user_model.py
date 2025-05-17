@@ -1,7 +1,6 @@
 import pytest
-from sqlmodel import SQLModel, create_engine, Session, select
+from sqlmodel import SQLModel, create_engine, Session
 from app.models.user import Usuario
-from app.core.config import settings
 
 # Usamos SQLite en memoria para tests
 TEST_DB_URL = "sqlite:///:memory:"
@@ -27,7 +26,8 @@ def test_create_usuario(session: Session):
 
 def test_unique_email_constraint(session: Session):
     u1 = Usuario(email="dup@ejemplo.com", hashed_password="pw1")
-    session.add(u1); session.commit()
+    session.add(u1)
+    session.commit()
 
     u2 = Usuario(email="dup@ejemplo.com", hashed_password="pw2")
     session.add(u2)
