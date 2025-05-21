@@ -26,4 +26,3 @@ def test_register_and_login():
     token_data = login.json()
     assert "access_token" in token_data
     assert token_data["token_type"] == "bearer"
-

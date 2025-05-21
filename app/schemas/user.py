@@ -1,4 +1,6 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
+from uuid import UUID
+
 
 class UsuarioBase(BaseModel):
     email: EmailStr
@@ -9,7 +11,8 @@ class UsuarioCreate(UsuarioBase):
     password: str
 
 class UsuarioRead(UsuarioBase):
-    id: str
+    id: UUID
+    model_config = ConfigDict(from_attributes=True)
 
 class UsuarioLogin(BaseModel):
     email: EmailStr
