@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import select
-
 from app.db.session import get_session
 from app.models.room import Room
 from app.models.user import Usuario
@@ -22,13 +21,13 @@ async def create_room(
 ):
 
     # Verifica unicidad (nombre + owner_id)
-    result = await session.execute(
+    result = await session.exec(
         select(Room).where(
             Room.nombre == payload.nombre,
             Room.owner_id == current_user.id
         )
     )
-    existing_room = result.scalar_one_or_none()
+    existing_room = result.one_or_none()
     if existing_room:
         from fastapi import HTTPException
         raise HTTPException(status_code=422, detail="Room ya existe")

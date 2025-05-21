@@ -24,6 +24,6 @@ jobs:
         run: |
           ruff check app
 
-      - name: Test
+      - name: Test with coverage
         run: |
-          pytest --cov=app tests/
+          pytest --cov=. --cov-report=term-missing --cov-fail-under=80
