@@ -1,16 +1,17 @@
 import json
 import uuid
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status , Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 
 from app.db.session import get_session
+from app.models import CategoriaTarea
 from app.services.auth import get_current_user
-from app.models.task import Task, TaskHistory
+from app.models.task import Task, TaskHistory, EstadoTarea
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 from app.models.user import Usuario
 
@@ -43,9 +44,6 @@ async def create_task(
         action="CREATED",
     )
 
-    # 👉 Diagnóstico: ¿entra al bloque de historial?
-    print("📝 Se va a guardar historial de creación de la tarea")
-
     session.add(history)
     await session.commit()
     return new_task
@@ -53,14 +51,43 @@ async def create_task(
 
 @router.get("", response_model=list[TaskRead])
 async def get_tasks(
+        estado : Optional[EstadoTarea] = Query(None),
+        categoria: Optional[CategoriaTarea] = Query(None),
+        completadas: Optional[bool] = Query(None),
+        desde: Optional[datetime] = Query(None),
+        hasta: Optional[datetime] = Query(None),
+        order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
+        desc: Optional[bool] = Query(False),
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
+
+    filters = [
+        Task.user_id == current_user.id,
+        Task.deleted_at.is_(None),
+    ]
+
+    if estado:
+        filters.append(Task.estado == estado)
+    if categoria:
+        filters.append(Task.categoria == categoria)
+    if completadas is not None:
+        filters.append(Task.completed == completadas)
+    if desde:
+        filters.append(Task.due_date >= desde)
+    if hasta:
+        filters.append(Task.due_date <= hasta)
+
+    if order_by in {"due_date", "peso", "created_at"}:
+        order_attr = getattr(Task, order_by)
+        order_clause = order_attr.desc() if desc else order_attr.asc()
+    else:
+        order_clause = Task.created_at.desc()
+
     result = await session.exec(
         select(Task).where(
-            Task.user_id == current_user.id,
-            Task.deleted_at.is_(None),
-            )
+            *filters
+        ).order_by(order_clause)
     )
     return result.all()
 

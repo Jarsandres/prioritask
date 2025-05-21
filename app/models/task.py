@@ -25,6 +25,7 @@ class Task(SQLModel, table=True):
     categoria: CategoriaTarea
     estado: EstadoTarea = EstadoTarea.TODO
     peso : float = 1.0
+    completed : bool = False
     due_date: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
