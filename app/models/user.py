@@ -1,7 +1,13 @@
 from datetime import datetime
 from uuid import uuid4, UUID
 from sqlmodel import SQLModel, Field, Relationship
-from typing import List, Optional
+from typing import List , TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .room import Room
+    from .task import Task
+
+
 
 class Usuario(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)   # ①  <── era str

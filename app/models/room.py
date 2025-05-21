@@ -4,7 +4,7 @@ from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 from uuid import uuid4, UUID
 
 if TYPE_CHECKING:
-    from app.models.user import Usuario
+    from .user import Usuario
 
 
 class Room(SQLModel, table=True):
