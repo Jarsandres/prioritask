@@ -1,12 +1,12 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
 from app.models import CategoriaTarea, EstadoTarea
 
 class TaskCreate(BaseModel):
-    titulo: str
-    descripcion: Optional[str] = None
+    titulo: str = Field(min_length=3, max_length=100)
+    descripcion: Optional[str] = Field(default=None, max_length=500)
     categoria: CategoriaTarea
     estado: EstadoTarea = EstadoTarea.TODO
     peso : float = 1.0
@@ -18,19 +18,31 @@ class TaskRead(BaseModel):
     descripcion: Optional[str] = None
     categoria: CategoriaTarea
     estado: EstadoTarea
-    peso : float
+    peso : float = Field(gt=0,lt=100)
     due_date: Optional[datetime] = None
     created_at: datetime
+
+    @field_validator("due_date", mode="before")
+    def validate_due_date(cls, value):
+        if value and value < datetime.now():
+            raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
+        return value
 
     model_config = ConfigDict(from_attributes=True)
 
 class TaskUpdate(BaseModel):
-    titulo: Optional[str] = None
-    descripcion: Optional[str] = None
+    titulo: Optional[str] = Field(None, min_length=3, max_length=100)
+    descripcion: Optional[str] = Field(None, max_length=500)
     categoria: Optional[CategoriaTarea] = None
     estado: Optional[EstadoTarea] = None
     peso : Optional[float] = None
     due_date: Optional[datetime] = None
+
+    @field_validator("due_date", mode="before")
+    def validate_due_date(cls, value):
+        if value and value < datetime.now():
+            raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
+        return value
 
     model_config = ConfigDict(from_attributes=True)
 

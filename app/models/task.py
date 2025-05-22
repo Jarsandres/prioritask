@@ -3,6 +3,7 @@ from typing import List, Optional
 from uuid import uuid4, UUID
 from datetime import datetime
 from enum import Enum
+import sqlalchemy as sa
 
 from app.models import Usuario
 
@@ -19,6 +20,10 @@ class EstadoTarea(str, Enum):
     DONE = "DONE"
 
 class Task(SQLModel, table=True):
+    __table_args__ = (
+        sa.Index('unique_user_task_title', 'user_id', 'titulo', unique=True, postgresql_where=sa.text('deleted_at IS NULL')),
+    )
+
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     titulo: str
     descripcion: Optional[str]

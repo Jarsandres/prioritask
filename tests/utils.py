@@ -1,5 +1,5 @@
-from enum import unique
-from uuid import uuid4, UUID
+
+from uuid import uuid4
 
 from httpx import AsyncClient
 
