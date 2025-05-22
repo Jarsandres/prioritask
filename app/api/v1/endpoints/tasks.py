@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status , Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
+from sqlalchemy.exc import IntegrityError
 
 from app.db.session import get_session
 from app.models import CategoriaTarea
@@ -33,10 +34,12 @@ async def create_task(
     )
 
     session.add(new_task)
-    await session.commit()
-    await session.refresh(new_task)
-
-    print("Se ha creado la tarea")
+    try:
+        await session.commit()
+        await session.refresh(new_task)
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="Ya existe una tarea activa con este título para el usuario.")
 
     history = TaskHistory(
         task_id=new_task.id,
@@ -187,5 +190,3 @@ async def delete_task(
     session.add(history)
     await session.commit()
     await session.refresh(task)
-
-

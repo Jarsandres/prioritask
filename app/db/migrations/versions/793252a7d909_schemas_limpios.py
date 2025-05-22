@@ -56,7 +56,8 @@ def upgrade() -> None:
     sa.Column('deleted_at', sa.DateTime(), nullable=True),
     sa.Column('user_id', sa.Uuid(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['usuario.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('user_id', 'titulo', name='unique_user_task_title', condition=sa.text('deleted_at IS NULL'))
     )
     op.create_table('taskhistory',
     sa.Column('id', sa.Uuid(), nullable=False),

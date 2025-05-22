@@ -1,5 +1,4 @@
 from tests.utils import create_user_and_token, create_task
-from sqlmodel.ext.asyncio.session import AsyncSession
 import pytest
 
 
@@ -68,3 +67,26 @@ async def test_create_task_creates_history(async_client):
 
     assert response.status_code == 201
     assert response.json()["titulo"] == "Nueva tarea con historia"
+
+@pytest.mark.asyncio
+async def test_unique_constraint_on_task(async_client):
+    client = async_client
+    user, token = await create_user_and_token(client)
+
+    # Crear una tarea con un título específico
+    task_data = {
+        "titulo": "Tarea única",
+        "categoria": "OTRO"
+    }
+    await create_task(client, token, task_data)
+
+    # Intentar crear otra tarea con el mismo título para el mismo usuario
+    response = await client.post(
+        "/api/v1/tasks",
+        json=task_data,
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    # Verificar que la respuesta indica un error de restricción única
+    assert response.status_code == 400
+    assert "ya existe una tarea activa con este título para el usuario." == response.json().get("detail", "").lower()
