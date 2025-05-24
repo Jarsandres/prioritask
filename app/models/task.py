@@ -6,6 +6,7 @@ from enum import Enum
 import sqlalchemy as sa
 
 from app.models import Usuario
+from .task_assignment import TaskAssignment
 
 
 class CategoriaTarea(str, Enum):
@@ -21,7 +22,7 @@ class EstadoTarea(str, Enum):
 
 class Task(SQLModel, table=True):
     __table_args__ = (
-        sa.Index('unique_user_task_title', 'user_id', 'titulo', unique=True, postgresql_where=sa.text('deleted_at IS NULL')),
+        sa.UniqueConstraint("user_id", "titulo", name="unique_user_task_title"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -39,6 +40,7 @@ class Task(SQLModel, table=True):
     user_id: UUID = Field(foreign_key="usuario.id")
     usuario: Optional["Usuario"] = Relationship(back_populates="tasks")
     history: List["TaskHistory"] = Relationship(back_populates="task")
+    colaboradores: List["TaskAssignment"] = Relationship(back_populates="task")
 
 class TaskHistory(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -48,3 +50,4 @@ class TaskHistory(SQLModel, table=True):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     changes : Optional[str] = None
     task: Optional["Task"] = Relationship(back_populates="history")
+

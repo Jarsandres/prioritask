@@ -1,10 +1,10 @@
 import json
 import uuid
-from datetime import datetime
-from typing import Dict, Any, Optional
+from datetime import datetime, timezone
+from typing import Dict, Any, Optional, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status , Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
@@ -13,8 +13,9 @@ from app.db.session import get_session
 from app.models import CategoriaTarea
 from app.services.auth import get_current_user
 from app.models.task import Task, TaskHistory, EstadoTarea
-from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead
 from app.models.user import Usuario
+from app.services.task_assignment import TaskAssignmentService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -54,20 +55,19 @@ async def create_task(
 
 @router.get("", response_model=list[TaskRead])
 async def get_tasks(
-        estado : Optional[EstadoTarea] = Query(None),
+        estado: Optional[EstadoTarea] = Query(None),
         categoria: Optional[CategoriaTarea] = Query(None),
         completadas: Optional[bool] = Query(None),
         desde: Optional[datetime] = Query(None),
         hasta: Optional[datetime] = Query(None),
         order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
-        desc: Optional[bool] = Query(False),
+        is_descending: Optional[bool] = Query(False),
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
 
     filters = [
         Task.user_id == current_user.id,
-        Task.deleted_at.is_(None),
     ]
 
     if estado:
@@ -81,14 +81,15 @@ async def get_tasks(
     if hasta:
         filters.append(Task.due_date <= hasta)
 
+    # Corrección en la lógica de ordenamiento
     if order_by in {"due_date", "peso", "created_at"}:
         order_attr = getattr(Task, order_by)
-        order_clause = order_attr.desc() if desc else order_attr.asc()
+        order_clause = order_attr.desc() if is_descending else order_attr.asc()
     else:
         order_clause = Task.created_at.desc()
 
     result = await session.exec(
-        select(Task).where(
+        select(Task).filter(
             *filters
         ).order_by(order_clause)
     )
@@ -107,7 +108,7 @@ async def update_task(
             Task.id == task_id,
             Task.user_id == current_user.id,
             Task.deleted_at.is_(None),
-            )
+        )
     )
     task = result.one_or_none()
     if not task:
@@ -123,14 +124,14 @@ async def update_task(
     if not changes:
         return task
 
-    task.updated_at = datetime.utcnow()
+    task.updated_at = datetime.now(timezone.utc)
     session.add(task)
 
     history = TaskHistory(
         task_id=task.id,
         user_id=current_user.id,
         action="UPDATED",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         changes=json.dumps(changes, default=str),
     )
     session.add(history)
@@ -157,7 +158,7 @@ async def get_task_history(
     history = result.all()
     return history
 
-@router.delete("/{task_id}", status_code= 204)
+@router.delete("/{task_id}", status_code=204)
 async def delete_task(
         task_id: UUID,
         current_user: Usuario = Depends(get_current_user),
@@ -175,18 +176,43 @@ async def delete_task(
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
     # Borrado lógico
-    task.deleted_at = datetime.utcnow()
-    task.updated_at = datetime.utcnow()
+    task.deleted_at = datetime.now(timezone.utc)
+    task.updated_at = datetime.now(timezone.utc)
     session.add(task)
 
-    #Historial
+    # Historial
 
     history = TaskHistory(
-        task_id= task.id,
-        user_id = current_user.id,
-        action = "DELETED",
-        timestamp = datetime.utcnow(),
+        task_id=task.id,
+        user_id=current_user.id,
+        action="DELETED",
+        timestamp=datetime.now(timezone.utc),
     )
     session.add(history)
     await session.commit()
     await session.refresh(task)
+
+@router.post("/assign", response_model=TaskAssignmentRead, status_code=201)
+async def assign_task(
+        payload: TaskAssignmentCreate,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    try:
+        assignment = await TaskAssignmentService.assign_task(
+            session=session,
+            task_id=payload.task_id,
+            user_id=payload.user_id,
+            assigned_by=current_user.id
+        )
+        return assignment
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/assigned/{user_id}", response_model=List[TaskAssignmentRead])
+async def get_assigned_tasks(
+        user_id: UUID,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)

@@ -1,16 +1,16 @@
-"""Add unique constraint to task
+"""Fix UUID TaskAssignment
 
-Revision ID: 3555dbe58d7b
-Revises: 793252a7d909
-Create Date: 2025-05-22 18:21:52.037392
+Revision ID: f78ec3bfba5b
+Revises: cddbdc0b939d
+Create Date: 2025-05-23 02:43:29.950908
 
 """
 from typing import Sequence, Union
 
 
 # revision identifiers, used by Alembic.
-revision: str = '3555dbe58d7b'
-down_revision: Union[str, None] = '793252a7d909'
+revision: str = 'f78ec3bfba5b'
+down_revision: Union[str, None] = 'cddbdc0b939d'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
