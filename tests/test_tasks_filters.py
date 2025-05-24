@@ -76,7 +76,7 @@ async def test_get_tasks_ordered_by_peso_desc(async_client):
         "peso": 5.0
     })
 
-    resp = await async_client.get("/api/v1/tasks?order_by=peso&desc=true", headers={
+    resp = await async_client.get("/api/v1/tasks?order_by=peso&is_descending=true", headers={
         "Authorization": f"Bearer {token}"
     })
     assert resp.status_code == 200

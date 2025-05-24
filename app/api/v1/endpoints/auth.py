@@ -8,6 +8,7 @@ from app.db.session import get_session
 from app.models.user import Usuario
 from sqlmodel.ext.asyncio.session import AsyncSession
 import os
+from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret")
@@ -26,3 +27,7 @@ async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_sessi
         raise HTTPException(HTTP_401_UNAUTHORIZED, "Credenciales inválidas")
     token = auth_srv.create_access_token(user.id, SECRET_KEY)
     return {"access_token": token, "token_type": "bearer"}
+
+@router.get("/me", response_model=UsuarioRead)
+async def get_me(current_user: Usuario = Depends(get_current_user)):
+    return current_user

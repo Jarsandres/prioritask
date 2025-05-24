@@ -46,3 +46,15 @@ class TaskUpdate(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class TaskAssignmentCreate(BaseModel):
+    task_id: UUID
+    user_id: UUID
+
+class TaskAssignmentRead(BaseModel):
+    id: int
+    task_id: UUID
+    user_id: UUID
+    asignado_por: UUID
+    fecha: datetime
+
+    model_config = ConfigDict(from_attributes=True)
