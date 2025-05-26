@@ -63,6 +63,7 @@ async def get_tasks(
         hasta: Optional[datetime] = Query(None),
         order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
         is_descending: Optional[bool] = Query(False),
+        tag_id: Optional[UUID] = Query(None),
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
@@ -81,6 +82,8 @@ async def get_tasks(
         filters.append(Task.due_date >= desde)
     if hasta:
         filters.append(Task.due_date <= hasta)
+    if tag_id:
+        filters.append(Task.etiquetas.any(TaskTag.tag_id == tag_id))
 
     # Corrección en la lógica de ordenamiento
     if order_by in {"due_date", "peso", "created_at"}:
@@ -240,3 +243,4 @@ async def assign_tags_to_task(
 
     await session.commit()
     return {"message": "Etiquetas asignadas correctamente"}
+

@@ -5,7 +5,6 @@ from app.models.task import Task
 from app.models.user import Usuario
 from datetime import datetime, timezone
 from uuid import UUID
-
 class TaskAssignmentService:
 
     @staticmethod
