@@ -1,0 +1,33 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.db.session import get_session
+from app.models.tag import Tag
+from app.schemas.tag import TagCreate, TagRead
+from app.services.auth import get_current_user
+from app.models.user import Usuario
+
+router = APIRouter(prefix="/tags", tags=["tags"])
+
+@router.post("", response_model=TagRead, status_code=status.HTTP_201_CREATED)
+async def create_tag(
+        payload: TagCreate,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user)
+):
+    try:
+        nueva_tag = Tag(
+            nombre=payload.nombre,
+            user_id=current_user.id
+        )
+        session.add(nueva_tag)
+        await session.commit()
+        await session.refresh(nueva_tag)
+        return nueva_tag
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Ya existe una etiqueta con ese nombre para este usuario."
+        )

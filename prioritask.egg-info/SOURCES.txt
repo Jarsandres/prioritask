@@ -8,6 +8,14 @@ prioritask.egg-info/dependency_links.txt
 prioritask.egg-info/requires.txt
 prioritask.egg-info/top_level.txt
 tests/test_auth_endpoints.py
+tests/test_get_task_history.py
 tests/test_main.py
+tests/test_rooms.py
 tests/test_rooms_persistence.py
 tests/test_sample.py
+tests/test_tags.py
+tests/test_task.py
+tests/test_task_assignment.py
+tests/test_task_edge_cases.py
+tests/test_tasks_filters.py
+tests/tests_delete_task.py
