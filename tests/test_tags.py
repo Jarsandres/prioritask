@@ -1,5 +1,4 @@
 import pytest
-from Tools.scripts.generate_opcode_h import header
 from httpx import AsyncClient
 
 from tests.utils import create_user_and_token
