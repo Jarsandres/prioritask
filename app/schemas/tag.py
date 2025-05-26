@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic import BaseModel, constr
 from uuid import UUID
 
@@ -7,3 +9,6 @@ class TagCreate(BaseModel):
 class TagRead(BaseModel):
     id: UUID
     nombre: str
+
+class TagAssignRequest(BaseModel):
+    tag_ids: List[UUID]

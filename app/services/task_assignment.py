@@ -51,3 +51,4 @@ class TaskAssignmentService:
             select(TaskAssignment).where(TaskAssignment.user_id == user_id)
         )
         return result.all()
+
