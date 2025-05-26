@@ -1,5 +1,7 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
@@ -31,3 +33,12 @@ async def create_tag(
             status_code=400,
             detail="Ya existe una etiqueta con ese nombre para este usuario."
         )
+
+@router.get("", response_model=List[TagRead])
+async def get_my_tags(
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user)
+):
+    statement = select(Tag).where(Tag.user_id == current_user.id).order_by(Tag.nombre)
+    result = await session.exec(statement)
+    return result.all()
