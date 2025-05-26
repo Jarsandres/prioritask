@@ -1,5 +1,3 @@
-# app/models/task_assignment.py
-
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime, timezone
