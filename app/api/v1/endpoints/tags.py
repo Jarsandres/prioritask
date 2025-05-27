@@ -14,7 +14,7 @@ from app.models.user import Usuario
 
 router = APIRouter(prefix="/tags", tags=["tags"])
 
-@router.post("", response_model=TagRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TagRead, status_code=status.HTTP_201_CREATED, summary="Crear etiqueta", description="Crea una nueva etiqueta asociada al usuario autenticado.")
 async def create_tag(
         payload: TagCreate,
         session: AsyncSession = Depends(get_session),
@@ -36,7 +36,7 @@ async def create_tag(
             detail="Ya existe una etiqueta con ese nombre para este usuario."
         )
 
-@router.get("", response_model=List[TagRead])
+@router.get("", response_model=List[TagRead], summary="Obtener etiquetas", description="Devuelve todas las etiquetas asociadas al usuario autenticado.")
 async def get_my_tags(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user)
@@ -45,7 +45,7 @@ async def get_my_tags(
     result = await session.exec(statement)
     return result.all()
 
-@router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Eliminar etiqueta", description="Elimina una etiqueta específica del usuario autenticado.")
 async def delete_tag(
         tag_id: UUID = Path(..., description="ID de la etiqueta a eliminar"),
         session: AsyncSession = Depends(get_session),
@@ -58,3 +58,4 @@ async def delete_tag(
 
     await session.delete(tag)
     await session.commit()
+
