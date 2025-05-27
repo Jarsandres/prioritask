@@ -9,22 +9,18 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc, asc
-from sqlalchemy.sql.expression import or_
-
 from app.db.session import get_session
 from app.models import CategoriaTarea, TaskTag
 from app.schemas.tag import TagAssignRequest
 from app.services.auth import get_current_user
 from app.models.task import Task, TaskHistory, EstadoTarea
-from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead, \
-    PrioritizedTask, TaskPrioritizeRequest, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
+from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead
 from app.models.user import Usuario
-from app.services.intelligence import prioritize_tasks_mock as prioritize_tasks, group_tasks_mock, rewrite_tasks_mock
 from app.services.task_assignment import TaskAssignmentService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
-@router.post("", response_model=TaskRead, status_code=201)
+@router.post("", response_model=TaskRead, status_code=201, summary="Crear tarea", description="Crea una nueva tarea para el usuario actual.")
 async def create_task(
         payload: TaskCreate,
         session: AsyncSession = Depends(get_session),
@@ -58,7 +54,7 @@ async def create_task(
     return new_task
 
 
-@router.get("", response_model=list[TaskRead])
+@router.get("", response_model=list[TaskRead], summary="Obtener tareas", description="Obtiene una lista de tareas del usuario actual con filtros opcionales.")
 async def get_tasks(
         estado: Optional[EstadoTarea] = Query(None),
         categoria: Optional[CategoriaTarea] = Query(None),
@@ -107,7 +103,7 @@ async def get_tasks(
     return result.all()
 
 
-@router.put("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK)
+@router.put("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK, summary="Actualizar tarea", description="Actualiza una tarea existente del usuario actual.")
 async def update_task(
         task_id: UUID,
         task_in: TaskUpdate,
@@ -152,7 +148,7 @@ async def update_task(
 
     return task
 
-@router.get("/{task_id}/history")
+@router.get("/{task_id}/history", summary="Historial de tarea", description="Obtiene el historial de cambios de una tarea específica.")
 async def get_task_history(
         task_id: str,
         session: AsyncSession = Depends(get_session),
@@ -169,7 +165,7 @@ async def get_task_history(
     history = result.all()
     return history
 
-@router.delete("/{task_id}", status_code=204)
+@router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual.")
 async def delete_task(
         task_id: UUID,
         current_user: Usuario = Depends(get_current_user),
@@ -203,7 +199,7 @@ async def delete_task(
     await session.commit()
     await session.refresh(task)
 
-@router.post("/assign", response_model=TaskAssignmentRead, status_code=201)
+@router.post("/assign", response_model=TaskAssignmentRead, status_code=201, summary="Asignar tarea", description="Asigna una tarea a otro usuario.")
 async def assign_task(
         payload: TaskAssignmentCreate,
         session: AsyncSession = Depends(get_session),
@@ -220,7 +216,7 @@ async def assign_task(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/assigned/{user_id}", response_model=List[TaskAssignmentRead])
+@router.get("/assigned/{user_id}", response_model=List[TaskAssignmentRead], summary="Tareas asignadas", description="Obtiene las tareas asignadas a un usuario específico.")
 async def get_assigned_tasks(
         user_id: UUID,
         session: AsyncSession = Depends(get_session),
@@ -228,7 +224,7 @@ async def get_assigned_tasks(
 ):
     return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
 
-@router.post("/{task_id}/tags", status_code=200)
+@router.post("/{task_id}/tags", status_code=200, summary="Asignar etiquetas", description="Asigna etiquetas a una tarea específica.")
 async def assign_tags_to_task(
         task_id: UUID,
         payload: TagAssignRequest,
@@ -250,55 +246,3 @@ async def assign_tags_to_task(
 
     await session.commit()
     return {"message": "Etiquetas asignadas correctamente"}
-
-@router.post("/prioritize", response_model=List[PrioritizedTask])
-async def prioritize(
-        payload: TaskPrioritizeRequest,
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
-):
-    stmt = select(Task).where(Task.user_id == current_user.id)
-    if payload.task_ids:
-        stmt = stmt.where(or_(*[Task.id == task_id for task_id in payload.task_ids]))
-
-    tasks = (await session.exec(stmt)).all()
-    if not tasks:
-        raise HTTPException(status_code=404, detail="No se encontraron tareas.")
-
-    result = await prioritize_tasks(tasks)
-    return result
-
-@router.post("/group", response_model=GroupedTasksResponse)
-async def group_tasks(
-        payload: TaskGroupRequest,
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
-):
-    stmt = select(Task).where(Task.user_id == current_user.id)
-    if payload.task_ids:
-        stmt = stmt.where(Task.id.in_(payload.task_ids))
-
-    tasks = (await session.exec(stmt)).all()
-    if not tasks:
-        raise HTTPException(status_code=404, detail="No se encontraron tareas.")
-
-    result = await group_tasks_mock(tasks)
-    return {"grupos": result}
-
-
-@router.post("/rewrite", response_model=List[RewrittenTask])
-async def rewrite_tasks(
-        payload: TaskRewriteRequest,
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
-):
-    stmt = select(Task).where(Task.user_id == current_user.id)
-    if payload.task_ids:
-        stmt = stmt.where(Task.id.in_(payload.task_ids))
-
-    tasks = (await session.exec(stmt)).all()
-    if not tasks:
-        raise HTTPException(status_code=404, detail="No se encontraron tareas.")
-
-    result = await rewrite_tasks_mock(tasks)
-    return result

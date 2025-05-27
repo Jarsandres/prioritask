@@ -10,7 +10,7 @@ async def test_prioritize_tasks_with_mock(async_client: AsyncClient):
     await create_task(async_client, token, {"titulo": "Urgente: pagar alquiler", "categoria": "OTRO"})
     await create_task(async_client, token, {"titulo": "Lavar ropa", "categoria": "OTRO"})
 
-    response = await async_client.post("/api/v1/tasks/prioritize", headers=headers, json={} )
+    response = await async_client.post("/api/v1/tasks/ai/prioritize", headers=headers, json={})
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
@@ -25,7 +25,7 @@ async def test_group_tasks_mock(async_client):
     await create_task(async_client, token, {"titulo": "Lavar platos", "categoria": "OTRO"})
     await create_task(async_client, token, {"titulo": "Enviar currículum", "categoria": "OTRO"})
 
-    response = await async_client.post("/api/v1/tasks/group", headers=headers, json={})
+    response = await async_client.post("/api/v1/tasks/ai/group", headers=headers, json={})
     assert response.status_code == 200
     data = response.json()
     assert "Limpieza" in data["grupos"] or "Trabajo/Estudios" in data["grupos"]
@@ -38,7 +38,7 @@ async def test_rewrite_tasks_mock(async_client):
     await create_task(async_client, token, {"titulo": "Lavar", "categoria": "OTRO"})
     await create_task(async_client, token, {"titulo": "Revisión prácticas", "categoria": "OTRO"})
 
-    response = await async_client.post("/api/v1/tasks/rewrite", headers=headers, json={})
+    response = await async_client.post("/api/v1/tasks/ai/rewrite", headers=headers, json={})
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2

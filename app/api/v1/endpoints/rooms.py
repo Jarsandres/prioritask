@@ -13,7 +13,7 @@ router = APIRouter(prefix="/rooms", tags=["rooms"])
 class RoomCreate(BaseModel):
     nombre: str
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=RoomRead)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=RoomRead, summary="Crear sala", description="Crea una nueva sala asociada al usuario autenticado.")
 async def create_room(
         payload: RoomCreate,
         current_user: Usuario = Depends(get_current_user),
