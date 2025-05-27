@@ -74,3 +74,11 @@ class TaskGroupRequest(BaseModel):
 
 class GroupedTasksResponse(BaseModel):
     grupos: Dict[str, List[dict]]
+
+class TaskRewriteRequest(BaseModel):
+    task_ids: Optional[List[UUID]] = None
+
+class RewrittenTask(BaseModel):
+    id : UUID
+    original : str
+    reformulada : str

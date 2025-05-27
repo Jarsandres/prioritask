@@ -29,3 +29,19 @@ async def test_group_tasks_mock(async_client):
     assert response.status_code == 200
     data = response.json()
     assert "Limpieza" in data["grupos"] or "Trabajo/Estudios" in data["grupos"]
+
+@pytest.mark.asyncio
+async def test_rewrite_tasks_mock(async_client):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    await create_task(async_client, token, {"titulo": "Lavar", "categoria": "OTRO"})
+    await create_task(async_client, token, {"titulo": "Revisión prácticas", "categoria": "OTRO"})
+
+    response = await async_client.post("/api/v1/tasks/rewrite", headers=headers, json={})
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    for item in data:
+        assert "reformulada" in item
+        assert item["reformulada"].startswith(item["original"])
