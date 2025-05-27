@@ -2,25 +2,14 @@ from sqlmodel import SQLModel, Field, Relationship
 from typing import List, Optional, TYPE_CHECKING
 from uuid import uuid4, UUID
 from datetime import datetime, timezone
-from enum import Enum
 import sqlalchemy as sa
 
 from app.models import Usuario
+from app.models.enums import CategoriaTarea, EstadoTarea
 from .task_assignment import TaskAssignment
 
 if TYPE_CHECKING:
     from .task_tag import TaskTag
-
-class CategoriaTarea(str, Enum):
-    LIMPIEZA = "LIMPIEZA"
-    COMPRA = "COMPRA"
-    MANTENIMIENTO = "MANTENIMIENTO"
-    OTRO = "OTRO"
-
-class EstadoTarea(str, Enum):
-    TODO = "TODO"
-    IN_PROGRESS = "IN_PROGRESS"
-    DONE = "DONE"
 
 class Task(SQLModel, table=True):
     __table_args__ = (
