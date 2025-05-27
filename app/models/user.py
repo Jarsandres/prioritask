@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from .room import Room
     from .task import Task
     from .task_assignment import TaskAssignment
+    from .models.tag import Tag
 
 
 
@@ -21,3 +22,4 @@ class Usuario(SQLModel, table=True):
     rooms:   List["Room"]  = Relationship(back_populates="owner")
     tasks:   List["Task"]  = Relationship(back_populates="usuario")
     tasks_asignadas: List["TaskAssignment"] = Relationship(back_populates="user", sa_relationship_kwargs={"foreign_keys": "TaskAssignment.user_id"})
+    etiquetas: List["Tag"] = Relationship(back_populates="usuario", sa_relationship_kwargs={"cascade": "all, delete-orphan"})

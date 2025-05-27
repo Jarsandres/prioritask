@@ -10,7 +10,8 @@ from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
 
 from app.db.session import get_session
-from app.models import CategoriaTarea
+from app.models import CategoriaTarea, TaskTag
+from app.schemas.tag import TagAssignRequest
 from app.services.auth import get_current_user
 from app.models.task import Task, TaskHistory, EstadoTarea
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead
@@ -62,6 +63,7 @@ async def get_tasks(
         hasta: Optional[datetime] = Query(None),
         order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
         is_descending: Optional[bool] = Query(False),
+        tag_id: Optional[UUID] = Query(None),
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
@@ -80,6 +82,8 @@ async def get_tasks(
         filters.append(Task.due_date >= desde)
     if hasta:
         filters.append(Task.due_date <= hasta)
+    if tag_id:
+        filters.append(Task.etiquetas.any(TaskTag.tag_id == tag_id))
 
     # Corrección en la lógica de ordenamiento
     if order_by in {"due_date", "peso", "created_at"}:
@@ -216,3 +220,27 @@ async def get_assigned_tasks(
         current_user: Usuario = Depends(get_current_user),
 ):
     return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
+
+@router.post("/{task_id}/tags", status_code=200)
+async def assign_tags_to_task(
+        task_id: UUID,
+        payload: TagAssignRequest,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user)
+):
+    # Verifica que la tarea exista y pertenezca al usuario
+    task = await session.get(Task, task_id)
+    if not task or task.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+
+    # Crear relaciones TaskTag (evitar duplicados)
+    for tag_id in payload.tag_ids:
+        result = await session.exec(
+            select(TaskTag).where(TaskTag.task_id == task_id, TaskTag.tag_id == tag_id)
+        )
+        if not result.first():
+            session.add(TaskTag(task_id=task_id, tag_id=tag_id))
+
+    await session.commit()
+    return {"message": "Etiquetas asignadas correctamente"}
+
