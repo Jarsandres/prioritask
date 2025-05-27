@@ -13,12 +13,12 @@ from app.services.auth import get_current_user
 router = APIRouter(prefix="/auth", tags=["auth"])
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret")
 
-@router.post("/register", response_model=UsuarioRead, status_code=201)
+@router.post("/register", response_model=UsuarioRead, status_code=201, summary="Registrar usuario", description="Crea un nuevo usuario en el sistema.")
 async def register(payload: UsuarioCreate):
     user = await auth_srv.create_user(payload, SECRET_KEY)
     return user
 
-@router.post("/login")
+@router.post("/login", summary="Iniciar sesión", description="Autentica al usuario y devuelve un token de acceso.")
 async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_session)):
     user = await session.scalar(
         select(Usuario).where(Usuario.email == payload.email)  # noqa
@@ -28,6 +28,6 @@ async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_sessi
     token = auth_srv.create_access_token(user.id, SECRET_KEY)
     return {"access_token": token, "token_type": "bearer"}
 
-@router.get("/me", response_model=UsuarioRead)
+@router.get("/me", response_model=UsuarioRead, summary="Obtener información del usuario", description="Devuelve la información del usuario autenticado.")
 async def get_me(current_user: Usuario = Depends(get_current_user)):
     return current_user
