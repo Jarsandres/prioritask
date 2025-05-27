@@ -1,4 +1,4 @@
-from app.schemas.task import PrioritizedTask
+from app.schemas.task import PrioritizedTask, RewrittenTask
 from app.models.task import Task
 from typing import List, Dict
 
@@ -38,3 +38,15 @@ async def group_tasks_mock(tasks: List[Task]) -> Dict[str, List[dict]]:
         })
     return grupos
 
+def rewrite_task_title(title: str) -> str:
+    return f"{title}. Por favor, realiza esta tarea lo antes posible y con atención."
+
+async def rewrite_tasks_mock(tasks: List[Task]) -> List[RewrittenTask]:
+    return [
+        RewrittenTask(
+            id=task.id,
+            original=task.titulo,
+            reformulada=rewrite_task_title(task.titulo)
+        )
+        for task in tasks
+    ]
