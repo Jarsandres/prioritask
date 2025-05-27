@@ -17,9 +17,9 @@ from app.schemas.tag import TagAssignRequest
 from app.services.auth import get_current_user
 from app.models.task import Task, TaskHistory, EstadoTarea
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead, \
-    PrioritizedTask, TaskPrioritizeRequest
+    PrioritizedTask, TaskPrioritizeRequest, GroupedTasksResponse, TaskGroupRequest
 from app.models.user import Usuario
-from app.services.intelligence import prioritize_tasks_mock as prioritize_tasks
+from app.services.intelligence import prioritize_tasks_mock as prioritize_tasks, group_tasks_mock
 from app.services.task_assignment import TaskAssignmentService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -267,4 +267,22 @@ async def prioritize(
 
     result = await prioritize_tasks(tasks)
     return result
+
+@router.post("/group", response_model=GroupedTasksResponse)
+async def group_tasks(
+        payload: TaskGroupRequest,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    stmt = select(Task).where(Task.user_id == current_user.id)
+    if payload.task_ids:
+        stmt = stmt.where(Task.id.in_(payload.task_ids))
+
+    tasks = (await session.exec(stmt)).all()
+    if not tasks:
+        raise HTTPException(status_code=404, detail="No se encontraron tareas.")
+
+    result = await group_tasks_mock(tasks)
+    return {"grupos": result}
+
 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
 from app.models.enums import CategoriaTarea, EstadoTarea
@@ -68,3 +68,9 @@ class PrioritizedTask(BaseModel):
     prioridad : str
     motivo : str
     model_config = ConfigDict(from_attributes=True)
+
+class TaskGroupRequest(BaseModel):
+    task_ids: Optional[List[UUID]] = None
+
+class GroupedTasksResponse(BaseModel):
+    grupos: Dict[str, List[dict]]
