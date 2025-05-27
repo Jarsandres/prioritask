@@ -1,6 +1,7 @@
 from app.schemas.task import PrioritizedTask
 from app.models.task import Task
-from typing import List
+from typing import List, Dict
+
 
 async def prioritize_tasks_mock(tasks: List[Task]) -> List[PrioritizedTask]:
     def simple_priority_logic(task: Task) -> str:
@@ -19,3 +20,21 @@ async def prioritize_tasks_mock(tasks: List[Task]) -> List[PrioritizedTask]:
         )
         for task in tasks
     ]
+def detect_group(task_title: str) -> str:
+    title = task_title.lower()
+    if any(word in title for word in ["limpiar", "lavar", "fregar", "cocina"]):
+        return "Limpieza"
+    if any(word in title for word in ["currículum", "informe", "trabajo", "prácticas"]):
+        return "Trabajo/Estudios"
+    return "Otros"
+
+async def group_tasks_mock(tasks: List[Task]) -> Dict[str, List[dict]]:
+    grupos = {}
+    for task in tasks:
+        grupo = detect_group(task.titulo)
+        grupos.setdefault(grupo, []).append({
+            "id": str(task.id),
+            "titulo": task.titulo
+        })
+    return grupos
+
