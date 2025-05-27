@@ -1,8 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
-from app.models import CategoriaTarea, EstadoTarea
+from app.models.enums import CategoriaTarea, EstadoTarea
 
 class TaskCreate(BaseModel):
     titulo: str = Field(min_length=3, max_length=100)
@@ -57,4 +57,14 @@ class TaskAssignmentRead(BaseModel):
     asignado_por: UUID
     fecha: datetime
 
+    model_config = ConfigDict(from_attributes=True)
+
+class TaskPrioritizeRequest(BaseModel):
+    task_ids: Optional[List[UUID]] = None
+
+class PrioritizedTask(BaseModel):
+    id : UUID
+    titulo: str
+    prioridad : str
+    motivo : str
     model_config = ConfigDict(from_attributes=True)

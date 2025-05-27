@@ -34,7 +34,6 @@ async def create_user_and_token(client: AsyncClient, email: str = None):
 
     return user, token
 
-
 async def create_task(client: AsyncClient, token: str, task_data: dict):
     # Valor por defecto si no se especifica peso
     task_data.setdefault("peso", 1.0)
