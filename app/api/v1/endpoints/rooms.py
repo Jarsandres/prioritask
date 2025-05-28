@@ -8,7 +8,7 @@ from app.services.auth import get_current_user
 from app.schemas.room import RoomRead
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/rooms", tags=["rooms"])
+router = APIRouter(prefix="/rooms", tags=["Gestión de salas"])
 
 class RoomCreate(BaseModel):
     nombre: str
@@ -44,5 +44,4 @@ async def create_room(
         owner_id=room.owner_id,
         owner=current_user.email
     )
-
 

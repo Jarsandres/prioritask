@@ -12,7 +12,7 @@ from app.schemas.tag import TagCreate, TagRead
 from app.services.auth import get_current_user
 from app.models.user import Usuario
 
-router = APIRouter(prefix="/tags", tags=["tags"])
+router = APIRouter(prefix="/tags", tags=["Etiquetas"])
 
 @router.post("", response_model=TagRead, status_code=status.HTTP_201_CREATED, summary="Crear etiqueta", description="Crea una nueva etiqueta asociada al usuario autenticado.")
 async def create_tag(
