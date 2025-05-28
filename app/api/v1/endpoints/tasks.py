@@ -25,7 +25,6 @@ async def create_task(
         payload: TaskCreate,
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
-        authorization: str = AUTHORIZATION_HEADER
 ):
     new_task = Task(
         titulo=payload.titulo,
@@ -67,7 +66,6 @@ async def get_tasks(
         tag_id: Optional[UUID] = Query(None),
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
-        authorization: str = AUTHORIZATION_HEADER
 ):
 
     filters = [
