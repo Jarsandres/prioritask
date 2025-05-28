@@ -37,7 +37,7 @@ def create_access_token(
         sub: UUID | str,
         secret: str,
         *,
-        expires_minutes: int = 60,
+        expires_minutes: int = 1440,  # Cambiado a 1440 minutos (24 horas) para pruebas
 ) -> str:
     """
     Genera un token JWT para el usuario.

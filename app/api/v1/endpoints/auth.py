@@ -14,7 +14,14 @@ router = APIRouter(prefix="/auth", tags=["Autenticación"])
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret")
 
 @router.post("/register", response_model=UsuarioRead, status_code=201, summary="Registrar usuario", description="Crea un nuevo usuario en el sistema.")
-async def register(payload: UsuarioCreate):
+async def register(payload: UsuarioCreate, session: AsyncSession = Depends(get_session)):
+    # Verificar si el usuario ya existe
+    existing_user = await session.scalar(
+        select(Usuario).where(Usuario.email == payload.email)
+    )
+    if existing_user:
+        raise HTTPException(status_code=400, detail="El correo electrónico ya está registrado.")
+
     user = await auth_srv.create_user(payload, SECRET_KEY)
     return user
 
@@ -31,3 +38,4 @@ async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_sessi
 @router.get("/me", response_model=UsuarioRead, summary="Obtener información del usuario", description="Devuelve la información del usuario autenticado.")
 async def get_me(current_user: Usuario = Depends(get_current_user)):
     return current_user
+
