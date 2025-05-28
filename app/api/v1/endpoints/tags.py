@@ -58,4 +58,3 @@ async def delete_tag(
 
     await session.delete(tag)
     await session.commit()
-
