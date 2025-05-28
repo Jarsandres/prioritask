@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from .room import Room
     from .task import Task
     from .task_assignment import TaskAssignment
-    from .models.tag import Tag
+    from .tag import Tag
 
 
 
