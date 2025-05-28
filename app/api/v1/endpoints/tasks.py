@@ -10,7 +10,6 @@ from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc, asc
 from app.db.session import get_session
-from app.main import AUTHORIZATION_HEADER
 from app.models import CategoriaTarea, TaskTag
 from app.schemas.tag import TagAssignRequest
 from app.services.auth import get_current_user
