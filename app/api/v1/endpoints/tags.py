@@ -14,7 +14,7 @@ from app.models.user import Usuario
 
 router = APIRouter(prefix="/tags", tags=["Etiquetas"])
 
-@router.post("", response_model=TagRead, status_code=status.HTTP_201_CREATED, summary="Crear etiqueta", description="Crea una nueva etiqueta asociada al usuario autenticado.")
+@router.post("", response_model=TagRead, status_code=status.HTTP_201_CREATED, summary="Crear etiqueta", description="Crea una nueva etiqueta asociada al usuario autenticado. Devuelve un error 400 si ya existe una etiqueta con el mismo nombre.")
 async def create_tag(
         payload: TagCreate,
         session: AsyncSession = Depends(get_session),

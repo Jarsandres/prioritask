@@ -17,6 +17,7 @@ from app.models.task import Task, TaskHistory, EstadoTarea
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead
 from app.models.user import Usuario
 from app.services.task_assignment import TaskAssignmentService
+from app.schemas.responses import ERROR_BAD_REQUEST, ERROR_ROOM_NOT_FOUND, ERROR_FORBIDDEN
 
 router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
 
@@ -148,7 +149,7 @@ async def update_task(
 
     return task
 
-@router.get("/{task_id}/history", summary="Historial de tarea", description="Obtiene el historial de cambios de una tarea específica.")
+@router.get("/{task_id}/history", summary="Historial de tarea", description="Obtiene el historial de cambios de una tarea específica. Devuelve un error 404 si la tarea no existe.")
 async def get_task_history(
         task_id: str,
         session: AsyncSession = Depends(get_session),
@@ -157,15 +158,17 @@ async def get_task_history(
     try:
         task_uuid = uuid.UUID(task_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="ID inválido")
+        return ERROR_BAD_REQUEST
 
     result = await session.exec(
         select(TaskHistory).where(TaskHistory.task_id == task_uuid)
     )
     history = result.all()
+    if not history:
+        return ERROR_ROOM_NOT_FOUND
     return history
 
-@router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual.")
+@router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual. Devuelve un error 403 si el usuario no tiene permisos para eliminar la tarea.")
 async def delete_task(
         task_id: UUID,
         current_user: Usuario = Depends(get_current_user),
@@ -182,12 +185,12 @@ async def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
-    # Borrado lógico
+    if task.user_id != current_user.id:
+        return ERROR_FORBIDDEN
+
     task.deleted_at = datetime.now(timezone.utc)
     task.updated_at = datetime.now(timezone.utc)
     session.add(task)
-
-    # Historial
 
     history = TaskHistory(
         task_id=task.id,

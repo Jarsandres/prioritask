@@ -6,6 +6,7 @@ from app.models.room import Room
 from app.models.user import Usuario
 from app.services.auth import get_current_user
 from app.schemas.room import RoomRead
+from app.schemas.responses import ERROR_ROOM_DUPLICATE, ERROR_INTERNAL_SERVER_ERROR
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/rooms", tags=["Gestión de salas"])
@@ -13,35 +14,32 @@ router = APIRouter(prefix="/rooms", tags=["Gestión de salas"])
 class RoomCreate(BaseModel):
     nombre: str
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=RoomRead, summary="Crear sala", description="Crea una nueva sala asociada al usuario autenticado.")
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=RoomRead, summary="Crear sala", description="Crea una nueva sala asociada al usuario autenticado. Devuelve un error 500 si ocurre un problema inesperado en el servidor.")
 async def create_room(
         payload: RoomCreate,
         current_user: Usuario = Depends(get_current_user),
         session: AsyncSession = Depends(get_session)
 ):
-
-    # Verifica unicidad (nombre + owner_id)
-    result = await session.exec(
-        select(Room).where(
-            Room.nombre == payload.nombre,
-            Room.owner_id == current_user.id
+    try:
+        result = await session.exec(
+            select(Room).where(
+                Room.nombre == payload.nombre,
+                Room.owner_id == current_user.id
+            )
         )
-    )
-    existing_room = result.one_or_none()
-    if existing_room:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=422, detail="Room ya existe")
+        existing_room = result.one_or_none()
+        if existing_room:
+            return ERROR_ROOM_DUPLICATE
 
-    # ... lógica de unicidad ...
-    room = Room(nombre=payload.nombre, owner_id=current_user.id)
-    session.add(room)
-    await session.commit()
-    await session.refresh(room)
-    # Arma la respuesta con los nombres correctos
-    return RoomRead(
-        id=room.id,
-        nombre=room.nombre,
-        owner_id=room.owner_id,
-        owner=current_user.email
-    )
-
+        room = Room(nombre=payload.nombre, owner_id=current_user.id)
+        session.add(room)
+        await session.commit()
+        await session.refresh(room)
+        return RoomRead(
+            id=room.id,
+            nombre=room.nombre,
+            owner_id=room.owner_id,
+            owner=current_user.email
+        )
+    except Exception:
+        return ERROR_INTERNAL_SERVER_ERROR
