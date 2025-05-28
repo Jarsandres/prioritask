@@ -11,7 +11,7 @@ from app.schemas.task import PrioritizedTask, TaskPrioritizeRequest, GroupedTask
 from app.services.auth import get_current_user
 from app.services.intelligence import prioritize_tasks_mock as prioritize_tasks, group_tasks_mock, rewrite_tasks_mock
 
-router = APIRouter(prefix="/tasks/ai", tags=["tasks-ai"])
+router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
 
 @router.post("/prioritize", response_model=List[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.")
 async def prioritize(
@@ -63,5 +63,4 @@ async def rewrite_tasks(
 
     result = await rewrite_tasks_mock(tasks)
     return result
-
 

@@ -10,7 +10,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 import os
 from app.services.auth import get_current_user
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["Autenticación"])
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret")
 
 @router.post("/register", response_model=UsuarioRead, status_code=201, summary="Registrar usuario", description="Crea un nuevo usuario en el sistema.")

@@ -18,7 +18,7 @@ from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCre
 from app.models.user import Usuario
 from app.services.task_assignment import TaskAssignmentService
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
 
 @router.post("", response_model=TaskRead, status_code=201, summary="Crear tarea", description="Crea una nueva tarea para el usuario actual.")
 async def create_task(
