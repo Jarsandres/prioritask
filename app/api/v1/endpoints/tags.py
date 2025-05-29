@@ -7,8 +7,9 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
+from app.models import TaskTag, Task
 from app.models.tag import Tag
-from app.schemas.tag import TagCreate, TagRead
+from app.schemas.tag import TagCreate, TagRead, TagAssignRequest
 from app.services.auth import get_current_user
 from app.models.user import Usuario
 
@@ -58,3 +59,26 @@ async def delete_tag(
 
     await session.delete(tag)
     await session.commit()
+
+@router.post("/tasks/{task_id}/tags", status_code=200, summary="Asignar etiquetas", description="Asigna etiquetas a una tarea específica.")
+async def assign_tags_to_task(
+        task_id: UUID,
+        payload: TagAssignRequest,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user)
+):
+    # Verifica que la tarea exista y pertenezca al usuario
+    task = await session.get(Task, task_id)
+    if not task or task.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+
+    # Crear relaciones TaskTag (evitar duplicados)
+    for tag_id in payload.tag_ids:
+        result = await session.exec(
+            select(TaskTag).where(TaskTag.task_id == task_id, TaskTag.tag_id == tag_id)
+        )
+        if not result.first():
+            session.add(TaskTag(task_id=task_id, tag_id=tag_id))
+
+    await session.commit()
+    return {"message": "Etiquetas asignadas correctamente"}
