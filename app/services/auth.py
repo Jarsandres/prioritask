@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from jose import jwt, JWTError
@@ -50,7 +50,7 @@ def create_access_token(
     -------
     str token JWT generado
     """
-    expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
     return jwt.encode({"sub": str(sub), "exp": expire}, secret, algorithm=ALGORITHM)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -83,6 +83,10 @@ async def get_current_user(
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        exp = payload.get("exp")
+        if exp is None or datetime.now(timezone.utc) > datetime.fromtimestamp(exp, timezone.utc):
+            raise cred_exc  # Token expirado
+
         user_id_raw: str | None = payload.get("sub")
         user_id = UUID(user_id_raw)  # Conversión segura de str a UUID
     except (JWTError, ValueError):
