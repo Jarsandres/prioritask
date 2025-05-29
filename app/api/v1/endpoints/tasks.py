@@ -71,6 +71,7 @@ async def get_tasks(
 
     filters = [
         Task.user_id == current_user.id,
+        Task.deleted_at.is_(None),
     ]
 
     if estado:
@@ -93,7 +94,6 @@ async def get_tasks(
         order_attr = getattr(Task, order_by)
         order_clause = desc(order_attr) if is_descending else asc(order_attr)
     else:
-        # Corrige el uso de desc para que utilice sqlalchemy.desc correctamente
         order_clause = desc(Task.created_at) if is_descending else asc(Task.created_at)
 
     result = await session.exec(
