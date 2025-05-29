@@ -105,7 +105,7 @@ async def test_get_tasks_filtered_by_tag(async_client: AsyncClient):
 
     # Asignar etiqueta a la tarea
     assign_resp = await async_client.post(
-        f"/api/v1/tasks/{task_id}/tags",
+        f"/api/v1/tags/tasks/{task_id}/tags",
         json={"tag_ids": [tag_id]},
         headers=headers
     )

@@ -90,7 +90,7 @@ async def test_assign_tags_to_task(async_client: AsyncClient, session):
     tag_ids = [tag1.json()["id"], tag2.json()["id"]]
 
     # Asignar etiquetas a la tarea
-    resp = await async_client.post(f"/api/v1/tasks/{task_id}/tags", json={"tag_ids": tag_ids}, headers=headers)
+    resp = await async_client.post(f"/api/v1/tags/tasks/{task_id}/tags", json={"tag_ids": tag_ids}, headers=headers)
     assert resp.status_code == 200
     assert resp.json()["message"] == "Etiquetas asignadas correctamente"
 
@@ -120,7 +120,7 @@ async def test_delete_tag_cascade_removes_tasktag(async_client: AsyncClient, ses
 
     # Asignar la etiqueta a la tarea
     assign_resp = await async_client.post(
-        f"/api/v1/tasks/{task_id}/tags",
+        f"/api/v1/tags/tasks/{task_id}/tags",
         json={"tag_ids": [str(tag_id)]},
         headers=headers
     )
