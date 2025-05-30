@@ -8,9 +8,10 @@ from app.models.task import Task
 from app.models.user import Usuario
 from app.schemas.task import PrioritizedTask, TaskPrioritizeRequest, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
 from app.services.auth import get_current_user
-from app.services.intelligence import group_tasks_mock, rewrite_tasks_mock
+from app.services.intelligence import rewrite_tasks_mock
 from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
 from app.services.AI.priority_classifier import clasificar_prioridad
+from app.services.AI.task_organizer import agrupar_tareas_por_similitud
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
 
@@ -56,8 +57,15 @@ async def group_tasks(
     if not tasks:
         raise HTTPException(status_code=404, detail="No se encontraron tareas.")
 
-    result = await group_tasks_mock(tasks)
-    return {"grupos": result}
+    group = agrupar_tareas_por_similitud([t.titulo for t in tasks], umbral_similitud= 0.7)
+    response = {
+        nombre_grupo : [
+            {"id": str(task.id), "titulo": task.titulo}
+            for task in tasks if task.titulo in titulos
+        ]
+        for nombre_grupo, titulos in group.items()
+    }
+    return {    "grupos": response,}
 
 @router.post("/rewrite", response_model=List[RewrittenTask], summary="Reescribir tareas", description="Reescribe las tareas del usuario autenticado para mejorar su claridad y enfoque.",
               responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": REWRITTEN_TASK_EXAMPLE}}}})
