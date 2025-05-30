@@ -6,7 +6,7 @@ from typing import List
 from app.db.session import get_session
 from app.models.task import Task
 from app.models.user import Usuario
-from app.schemas.task import PrioritizedTask, TaskPrioritizeRequest, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
+from app.schemas.task import PrioritizedTask, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
 from app.services.auth import get_current_user
 from app.services.intelligence import rewrite_tasks_mock
 from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
@@ -15,7 +15,7 @@ from app.services.AI.task_organizer import agrupar_tareas_por_similitud
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
 
-def clasificar_prioridad_batch(tasks: List[Task], criterio: str = "") -> List[PrioritizedTask]:
+def clasificar_prioridad_batch(tasks: List[Task]) -> List[PrioritizedTask]:
     resultado = []
     for task in tasks:
         prioridad = clasificar_prioridad(task.titulo)
@@ -33,7 +33,6 @@ def clasificar_prioridad_batch(tasks: List[Task], criterio: str = "") -> List[Pr
 @router.post("/prioritize", response_model=List[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.",
               responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": PRIORITIZED_TASK_EXAMPLE}}}})
 async def prioritize(
-        payload: TaskPrioritizeRequest,
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
