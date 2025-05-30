@@ -1,7 +1,7 @@
 from sentence_transformers import SentenceTransformer, util
 from typing import List, Dict
 
-# Cargamos el modelo multilingüe localmente (una vez)
+# Cargamos el modelo multilingüe localmente
 modelo = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
 def agrupar_tareas_por_similitud(titulos: List[str], umbral_similitud: float = 0.7) -> Dict[str, List[str]]:
