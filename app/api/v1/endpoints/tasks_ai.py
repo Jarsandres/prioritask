@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
-from sqlalchemy.sql.expression import or_
 from typing import List
 
 from app.db.session import get_session
@@ -9,10 +8,26 @@ from app.models.task import Task
 from app.models.user import Usuario
 from app.schemas.task import PrioritizedTask, TaskPrioritizeRequest, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
 from app.services.auth import get_current_user
-from app.services.intelligence import prioritize_tasks_mock as prioritize_tasks, group_tasks_mock, rewrite_tasks_mock
+from app.services.intelligence import group_tasks_mock, rewrite_tasks_mock
 from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
+from app.services.AI.priority_classifier import clasificar_prioridad
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
+
+def clasificar_prioridad_batch(tasks: List[Task], criterio: str = "") -> List[PrioritizedTask]:
+    resultado = []
+    for task in tasks:
+        prioridad = clasificar_prioridad(task.titulo)
+        resultado.append(PrioritizedTask(
+            id=task.id,
+            titulo=task.titulo,
+            prioridad=prioridad,
+            motivo="IA basada en sentimiento del título."
+        ))
+        # Log opcional para debugging
+        print(f"[PRIORITY-IA] '{task.titulo}' → {prioridad}")
+    return resultado
+
 
 @router.post("/prioritize", response_model=List[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.",
               responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": PRIORITIZED_TASK_EXAMPLE}}}})
@@ -21,16 +36,10 @@ async def prioritize(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
-    stmt = select(Task).where(Task.user_id == current_user.id)
-    if payload.task_ids:
-        stmt = stmt.where(or_(*[Task.id == task_id for task_id in payload.task_ids]))
-
-    tasks = (await session.exec(stmt)).all()
-    if not tasks:
-        raise HTTPException(status_code=404, detail="No se encontraron tareas.")
-
-    result = await prioritize_tasks(tasks)
-    return result
+    result = await session.exec(select(Task).where(Task.user_id == current_user.id))
+    tasks_list = result.all()
+    prioritized_tasks = clasificar_prioridad_batch(tasks_list)
+    return prioritized_tasks
 
 @router.post("/group", response_model=GroupedTasksResponse, summary="Agrupar tareas", description="Agrupa las tareas del usuario autenticado en categorías específicas.",
               responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": GROUPED_TASKS_EXAMPLE}}}})
