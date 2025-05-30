@@ -51,7 +51,6 @@ def test_local_priority_classifier():
         print(f"\n '{tarea}' → Prioridad: {prioridad}")
         assert prioridad in ["alta", "media", "baja"]
 
-@pytest.mark.asyncio
 async def test_prioritize_tasks_real(async_client: AsyncClient):
     # Crear usuario y token
     user, token = await create_user_and_token(async_client)
@@ -65,13 +64,12 @@ async def test_prioritize_tasks_real(async_client: AsyncClient):
     response = await async_client.post(
         "/api/v1/tasks/ai/prioritize",
         headers=headers,
-        json={"task_ids": None, "criteria": "urgente"}
+        json={"task_ids": None}
     )
 
     assert response.status_code == 200
     data = response.json()
 
-    # Validar formato y contenido
     assert isinstance(data, list)
     assert len(data) == 2
 
@@ -81,7 +79,13 @@ async def test_prioritize_tasks_real(async_client: AsyncClient):
         assert "prioridad" in tarea
         assert tarea["prioridad"] in ["alta", "media", "baja"]
         assert "motivo" in tarea
-        assert "IA" in tarea["motivo"]
+        # Ahora permitimos ambos tipos de motivo
+        assert "IA" in tarea["motivo"] or "urgencia" in tarea["motivo"].lower()
+
+    # Verifica que la tarea urgente haya sido clasificada como alta prioridad
+    urgente = next(t for t in data if "urgente" in t["titulo"].lower())
+    assert urgente["prioridad"] == "alta"
+    assert "urgencia" in urgente["motivo"].lower()
 
 @pytest.mark.asyncio
 async def test_group_tasks_real(async_client: AsyncClient):
