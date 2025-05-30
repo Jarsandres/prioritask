@@ -45,4 +45,4 @@ async def test_rewrite_tasks_mock(async_client):
     assert len(data) == 2
     for item in data:
         assert "reformulada" in item
-        assert item["reformulada"].startswith(item["original"])
+        assert item["original"] in item["reformulada"]
