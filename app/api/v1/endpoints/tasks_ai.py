@@ -12,22 +12,45 @@ from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPL
 from app.services.AI.priority_classifier import clasificar_prioridad
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
 from app.services.AI.reformulator import reformular_titulo
+import re
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
+
+
+PALABRAS_URGENCIA = ["urgente", "hoy", "mañana", "prioritario", "inmediato", "rápido", "entregar", "última hora"]
+
+def contiene_palabra_clave(titulo: str) -> bool:
+    titulo_lower = titulo.lower()
+    return any(re.search(rf"\b{palabra}\b", titulo_lower) for palabra in PALABRAS_URGENCIA)
 
 def clasificar_prioridad_batch(tasks: List[Task]) -> List[PrioritizedTask]:
     resultado = []
     for task in tasks:
-        prioridad = clasificar_prioridad(task.titulo)
+        if contiene_palabra_clave(task.titulo):
+            prioridad = "alta"
+            motivo = "Palabra clave de urgencia detectada en el título."
+        else:
+            sentimiento = clasificar_prioridad(task.titulo)
+            match sentimiento:
+                case "1" | "2":
+                    prioridad = "baja"
+                case "3":
+                    prioridad = "media"
+                case "4" | "5":
+                    prioridad = "alta"
+                case _:
+                    prioridad = "media"
+            motivo = "IA basada en sentimiento del título."
+
         resultado.append(PrioritizedTask(
             id=task.id,
             titulo=task.titulo,
             prioridad=prioridad,
-            motivo="IA basada en sentimiento del título."
+            motivo=motivo
         ))
-        # Log opcional para debugging
-        print(f"[PRIORITY-IA] '{task.titulo}' → {prioridad}")
+        print(f"[PRIORITY-IA+H] '{task.titulo}' → {prioridad} ({motivo})")
     return resultado
+
 
 
 @router.post("/prioritize", response_model=List[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.",
