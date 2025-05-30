@@ -17,6 +17,7 @@ async def test_prioritize_tasks_with_mock(async_client: AsyncClient):
     prioridades = [item["prioridad"] for item in data]
     assert "alta" in prioridades or "media" in prioridades
 
+@pytest.mark.skip(reason="Reemplazado por IA real")
 @pytest.mark.asyncio
 async def test_group_tasks_mock(async_client):
     user, token = await create_user_and_token(async_client)

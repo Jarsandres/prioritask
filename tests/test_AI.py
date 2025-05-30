@@ -83,3 +83,35 @@ async def test_prioritize_tasks_real(async_client: AsyncClient):
         assert "motivo" in tarea
         assert "IA" in tarea["motivo"]
 
+@pytest.mark.asyncio
+async def test_group_tasks_real(async_client: AsyncClient):
+    # Crear usuario y token
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear tareas que deberían agruparse por similitud
+    await create_task(async_client, token, {"titulo": "Limpiar cocina", "categoria": "OTRO"})
+    await create_task(async_client, token, {"titulo": "Organizar cocina", "categoria": "OTRO"})
+    await create_task(async_client, token, {"titulo": "Pagar facturas", "categoria": "OTRO"})
+    await create_task(async_client, token, {"titulo": "Revisar recibos", "categoria": "OTRO"})
+
+    # Llamada al endpoint de agrupación
+    response = await async_client.post(
+        "/api/v1/tasks/ai/group",
+        headers=headers,
+        json={"task_ids": None}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "grupos" in data
+    assert isinstance(data["grupos"], dict)
+    assert len(data["grupos"]) >= 2  # Al menos dos grupos esperados
+
+    # Comprobamos que cada grupo tiene tareas con estructura válida
+    for grupo, tareas in data["grupos"].items():
+        assert isinstance(grupo, str)
+        assert isinstance(tareas, list)
+        for tarea in tareas:
+            assert "id" in tarea
+            assert "titulo" in tarea
