@@ -8,10 +8,10 @@ from app.models.task import Task
 from app.models.user import Usuario
 from app.schemas.task import PrioritizedTask, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
 from app.services.auth import get_current_user
-from app.services.intelligence import rewrite_tasks_mock
 from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
 from app.services.AI.priority_classifier import clasificar_prioridad
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
+from app.services.AI.reformulator import reformular_titulo
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
 
@@ -81,6 +81,15 @@ async def rewrite_tasks(
     if not tasks:
         raise HTTPException(status_code=404, detail="No se encontraron tareas.")
 
-    result = await rewrite_tasks_mock(tasks)
+    result = []
+    for task in tasks:
+        reformulada = reformular_titulo(task.titulo)
+        if reformulada.strip().lower() == task.titulo.strip().lower():
+            reformulada += " (sin cambios sugeridos)"
+        result.append(RewrittenTask(
+            id=task.id,
+            original=task.titulo,
+            reformulada=reformulada
+        ))
     return result
 
