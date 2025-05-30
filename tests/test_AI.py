@@ -115,3 +115,34 @@ async def test_group_tasks_real(async_client: AsyncClient):
         for tarea in tareas:
             assert "id" in tarea
             assert "titulo" in tarea
+
+@pytest.mark.asyncio
+async def test_rewrite_tasks_real(async_client: AsyncClient):
+    # Crear usuario y token
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear tareas con títulos reformulables
+    await create_task(async_client, token, {"titulo": "Hacer cosas del trabajo", "categoria": "OTRO"})
+    await create_task(async_client, token, {"titulo": "Organizar casa", "categoria": "OTRO"})
+
+    # Llamada al endpoint de reformulación
+    response = await async_client.post(
+        "/api/v1/tasks/ai/rewrite",
+        headers=headers,
+        json={"task_ids": None}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Validaciones básicas
+    assert isinstance(data, list)
+    assert len(data) == 2
+
+    for tarea in data:
+        assert "id" in tarea
+        assert "original" in tarea
+        assert "reformulada" in tarea
+        assert tarea["reformulada"].strip() != ""
+        # Puede estar marcada como "sin cambios sugeridos" si no cambió
