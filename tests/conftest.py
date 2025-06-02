@@ -13,16 +13,16 @@ async_session = async_sessionmaker(test_engine, expire_on_commit=False)
 @pytest_asyncio.fixture(scope="session", autouse=True)
 def reset_test_db():
     if os.path.exists("prioritask.db"):
-        asyncio.get_event_loop().run_until_complete(test_engine.dispose())
+        asyncio.run(test_engine.dispose())
         os.remove("prioritask.db")
 
     async def init_models():
         async with test_engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
 
-    asyncio.get_event_loop().run_until_complete(init_models())
+    asyncio.run(init_models())
     yield
-    asyncio.get_event_loop().run_until_complete(test_engine.dispose())
+    asyncio.run(test_engine.dispose())
 
 @pytest_asyncio.fixture
 async def async_client():
