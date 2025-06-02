@@ -21,6 +21,7 @@ dependencies = [
   # ─── IA / Background Jobs ────────────────────────────────────────────
   "sentence-transformers>=2.7.0",
   "celery[redis]~=5.4",
+  "setfit",
 
   # ─── Miscelánea ────────────────────────────────clear──────────────────────
   "python-dotenv~=1.0"
