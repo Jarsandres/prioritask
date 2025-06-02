@@ -1,33 +1,48 @@
-from sentence_transformers import SentenceTransformer, util
+from collections import defaultdict
 from typing import List, Dict
+from sentence_transformers import SentenceTransformer, util
+from app.models.task import Task
 
-# Cargamos el modelo multilingüe localmente
-modelo = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
 
-def agrupar_tareas_por_similitud(titulos: List[str], umbral_similitud: float = 0.7) -> Dict[str, List[str]]:
-    embeddings = modelo.encode(titulos)
+def agrupar_tareas_por_similitud(tareas: List[Task], umbral: float = 0.4) -> Dict[str, List[Task]]:
+    if not tareas:
+        return {}
 
-    grupos = {}
-    grupo_id = 1
-    asignadas = set()
+    # Convertir títulos a una lista de textos
+    titulos = [t.titulo for t in tareas]
 
-    for i, titulo in enumerate(titulos):
-        if titulo in asignadas:
+    # Calcular embeddings
+    embeddings = model.encode(titulos, convert_to_tensor=True)
+
+    grupos = defaultdict(list)
+    usados = set()
+    grupo_idx = 1
+
+    for i, tarea in enumerate(tareas):
+        if i in usados:
             continue
+        grupo_actual = [tarea]
+        usados.add(i)
 
-        grupo_actual = [titulo]
-        asignadas.add(titulo)
-
-        for j in range(i + 1, len(titulos)):
-            if titulos[j] in asignadas:
+        for j in range(i + 1, len(tareas)):
+            if j in usados:
                 continue
+            similitud = util.cos_sim(embeddings[i], embeddings[j]).item()
+            if similitud >= umbral:
+                grupo_actual.append(tareas[j])
+                usados.add(j)
 
-            similitud = util.cos_sim(embeddings[i], embeddings[j])
-            if similitud.item() >= umbral_similitud:
-                grupo_actual.append(titulos[j])
-                asignadas.add(titulos[j])
+        grupos[f"Grupo {grupo_idx}"] = grupo_actual
+        grupo_idx += 1
 
-        grupos[f"Grupo {grupo_id}"] = grupo_actual
-        grupo_id += 1
+    return grupos
 
+
+
+def agrupar_por_categoria(tareas: List[Task]) -> Dict[str, List[Task]]:
+
+    grupos = defaultdict(list)
+    for tarea in tareas:
+        grupos[tarea.categoria].append(tarea)
     return grupos

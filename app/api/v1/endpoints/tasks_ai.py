@@ -2,16 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from typing import List
-
 from app.db.session import get_session
+from app.schemas.task import GroupedTasks
 from app.models.task import Task
 from app.models.user import Usuario
 from app.schemas.task import PrioritizedTask, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
 from app.services.auth import get_current_user
 from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
 from app.services.AI.priority_classifier import clasificar_prioridad
-from app.services.AI.task_organizer import agrupar_tareas_por_similitud
 from app.services.AI.reformulator import  reformular_titulo_con_traduccion
+from app.services.AI.task_organizer import agrupar_tareas_por_similitud
 import re
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
@@ -71,15 +71,16 @@ async def group_tasks(
     if not tasks:
         raise HTTPException(status_code=404, detail="No se encontraron tareas.")
 
-    group = agrupar_tareas_por_similitud([t.titulo for t in tasks], umbral_similitud= 0.7)
+    group = agrupar_tareas_por_similitud(tasks)
     response = {
-        nombre_grupo : [
-            {"id": str(task.id), "titulo": task.titulo}
-            for task in tasks if task.titulo in titulos
+        nombre_grupo: [
+            GroupedTasks(id=task.id, titulo=task.titulo)
+            for task in tareas
         ]
-        for nombre_grupo, titulos in group.items()
+        for nombre_grupo, tareas in group.items()
     }
-    return {    "grupos": response,}
+    return {"grupos": response}
+
 
 @router.post("/rewrite", response_model=List[RewrittenTask], summary="Reescribir tareas", description="Reescribe las tareas del usuario autenticado para mejorar su claridad y enfoque.",
               responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": REWRITTEN_TASK_EXAMPLE}}}})
