@@ -30,17 +30,8 @@ def clasificar_prioridad_batch(tasks: List[Task]) -> List[PrioritizedTask]:
             prioridad = "alta"
             motivo = "Palabra clave de urgencia detectada en el título."
         else:
-            sentimiento = clasificar_prioridad(task.titulo)
-            match sentimiento:
-                case "1" | "2":
-                    prioridad = "baja"
-                case "3":
-                    prioridad = "media"
-                case "4" | "5":
-                    prioridad = "alta"
-                case _:
-                    prioridad = "media"
-            motivo = "IA basada en sentimiento del título."
+            prioridad = clasificar_prioridad(task.titulo)
+            motivo = "IA personalizada basada en entrenamiento en tareas reales."
 
         resultado.append(PrioritizedTask(
             id=task.id,
@@ -50,6 +41,7 @@ def clasificar_prioridad_batch(tasks: List[Task]) -> List[PrioritizedTask]:
         ))
         print(f"[PRIORITY-IA+H] '{task.titulo}' → {prioridad} ({motivo})")
     return resultado
+
 
 
 
