@@ -11,7 +11,7 @@ from app.services.auth import get_current_user
 from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
 from app.services.AI.priority_classifier import clasificar_prioridad
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
-from app.services.AI.reformulator import reformular_titulo
+from app.services.AI.reformulator import  reformular_titulo_con_traduccion
 import re
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
@@ -98,13 +98,12 @@ async def rewrite_tasks(
 
     result = []
     for task in tasks:
-        reformulada = reformular_titulo(task.titulo)
-        if reformulada.strip().lower() == task.titulo.strip().lower():
-            reformulada += " (sin cambios sugeridos)"
+        resultado =  reformular_titulo_con_traduccion(task.titulo)
         result.append(RewrittenTask(
             id=task.id,
             original=task.titulo,
-            reformulada=reformulada
+            reformulada=resultado["reformulada"],
+            motivo=resultado["motivo"]
         ))
     return result
 

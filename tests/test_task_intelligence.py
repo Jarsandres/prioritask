@@ -1,5 +1,6 @@
 import pytest
 from httpx import AsyncClient
+from app.services.AI.reformulator import reformular_titulo_con_traduccion
 from tests.utils import create_user_and_token, create_task
 
 @pytest.mark.asyncio
@@ -31,18 +32,11 @@ async def test_group_tasks_mock(async_client):
     data = response.json()
     assert "Limpieza" in data["grupos"] or "Trabajo/Estudios" in data["grupos"]
 
-@pytest.mark.asyncio
-async def test_rewrite_tasks_mock(async_client):
-    user, token = await create_user_and_token(async_client)
-    headers = {"Authorization": f"Bearer {token}"}
+def test_rewrite_tasks_mock():
+    original = "Revisión prácticas"
+    resultado = reformular_titulo_con_traduccion(original)
+    assert isinstance(resultado, dict)
+    assert resultado["reformulada"].strip() != ""
+    assert resultado["reformulada"].lower() != original.lower()
+    assert resultado["cambio"] is True
 
-    await create_task(async_client, token, {"titulo": "Lavar", "categoria": "OTRO"})
-    await create_task(async_client, token, {"titulo": "Revisión prácticas", "categoria": "OTRO"})
-
-    response = await async_client.post("/api/v1/tasks/ai/rewrite", headers=headers, json={})
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 2
-    for item in data:
-        assert "reformulada" in item
-        assert item["original"] in item["reformulada"]

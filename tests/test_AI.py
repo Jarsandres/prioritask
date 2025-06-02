@@ -2,7 +2,7 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
-from  app.services.AI.reformulator import reformular_titulo
+from app.services.AI.reformulator import reformular_titulo_con_traduccion
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
 from app.services.AI.priority_classifier import clasificar_prioridad
 from tests.utils import create_user_and_token, create_task
@@ -10,7 +10,8 @@ from tests.utils import create_user_and_token, create_task
 
 def test_local_reformulator():
     original = "Limpiar la cocina"
-    reformulada = reformular_titulo(original)
+    resultado = reformular_titulo_con_traduccion(original)
+    reformulada = resultado["reformulada"]
 
     print("\n Original:", original)
     print(" Reformulado:", reformulada)

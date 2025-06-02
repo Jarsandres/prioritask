@@ -82,3 +82,4 @@ class RewrittenTask(BaseModel):
     id : UUID
     original : str
     reformulada : str
+    motivo: str
