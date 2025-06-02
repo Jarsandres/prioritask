@@ -72,8 +72,12 @@ class PrioritizedTask(BaseModel):
 class TaskGroupRequest(BaseModel):
     task_ids: Optional[List[UUID]] = None
 
+class GroupedTasks (BaseModel):
+    id : UUID
+    titulo: str
+
 class GroupedTasksResponse(BaseModel):
-    grupos: Dict[str, List[dict]]
+    grupos: Dict[str, List[GroupedTasks]]
 
 class TaskRewriteRequest(BaseModel):
     task_ids: Optional[List[UUID]] = None

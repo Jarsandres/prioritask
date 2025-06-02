@@ -1,9 +1,10 @@
 from uuid import UUID
+from collections import namedtuple
 
 import pytest
 from httpx import AsyncClient
 from app.services.AI.reformulator import reformular_titulo_con_traduccion
-from app.services.AI.task_organizer import agrupar_tareas_por_similitud
+from app.services.AI.task_organizer import agrupar_por_categoria
 from app.services.AI.priority_classifier import clasificar_prioridad
 from tests.utils import create_user_and_token, create_task
 
@@ -21,16 +22,17 @@ def test_local_reformulator():
     assert reformulada.lower() != original.lower()
 
 def test_local_grouper():
+    Tarea = namedtuple('Tarea', ['titulo', 'categoria'])
     tareas = [
-        "Limpiar la cocina",
-        "Organizar la cocina",
-        "Revisar facturas del mes",
-        "Pagar las facturas",
-        "Preparar presentación",
-        "Limpiar el baño"
+        Tarea(titulo="Limpiar la cocina", categoria="Casa"),
+        Tarea(titulo="Organizar la cocina", categoria="Casa"),
+        Tarea(titulo="Revisar facturas del mes", categoria="Finanzas"),
+        Tarea(titulo="Pagar las facturas", categoria="Finanzas"),
+        Tarea(titulo="Preparar presentación", categoria="Trabajo"),
+        Tarea(titulo="Limpiar el baño", categoria="Casa"),
     ]
 
-    grupos = agrupar_tareas_por_similitud(tareas, umbral_similitud=0.65)
+    grupos = agrupar_por_categoria(tareas)
 
     print("\n Grupos detectados:")
     for nombre, grupo in grupos.items():
@@ -94,11 +96,11 @@ async def test_group_tasks_real(async_client: AsyncClient):
     user, token = await create_user_and_token(async_client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Crear tareas que deberían agruparse por similitud
-    await create_task(async_client, token, {"titulo": "Limpiar cocina", "categoria": "OTRO"})
-    await create_task(async_client, token, {"titulo": "Organizar cocina", "categoria": "OTRO"})
-    await create_task(async_client, token, {"titulo": "Pagar facturas", "categoria": "OTRO"})
-    await create_task(async_client, token, {"titulo": "Revisar recibos", "categoria": "OTRO"})
+    # Crear tareas en distintas categorías
+    await create_task(async_client, token, {"titulo": "Limpiar cocina", "categoria": "LIMPIEZA"})
+    await create_task(async_client, token, {"titulo": "Organizar cocina", "categoria": "LIMPIEZA"})
+    await create_task(async_client, token, {"titulo": "Pagar facturas", "categoria": "MANTENIMIENTO"})
+    await create_task(async_client, token, {"titulo": "Revisar recibos", "categoria": "COMPRA"})
 
     # Llamada al endpoint de agrupación
     response = await async_client.post(
@@ -111,7 +113,7 @@ async def test_group_tasks_real(async_client: AsyncClient):
     data = response.json()
     assert "grupos" in data
     assert isinstance(data["grupos"], dict)
-    assert len(data["grupos"]) >= 2  # Al menos dos grupos esperados
+    assert len(data["grupos"]) >= 2  # Ahora sí debería haber múltiples categorías
 
     # Comprobamos que cada grupo tiene tareas con estructura válida
     for grupo, tareas in data["grupos"].items():
