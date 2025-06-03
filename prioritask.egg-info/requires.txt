@@ -8,6 +8,9 @@ python-jose[cryptography]~=3.3
 passlib[bcrypt]==1.7.*
 sentence-transformers>=2.7.0
 celery[redis]~=5.4
+setfit
+sentencepiece>=0.2.0
+sacremoses==0.1.1
 python-dotenv~=1.0
 
 [dev]
