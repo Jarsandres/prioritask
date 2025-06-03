@@ -60,3 +60,9 @@ poetry.lock
 .idea/
 *.sublime-workspace
 *.sublime-project
+
+# Project-specific directories
+app/services/AI/modelos/
+checkpoints/
+node_modules/
+
