@@ -23,7 +23,7 @@ const Dashboard = () => {
       <nav className="navbar navbar-expand-lg navbar-light bg-white shadow-sm px-4">
         <span className="navbar-brand fw-bold text-primary">Prioritask</span>
         <div className="ms-auto">
-          <span className="text-muted">Bienvenido: Joel</span>
+          <span className="text-muted">Bienvenido</span>
         </div>
       </nav>
 

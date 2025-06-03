@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 const TaskForm = () => {
   const [titulo, setTitulo] = useState("");
@@ -10,7 +10,42 @@ const TaskForm = () => {
   const [dueDate, setDueDate] = useState("");
   const [error, setError] = useState("");
 
+  const { taskId } = useParams();
   const navigate = useNavigate();
+
+  const formatearFecha = (fecha: string) => {
+    const partes = fecha.split("/");
+    if (partes.length === 3) {
+      const [dd, mm, yyyy] = partes;
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    return fecha;
+  };
+
+  useEffect(() => {
+    if (taskId) {
+      const fetchTask = async () => {
+        const token = localStorage.getItem("token");
+        try {
+          const response = await axios.get(`http://localhost:8000/api/v1/tasks/${taskId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          const { titulo, descripcion, categoria, peso, due_date } = response.data;
+          setTitulo(titulo);
+          setDescripcion(descripcion);
+          setCategoria(categoria);
+          setPeso(peso);
+          setDueDate(due_date);
+        } catch (err) {
+          console.error(err);
+          setError("Error al cargar la tarea");
+        }
+      };
+      fetchTask();
+    }
+  }, [taskId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,32 +54,50 @@ const TaskForm = () => {
     const token = localStorage.getItem("token");
 
     try {
-      await axios.post(
-        "http://localhost:8000/api/v1/tasks",
-        {
-          titulo,
-          descripcion,
-          categoria,
-          peso,
-          due_date: dueDate,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
+      if (taskId) {
+        await axios.put(
+          `http://localhost:8000/api/v1/tasks/${taskId}`,
+          {
+            titulo,
+            descripcion,
+            categoria,
+            peso,
+            due_date: formatearFecha(dueDate),
           },
-        }
-      );
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      } else {
+        await axios.post(
+          "http://localhost:8000/api/v1/tasks",
+          {
+            titulo,
+            descripcion,
+            categoria,
+            peso,
+            due_date: dueDate,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      }
 
       navigate("/tasks");
     } catch (err: any) {
       console.error(err);
-      setError(err.response?.data?.detail || "Error al crear la tarea");
+      setError(err.response?.data?.detail || "Error al guardar la tarea");
     }
   };
 
   return (
     <div className="container mt-4">
-      <h2>Crear nueva tarea</h2>
+      <h2>{taskId ? "Editar tarea" : "Crear nueva tarea"}</h2>
       {error && <div className="alert alert-danger">{error}</div>}
 
       <form onSubmit={handleSubmit}>
@@ -83,20 +136,19 @@ const TaskForm = () => {
         </div>
 
         <div className="mb-3">
-          <label>Peso (1-100)</label>
+          <label>Peso</label>
           <input
             type="number"
             className="form-control"
-            min={1}
-            max={100}
             value={peso}
-            onChange={(e) => setPeso(parseInt(e.target.value))}
-            required
+            onChange={(e) => setPeso(Number(e.target.value))}
+            min="1"
+            max="5"
           />
         </div>
 
         <div className="mb-3">
-          <label>Fecha límite</label>
+          <label>Fecha de vencimiento</label>
           <input
             type="date"
             className="form-control"
@@ -105,7 +157,9 @@ const TaskForm = () => {
           />
         </div>
 
-        <button className="btn btn-primary">Crear tarea</button>
+        <button type="submit" className="btn btn-primary">
+          {taskId ? "Actualizar" : "Crear"}
+        </button>
       </form>
     </div>
   );

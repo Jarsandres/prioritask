@@ -1,65 +1,81 @@
 .sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 100vh;
   width: 220px;
-  background-color: #0d6efd;
+  background-color: #007bff;
   color: white;
-  padding: 1.5rem 1rem;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
   display: flex;
   flex-direction: column;
+  padding: 20px 15px;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
 }
 
 .logo {
-  font-weight: 600;
-  font-size: 1.2rem;
-  margin-bottom: 2rem;
-  text-align: center;
-  letter-spacing: 0.5px;
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 40px;
+  text-align: left;
 }
 
 .nav {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 10px;
   list-style: none;
   padding: 0;
+  margin: 0;
   flex-grow: 1;
 }
 
 .nav li {
-  margin: 1.5rem 0;
+  display: flex;
 }
 
 .nav a {
-  color: #f1f1f1;
-  text-decoration: none;
-  font-size: 1.05rem;
-  font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 1rem;
+  gap: 10px;
+  padding: 10px 12px;
   border-radius: 8px;
-  transition: background 0.3s ease;
+  text-decoration: none;
+  color: white;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  width: 100%;
 }
 
 .nav a:hover {
-  background-color: rgba(255, 255, 255, 0.15);
-  text-decoration: none;
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 .nav a.active {
-  background-color: rgba(255, 255, 255, 0.1);
-  position: relative;
+  background-color: rgba(255, 255, 255, 0.3);
 }
 
-.nav a.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 4px;
-  background-color: white;
-  border-radius: 2px;
+.nav-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
+
+.logout-btn {
+  background: transparent;
+  color: white;
+  border: none;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+}
+
+.logout-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+

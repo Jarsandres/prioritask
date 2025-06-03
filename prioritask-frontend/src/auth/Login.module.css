@@ -35,7 +35,7 @@
   border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   font-size: 1rem;
-  background-color: white;
+  /* Eliminado el fondo blanco explícito */
   color: #1f2937;
   box-sizing: border-box;
 }

@@ -24,8 +24,13 @@ class TaskRead(BaseModel):
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):
-        if value and value < datetime.now():
-            raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
+        if value:
+            try:
+                value = datetime.fromisoformat(value) if isinstance(value, str) else value
+            except ValueError:
+                raise ValueError("Formato de fecha inválido")
+            if value < datetime.now():
+                raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
         return value
 
     model_config = ConfigDict(from_attributes=True)
@@ -40,8 +45,13 @@ class TaskUpdate(BaseModel):
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):
-        if value and value < datetime.now():
-            raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
+        if value:
+            try:
+                value = datetime.fromisoformat(value) if isinstance(value, str) else value
+            except ValueError:
+                raise ValueError("Formato de fecha inválido")
+            if value < datetime.now():
+                raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
         return value
 
     model_config = ConfigDict(from_attributes=True)
