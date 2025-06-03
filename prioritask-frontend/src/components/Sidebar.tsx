@@ -1,12 +1,26 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import "./Sidebar.css";
 
 const Sidebar = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const token = localStorage.getItem("token");
+
+  // Ocultar Sidebar si no hay token o si está en login o register
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/register";
+  if (!token || isAuthPage) {
+    return null;
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
+
   return (
     <div className="sidebar">
       <h3 className="logo">Prioritask</h3>
       <ul className="nav">
-        {/* Secciones principales */}
         <li>
           <NavLink to="/dashboard" className={({ isActive }) => isActive ? "active" : ""}>
             <span role="img" aria-label="Dashboard">📊</span> Dashboard
@@ -18,11 +32,13 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* Separador visual */}
-        <li style={{ marginTop: "auto" }}>
+        <li className="nav-bottom">
           <NavLink to="/profile" className={({ isActive }) => isActive ? "active" : ""}>
             <span role="img" aria-label="Profile">👤</span> Perfil
           </NavLink>
+          <button onClick={handleLogout} className="logout-btn">
+            🔓 Cerrar sesión
+          </button>
         </li>
       </ul>
     </div>

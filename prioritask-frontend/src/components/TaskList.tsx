@@ -65,7 +65,15 @@ const TaskList = () => {
                   {tarea.categoria} · {tarea.estado}
                 </small>
               </div>
-              {/* Aquí irán botones de Editar / Eliminar más adelante */}
+
+              <div>
+                <button
+                  className="btn btn-sm btn-outline-primary me-2"
+                  onClick={() => navigate(`/tasks/edit/${tarea.id}`)}
+                >
+                  Editar
+                </button>
+              </div>
             </li>
           ))}
         </ul>

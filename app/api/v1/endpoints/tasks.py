@@ -167,6 +167,28 @@ async def get_task_history(
         return ERROR_ROOM_NOT_FOUND
     return history
 
+@router.get("/{task_id}", response_model=TaskRead, summary="Obtener tarea específica", description="Obtiene una tarea específica del usuario actual.")
+async def get_task(
+        task_id: UUID,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    result = await session.exec(
+        select(Task).where(
+            Task.id == task_id,
+            Task.user_id == current_user.id,
+            Task.deleted_at.is_(None),
+        )
+    )
+    task = result.one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    if task.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes acceso a esta tarea")
+
+    return task
+
 @router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual. Devuelve un error 403 si el usuario no tiene permisos para eliminar la tarea.")
 async def delete_task(
         task_id: UUID,
@@ -225,5 +247,4 @@ async def get_assigned_tasks(
         current_user: Usuario = Depends(get_current_user),
 ):
     return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
-
 
