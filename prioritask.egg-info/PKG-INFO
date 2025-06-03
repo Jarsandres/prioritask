@@ -12,6 +12,9 @@ Requires-Dist: python-jose[cryptography]~=3.3
 Requires-Dist: passlib[bcrypt]==1.7.*
 Requires-Dist: sentence-transformers>=2.7.0
 Requires-Dist: celery[redis]~=5.4
+Requires-Dist: setfit
+Requires-Dist: sentencepiece>=0.2.0
+Requires-Dist: sacremoses==0.1.1
 Requires-Dist: python-dotenv~=1.0
 Provides-Extra: dev
 Requires-Dist: pytest~=8.2; extra == "dev"
