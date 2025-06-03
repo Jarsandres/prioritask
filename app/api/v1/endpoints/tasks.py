@@ -226,3 +226,4 @@ async def get_assigned_tasks(
 ):
     return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
 
+

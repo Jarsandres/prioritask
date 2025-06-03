@@ -9,12 +9,12 @@ from app.schemas.room import RoomRead
 from app.schemas.responses import ERROR_ROOM_DUPLICATE, ERROR_INTERNAL_SERVER_ERROR
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/rooms", tags=["Gestión de salas"])
+router = APIRouter(prefix="/rooms", tags=["Hogar"])
 
 class RoomCreate(BaseModel):
     nombre: str
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=RoomRead, summary="Crear sala", description="Crea una nueva sala asociada al usuario autenticado. Devuelve un error 500 si ocurre un problema inesperado en el servidor.")
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=RoomRead, summary="Crear Hogar", description="Crea un nuevo Hogar asociado al usuario autenticado. Devuelve un error 500 si ocurre un problema inesperado en el servidor.")
 async def create_room(
         payload: RoomCreate,
         current_user: Usuario = Depends(get_current_user),

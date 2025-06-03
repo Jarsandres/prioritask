@@ -15,9 +15,5 @@ app = FastAPI(
     }
 )
 
-@app.get("/")
-def read_root():
-    return {"message": "¡Prioritask está funcionando!"}
-
 # Aquí sí cargamos el router de la API
 app.include_router(api_router, prefix="/api/v1")
