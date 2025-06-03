@@ -4,7 +4,7 @@ import "./Sidebar.css";
 const Sidebar = () => {
   return (
     <div className="sidebar">
-      <h3 className="logo">🧠 Prioritask</h3>
+      <h3 className="logo">Prioritask</h3>
       <ul className="nav">
         {/* Secciones principales */}
         <li>
