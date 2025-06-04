@@ -47,7 +47,10 @@ cd prioritask
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # o .venv\Scripts\activate en Windows
+# Instala las dependencias de desarrollo (incluyen pytest_asyncio)
 pip install -e .[dev]
+# O bien puedes usar el archivo helper
+# pip install -r requirements-dev.txt
 ```
 
 ### 3. Configura el entorno
