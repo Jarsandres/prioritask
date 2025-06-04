@@ -5,6 +5,9 @@ from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from httpx import AsyncClient, ASGITransport
 from app.main import app
+from app.services.auth import create_access_token, hash_password
+from app.models.user import Usuario
+from app.core.config import settings
 
 TEST_DB = "sqlite+aiosqlite:///./prioritask.db"
 test_engine = create_async_engine(TEST_DB, echo=False)
@@ -36,3 +39,18 @@ async def session():
         yield session
         await session.close()
 
+@pytest_asyncio.fixture
+def auth_headers(session):
+    # Crear un usuario de prueba
+    user = Usuario(
+        id="test-user-id",
+        email="test@example.com",
+        hashed_password=hash_password("password123"),
+        is_active=True,
+    )
+    session.add(user)
+    asyncio.run(session.commit())
+
+    # Generar un token válido usando el JWT_SECRET_KEY de la configuración
+    token = create_access_token(sub=user.id, secret=settings.JWT_SECRET_KEY)
+    return {"Authorization": f"Bearer {token}"}

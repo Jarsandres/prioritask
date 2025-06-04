@@ -30,7 +30,7 @@ class Task(SQLModel, table=True):
 
     user_id: UUID = Field(foreign_key="usuario.id")
     usuario: Optional["Usuario"] = Relationship(back_populates="tasks")
-    history: List["TaskHistory"] = Relationship(back_populates="task")
+    history: List["TaskHistory"] = Relationship(back_populates="task", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     colaboradores: List["TaskAssignment"] = Relationship(back_populates="task")
     etiquetas: List["TaskTag"] = Relationship(back_populates="tarea", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 

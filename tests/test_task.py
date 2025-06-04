@@ -1,5 +1,7 @@
 from tests.utils import create_user_and_token, create_task
 import pytest
+from httpx import AsyncClient
+from uuid import uuid4
 
 
 @pytest.mark.asyncio
@@ -90,3 +92,61 @@ async def test_unique_constraint_on_task(async_client):
     # Verificar que la respuesta indica un error de restricción única
     assert response.status_code == 400
     assert "ya existe una tarea activa con este título para el usuario." == response.json().get("detail", "").lower()
+
+@pytest.mark.asyncio
+async def test_get_task_success(async_client: AsyncClient):
+    # Crear usuario y token
+    user, token = await create_user_and_token(async_client)
+
+    # Crear una tarea de prueba
+    task = await create_task(async_client, token, {
+        "titulo": "Tarea de prueba",
+        "descripcion": "Descripción de prueba",
+        "categoria": "OTRO",
+        "peso": 1,
+        "estado": "TODO",
+    })
+
+    # Obtener la tarea específica
+    response = await async_client.get(
+        f"/api/v1/tasks/{task['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == task["id"]
+    assert data["titulo"] == "Tarea de prueba"
+
+@pytest.mark.asyncio
+async def test_get_task_not_found(async_client: AsyncClient):
+    # Crear usuario y token
+    user, token = await create_user_and_token(async_client)
+
+    # Intentar obtener una tarea inexistente
+    response = await async_client.get(
+        f"/api/v1/tasks/{uuid4()}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404
+
+@pytest.mark.asyncio
+async def test_get_task_no_permission(async_client: AsyncClient):
+    # Crear dos usuarios y tokens
+    user1, token1 = await create_user_and_token(async_client)
+    user2, token2 = await create_user_and_token(async_client)
+
+    # Crear una tarea con el primer usuario
+    task = await create_task(async_client, token1, {
+        "titulo": "Tarea de prueba",
+        "descripcion": "Descripción de prueba",
+        "categoria": "OTRO",
+        "peso": 1,
+        "estado": "TODO",
+    })
+
+    # Intentar obtener la tarea con el segundo usuario
+    response = await async_client.get(
+        f"/api/v1/tasks/{task['id']}",
+        headers={"Authorization": f"Bearer {token2}"},
+    )
+    assert response.status_code == 403

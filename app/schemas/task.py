@@ -54,7 +54,7 @@ class TaskUpdate(BaseModel):
                 raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
         return value
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(extra="forbid")
 
 class TaskAssignmentCreate(BaseModel):
     task_id: UUID
