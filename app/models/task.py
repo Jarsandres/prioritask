@@ -34,6 +34,14 @@ class Task(SQLModel, table=True):
     colaboradores: List["TaskAssignment"] = Relationship(back_populates="task")
     etiquetas: List["TaskTag"] = Relationship(back_populates="tarea", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
+    @property
+    def owner_id(self) -> UUID:
+        return self.user_id
+
+    @owner_id.setter
+    def owner_id(self, value: UUID):
+        self.user_id = value
+
 class TaskHistory(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     task_id: UUID = Field(foreign_key="task.id")

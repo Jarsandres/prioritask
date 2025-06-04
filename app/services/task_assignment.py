@@ -51,3 +51,19 @@ class TaskAssignmentService:
         )
         return result.all()
 
+    @staticmethod
+    async def remove_task_assignment(session: AsyncSession, task_id: UUID, user_id: UUID):
+        # Buscar la asignación
+        query = select(TaskAssignment).where(
+            TaskAssignment.task_id == task_id,
+            TaskAssignment.user_id == user_id
+        )
+        result = await session.exec(query)
+        assignment = result.one_or_none()
+
+        if not assignment:
+            raise ValueError("Tarea asignada no encontrada")
+
+        # Eliminar la asignación
+        await session.delete(assignment)
+        await session.commit()
