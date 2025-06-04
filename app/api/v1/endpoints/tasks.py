@@ -16,7 +16,7 @@ from app.models.task import Task, TaskHistory, EstadoTarea
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead
 from app.models.user import Usuario
 from app.services.task_assignment import TaskAssignmentService
-from app.schemas.responses import ERROR_BAD_REQUEST, ERROR_ROOM_NOT_FOUND, ERROR_FORBIDDEN
+from app.schemas.responses import ERROR_BAD_REQUEST, ERROR_FORBIDDEN
 from pydantic import ValidationError
 
 router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
