@@ -165,7 +165,7 @@ async def get_task_history(
     )
     history = result.all()
     if not history:
-        return ERROR_ROOM_NOT_FOUND
+        raise HTTPException(status_code=404, detail="Historial no encontrado")
     return history
 
 @router.get("/{task_id}", response_model=TaskRead, summary="Obtener tarea específica", description="Obtiene una tarea específica del usuario actual.")

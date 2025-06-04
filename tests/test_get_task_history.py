@@ -19,3 +19,5 @@ async def test_get_task_history(async_client):
     assert resp.status_code == 200
     history = resp.json()
     assert isinstance(history, list)
+    assert len(history) > 0, "El historial debería contener al menos un elemento."
+    assert history[0]["action"] == "CREATED", "El primer registro del historial debería tener la acción 'CREATED'."
