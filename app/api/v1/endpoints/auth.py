@@ -13,6 +13,11 @@ from app.services.auth import get_current_user
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret")
 
+@router.get("/me", response_model=UsuarioRead, summary="Obtener información del usuario", description="Devuelve la información del usuario autenticado.")
+async def get_me(current_user: Usuario = Depends(get_current_user)):
+    return current_user
+
+
 @router.post("/register", response_model=UsuarioRead, status_code=201, summary="Registrar usuario", description="Crea un nuevo usuario en el sistema.")
 async def register(payload: UsuarioCreate, session: AsyncSession = Depends(get_session)):
     # Verificar si el usuario ya existe
@@ -35,7 +40,18 @@ async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_sessi
     token = auth_srv.create_access_token(user.id, SECRET_KEY)
     return {"access_token": token, "token_type": "bearer"}
 
-@router.get("/me", response_model=UsuarioRead, summary="Obtener información del usuario", description="Devuelve la información del usuario autenticado.")
-async def get_me(current_user: Usuario = Depends(get_current_user)):
-    return current_user
+@router.post(
+    "/refresh",
+    summary="Renovar token",
+    description="Genera un nuevo token de acceso a partir de uno válido."
+)
+async def refresh_token(current_user: Usuario = Depends(get_current_user)):
+    """Devuelve un nuevo JWT para el usuario autenticado."""
+    token = auth_srv.create_access_token(
+        sub=current_user.id,
+        secret=SECRET_KEY,
+        expires_minutes=60
+    )
+    return {"access_token": token, "token_type": "bearer"}
+
 
