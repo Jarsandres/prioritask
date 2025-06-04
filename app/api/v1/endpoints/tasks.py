@@ -17,9 +17,57 @@ from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCre
 from app.models.user import Usuario
 from app.services.task_assignment import TaskAssignmentService
 from app.schemas.responses import ERROR_BAD_REQUEST, ERROR_FORBIDDEN
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel
 
 router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
+
+@router.get("", response_model=list[TaskRead], summary="Obtener tareas", description="Obtiene una lista de tareas del usuario actual con filtros opcionales.")
+async def get_tasks(
+        estado: Optional[EstadoTarea] = Query(None),
+        categoria: Optional[CategoriaTarea] = Query(None),
+        completadas: Optional[bool] = Query(None),
+        desde: Optional[datetime] = Query(None),
+        hasta: Optional[datetime] = Query(None),
+        order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
+        is_descending: Optional[bool] = Query(False),
+        tag_id: Optional[UUID] = Query(None),
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+
+    filters = [
+        Task.user_id == current_user.id,
+        Task.deleted_at.is_(None),
+        ]
+
+    if estado:
+        filters.append(Task.estado == estado)
+    if categoria:
+        filters.append(Task.categoria == categoria)
+    if completadas is not None:
+        filters.append(Task.completed == completadas)
+    if desde:
+        filters.append(Task.due_date >= desde)
+    if hasta:
+        filters.append(Task.due_date <= hasta)
+    if tag_id:
+        filters.append(Task.id.in_(
+            select(TaskTag.task_id).where(TaskTag.tag_id == tag_id)
+        ))
+
+    # Corrección en la lógica de ordenamiento
+    if order_by in {"due_date", "peso", "created_at"}:
+        order_attr = getattr(Task, order_by)
+        order_clause = desc(order_attr) if is_descending else asc(order_attr)
+    else:
+        order_clause = desc(Task.created_at) if is_descending else asc(Task.created_at)
+
+    result = await session.exec(
+        select(Task).filter(
+            *filters
+        ).order_by(order_clause)
+    )
+    return result.all()
 
 @router.post("", response_model=TaskRead, status_code=201, summary="Crear tarea", description="Crea una nueva tarea para el usuario actual.")
 async def create_task(
@@ -54,56 +102,72 @@ async def create_task(
     await session.commit()
     return new_task
 
-
-@router.get("", response_model=list[TaskRead], summary="Obtener tareas", description="Obtiene una lista de tareas del usuario actual con filtros opcionales.")
-async def get_tasks(
-        estado: Optional[EstadoTarea] = Query(None),
-        categoria: Optional[CategoriaTarea] = Query(None),
-        completadas: Optional[bool] = Query(None),
-        desde: Optional[datetime] = Query(None),
-        hasta: Optional[datetime] = Query(None),
-        order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
-        is_descending: Optional[bool] = Query(False),
-        tag_id: Optional[UUID] = Query(None),
+@router.post("/assign", response_model=TaskAssignmentRead, status_code=201, summary="Asignar tarea", description="Asigna una tarea a otro usuario.")
+async def assign_task(
+        payload: TaskAssignmentCreate,
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
+    try:
+        assignment = await TaskAssignmentService.assign_task(
+            session=session,
+            task_id=payload.task_id,
+            user_id=payload.user_id,
+            assigned_by=current_user.id
+        )
+        return assignment
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    filters = [
-        Task.user_id == current_user.id,
-        Task.deleted_at.is_(None),
-    ]
 
-    if estado:
-        filters.append(Task.estado == estado)
-    if categoria:
-        filters.append(Task.categoria == categoria)
-    if completadas is not None:
-        filters.append(Task.completed == completadas)
-    if desde:
-        filters.append(Task.due_date >= desde)
-    if hasta:
-        filters.append(Task.due_date <= hasta)
-    if tag_id:
-        filters.append(Task.id.in_(
-            select(TaskTag.task_id).where(TaskTag.tag_id == tag_id)
-        ))
+@router.get("/assigned/{user_id}", response_model=List[TaskAssignmentRead], summary="Tareas asignadas", description="Obtiene las tareas asignadas a un usuario específico.")
+async def get_assigned_tasks(
+        user_id: UUID,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
 
-    # Corrección en la lógica de ordenamiento
-    if order_by in {"due_date", "peso", "created_at"}:
-        order_attr = getattr(Task, order_by)
-        order_clause = desc(order_attr) if is_descending else asc(order_attr)
-    else:
-        order_clause = desc(Task.created_at) if is_descending else asc(Task.created_at)
+@router.get("/{task_id}/history", summary="Historial de tarea", description="Obtiene el historial de cambios de una tarea específica. Devuelve un error 404 si la tarea no existe.")
+async def get_task_history(
+        task_id: str,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    try:
+        task_uuid = uuid.UUID(task_id)
+    except ValueError:
+        return ERROR_BAD_REQUEST
 
     result = await session.exec(
-        select(Task).filter(
-            *filters
-        ).order_by(order_clause)
+        select(TaskHistory)
+        .where(TaskHistory.task_id == task_uuid)
+        .order_by(asc(TaskHistory.timestamp))
     )
-    return result.all()
+    history = result.all()
+    if not history:
+        raise HTTPException(status_code=404, detail="Historial no encontrado")
+    return history
 
+@router.get("/{task_id}", response_model=TaskRead, summary="Obtener tarea específica", description="Obtiene una tarea específica del usuario actual.")
+async def get_task(
+        task_id: UUID,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    result = await session.exec(
+        select(Task).where(
+            Task.id == task_id,
+            Task.deleted_at.is_(None),
+        )
+    )
+    task = result.one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
+    if task.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes acceso a esta tarea")
+    return task
 @router.put("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK, summary="Actualizar tarea", description="Actualiza una tarea existente del usuario actual.")
 async def update_task(
         task_id: UUID,
@@ -148,49 +212,6 @@ async def update_task(
     await session.refresh(task)
 
     return task
-
-@router.get("/{task_id}/history", summary="Historial de tarea", description="Obtiene el historial de cambios de una tarea específica. Devuelve un error 404 si la tarea no existe.")
-async def get_task_history(
-        task_id: str,
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
-):
-    try:
-        task_uuid = uuid.UUID(task_id)
-    except ValueError:
-        return ERROR_BAD_REQUEST
-
-    result = await session.exec(
-        select(TaskHistory)
-        .where(TaskHistory.task_id == task_uuid)
-        .order_by(asc(TaskHistory.timestamp))
-    )
-    history = result.all()
-    if not history:
-        raise HTTPException(status_code=404, detail="Historial no encontrado")
-    return history
-
-@router.get("/{task_id}", response_model=TaskRead, summary="Obtener tarea específica", description="Obtiene una tarea específica del usuario actual.")
-async def get_task(
-        task_id: UUID,
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
-):
-    result = await session.exec(
-        select(Task).where(
-            Task.id == task_id,
-            Task.deleted_at.is_(None),
-        )
-    )
-    task = result.one_or_none()
-    if not task:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada")
-
-    if task.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="No tienes acceso a esta tarea")
-
-    return task
-
 @router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual. Devuelve un error 403 si el usuario no tiene permisos para eliminar la tarea.")
 async def delete_task(
         task_id: UUID,
@@ -214,66 +235,26 @@ async def delete_task(
     await session.delete(task)
     await session.commit()
 
-@router.post("/assign", response_model=TaskAssignmentRead, status_code=201, summary="Asignar tarea", description="Asigna una tarea a otro usuario.")
-async def assign_task(
-        payload: TaskAssignmentCreate,
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
-):
-    try:
-        assignment = await TaskAssignmentService.assign_task(
-            session=session,
-            task_id=payload.task_id,
-            user_id=payload.user_id,
-            assigned_by=current_user.id
-        )
-        return assignment
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+class UpdateTaskStatus(BaseModel):
+    estado: EstadoTarea
 
-@router.get("/assigned/{user_id}", response_model=List[TaskAssignmentRead], summary="Tareas asignadas", description="Obtiene las tareas asignadas a un usuario específico.")
-async def get_assigned_tasks(
-        user_id: UUID,
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
-):
-    return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
-
-@router.patch("/{task_id}", response_model=TaskRead, summary="Actualizar tarea parcialmente", description="Actualiza parcialmente una tarea, como cambiar su estado.")
-async def patch_task(
+@router.patch("/{task_id}", summary="Actualizar estado de tarea", description="Actualiza el estado de una tarea específica.")
+async def update_task_status(
         task_id: UUID,
-        payload: TaskUpdate,  # Usar esquema de validación
+        payload: UpdateTaskStatus,
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
-    try:
-        task = await session.get(Task, task_id)
+    """Actualiza el estado de una tarea existente."""
+    task = await session.get(Task, task_id)
 
-        if not task or task.deleted_at is not None:
-            raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+    if not task or task.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada o no autorizada.")
 
-        if task.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="No tienes acceso a esta tarea.")
+    task.estado = payload.estado
+    task.updated_at = datetime.now(timezone.utc)
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
 
-        update_data = payload.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(task, key, value)
-
-        task.updated_at = datetime.now(timezone.utc)
-
-        session.add(task)
-        await session.commit()
-        await session.refresh(task)
-
-        history = TaskHistory(
-            task_id=task.id,
-            user_id=current_user.id,
-            action="UPDATED",
-            changes=json.dumps(update_data, default=str),
-        )
-        session.add(history)
-        await session.commit()
-
-        return task
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
+    return {"message": "Estado de la tarea actualizado correctamente."}
