@@ -276,3 +276,39 @@ async def patch_task(
         return task
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
+
+@router.patch("/{task_id}/status", response_model=TaskRead, summary="Actualizar estado de tarea", description="Actualiza el estado de una tarea específica.")
+async def patch_task_status(
+        task_id: UUID,
+        payload: UpdateTaskStatus,  # Usar esquema de validación
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    try:
+        task = await session.get(Task, task_id)
+
+        if not task or task.deleted_at is not None:
+            raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+
+        if task.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="No tienes acceso a esta tarea.")
+
+        task.estado = payload.estado
+        task.updated_at = datetime.now(timezone.utc)
+
+        session.add(task)
+        await session.commit()
+        await session.refresh(task)
+
+        history = TaskHistory(
+            task_id=task.id,
+            user_id=current_user.id,
+            action="UPDATED_STATUS",
+            changes=json.dumps({"estado": payload.estado}, default=str),
+        )
+        session.add(history)
+        await session.commit()
+
+        return task
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
