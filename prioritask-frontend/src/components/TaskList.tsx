@@ -53,6 +53,25 @@ const TaskList = () => {
     }
   };
 
+  const marcarComoCompletada = async (taskId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `http://localhost:8000/api/v1/tasks/${taskId}`,
+        { estado: "DONE" },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      // Recargar tareas
+      fetchTareas();
+    } catch (error) {
+      console.error("Error al marcar como completada:", error);
+    }
+  };
+
   useEffect(() => {
     fetchTareas();
   }, []);
@@ -77,7 +96,9 @@ const TaskList = () => {
           {tareas.map((tarea) => (
             <li
               key={tarea.id}
-              className="list-group-item d-flex justify-content-between align-items-center"
+              className={`list-group-item d-flex justify-content-between align-items-center ${
+                tarea.estado === "DONE" ? "bg-light text-muted" : ""
+              }`}
             >
               <div>
                 <strong>{tarea.titulo}</strong> <br />
@@ -87,6 +108,14 @@ const TaskList = () => {
               </div>
 
               <div>
+                {tarea.estado !== "DONE" && (
+                  <button
+                    className="btn btn-sm btn-success me-2"
+                    onClick={() => marcarComoCompletada(tarea.id)}
+                  >
+                    ✅ Completar
+                  </button>
+                )}
                 <button
                   className="btn btn-sm btn-outline-primary me-2"
                   onClick={() => navigate(`/tasks/edit/${tarea.id}`)}

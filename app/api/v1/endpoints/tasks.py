@@ -248,3 +248,38 @@ async def get_assigned_tasks(
 ):
     return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
 
+@router.patch("/{task_id}", response_model=TaskRead, summary="Actualizar tarea parcialmente", description="Actualiza parcialmente una tarea, como cambiar su estado.")
+async def patch_task(
+        task_id: UUID,
+        payload: Dict[str, Any],
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    task = await session.get(Task, task_id)
+
+    if not task or task.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+
+    if task.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta tarea.")
+
+    for key, value in payload.items():
+        if hasattr(task, key):
+            setattr(task, key, value)
+
+    task.updated_at = datetime.now(timezone.utc)
+
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
+
+    history = TaskHistory(
+        task_id=task.id,
+        user_id=current_user.id,
+        action="UPDATED",
+        changes=json.dumps(payload, default=str),
+    )
+    session.add(history)
+    await session.commit()
+
+    return task
