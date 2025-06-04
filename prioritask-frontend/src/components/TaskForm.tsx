@@ -8,6 +8,7 @@ const TaskForm = () => {
   const [categoria, setCategoria] = useState("LIMPIEZA");
   const [peso, setPeso] = useState(1);
   const [dueDate, setDueDate] = useState("");
+  const [estado, setEstado] = useState("TODO");
   const [error, setError] = useState("");
 
   const { taskId } = useParams();
@@ -32,12 +33,13 @@ const TaskForm = () => {
               Authorization: `Bearer ${token}`,
             },
           });
-          const { titulo, descripcion, categoria, peso, due_date } = response.data;
+          const { titulo, descripcion, categoria, peso, due_date, estado } = response.data;
           setTitulo(titulo);
           setDescripcion(descripcion);
           setCategoria(categoria);
           setPeso(peso);
           setDueDate(due_date);
+          setEstado(estado);
         } catch (err) {
           console.error(err);
           setError("Error al cargar la tarea");
@@ -52,18 +54,20 @@ const TaskForm = () => {
     setError("");
 
     const token = localStorage.getItem("token");
+    const taskData = {
+      titulo,
+      descripcion,
+      categoria,
+      peso,
+      due_date: formatearFecha(dueDate),
+      estado,
+    };
 
     try {
       if (taskId) {
         await axios.put(
           `http://localhost:8000/api/v1/tasks/${taskId}`,
-          {
-            titulo,
-            descripcion,
-            categoria,
-            peso,
-            due_date: formatearFecha(dueDate),
-          },
+          taskData,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -73,13 +77,7 @@ const TaskForm = () => {
       } else {
         await axios.post(
           "http://localhost:8000/api/v1/tasks",
-          {
-            titulo,
-            descripcion,
-            categoria,
-            peso,
-            due_date: dueDate,
-          },
+          taskData,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -155,6 +153,20 @@ const TaskForm = () => {
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
           />
+        </div>
+
+        <div className="mb-3">
+          <label htmlFor="estado" className="form-label">Estado</label>
+          <select
+            id="estado"
+            className="form-select"
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+          >
+            <option value="TODO">Pendiente</option>
+            <option value="IN_PROGRESS">En progreso</option>
+            <option value="DONE">Completada</option>
+          </select>
         </div>
 
         <button type="submit" className="btn btn-primary">
