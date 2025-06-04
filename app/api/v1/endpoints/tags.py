@@ -46,20 +46,6 @@ async def get_my_tags(
     result = await session.exec(statement)
     return result.all()
 
-@router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Eliminar etiqueta", description="Elimina una etiqueta específica del usuario autenticado.")
-async def delete_tag(
-        tag_id: UUID = Path(..., description="ID de la etiqueta a eliminar"),
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user)
-):
-    tag = await session.get(Tag, tag_id)
-
-    if not tag or tag.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Etiqueta no encontrada.")
-
-    await session.delete(tag)
-    await session.commit()
-
 @router.post("/tasks/{task_id}/tags", status_code=200, summary="Asignar etiquetas", description="Asigna etiquetas a una tarea específica.")
 async def assign_tags_to_task(
         task_id: UUID,
@@ -82,3 +68,17 @@ async def assign_tags_to_task(
 
     await session.commit()
     return {"message": "Etiquetas asignadas correctamente"}
+
+@router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Eliminar etiqueta", description="Elimina una etiqueta específica del usuario autenticado.")
+async def delete_tag(
+        tag_id: UUID = Path(..., description="ID de la etiqueta a eliminar"),
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user)
+):
+    tag = await session.get(Tag, tag_id)
+
+    if not tag or tag.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Etiqueta no encontrada.")
+
+    await session.delete(tag)
+    await session.commit()
