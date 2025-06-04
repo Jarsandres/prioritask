@@ -37,7 +37,7 @@ async def get_tasks(
 
     filters = [
         Task.user_id == current_user.id,
-        Task.deleted_at is None
+        Task.deleted_at.is_(None)
     ]
 
     if estado:
@@ -51,14 +51,14 @@ async def get_tasks(
     if hasta:
         filters.append(Task.due_date <= hasta)
     if tag_id:
-        subquery = select(TaskTag.task_id).where(TaskTag.tag_id == tag_id)
+        subquery = select(TaskTag.task_id).where(TaskTag.tag_id == tag_id).distinct()
         filters.append(Task.id.in_(subquery))
 
     if order_by and hasattr(Task, order_by):
         order_attr = getattr(Task, order_by)
         order_clause = desc(order_attr) if is_descending else asc(order_attr)
     else:
-        order_clause = desc(Task.__table__.c.created_at) if is_descending else asc(Task.__table__.c.created_at)  # Ajuste para usar __table__.c
+        order_clause = desc(Task.created_at) if is_descending else asc(Task.created_at)
 
     result = await session.exec(
         select(Task).filter(
@@ -156,7 +156,7 @@ async def get_task(
     result = await session.exec(
         select(Task).where(
             Task.id == task_id,
-            Task.deleted_at is None  # Ajuste para comparación directa con None
+            Task.deleted_at.is_(None)
         )
     )
     task = result.one_or_none()
@@ -164,7 +164,7 @@ async def get_task(
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
-    if task.owner_id != current_user.id:
+    if task.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para acceder a esta tarea")
 
     return task
@@ -180,9 +180,9 @@ async def update_task(
         select(Task).where(
             Task.id == task_id,
             Task.user_id == current_user.id,
-            Task.deleted_at is None  # Ajuste para comparación directa con None
+            Task.deleted_at.is_(None)
         )
-    )  # Ajuste para usar Select correctamente
+    )
     task = result.one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
@@ -224,9 +224,9 @@ async def delete_task(
         select(Task).where(
             Task.id == task_id,
             Task.user_id == current_user.id,
-            Task.deleted_at is None
+            Task.deleted_at.is_(None)
         )
-    )  # Ajuste para usar Select correctamente
+    )
     task = result.one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
@@ -251,7 +251,7 @@ async def patch_task(
         result = await session.exec(
             select(Task).where(
                 Task.id == task_id,
-                Task.deleted_at is None,
+                Task.deleted_at.is_(None),
                 Task.user_id == current_user.id
             )
         )
@@ -295,7 +295,7 @@ async def patch_task_status(
             select(Task).where(
                 Task.id == task_id,
                 Task.user_id == current_user.id,
-                Task.deleted_at is None
+                Task.deleted_at.is_(None)
             )
         )
         task = result.one_or_none()
