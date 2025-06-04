@@ -33,6 +33,26 @@ const TaskList = () => {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    const confirm = window.confirm(
+      "¿Estás seguro de que deseas eliminar esta tarea?"
+    );
+    if (!confirm) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(`http://localhost:8000/api/v1/tasks/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setTareas(tareas.filter((t) => t.id !== id));
+    } catch (error) {
+      console.error("Error al eliminar tarea:", error);
+      alert("Ocurrió un error al eliminar la tarea.");
+    }
+  };
+
   useEffect(() => {
     fetchTareas();
   }, []);
@@ -73,6 +93,12 @@ const TaskList = () => {
                 >
                   Editar
                 </button>
+                <button
+                  className="btn btn-sm btn-outline-danger"
+                  onClick={() => handleDelete(tarea.id)}
+                >
+                  Eliminar
+                </button>
               </div>
             </li>
           ))}
@@ -83,4 +109,3 @@ const TaskList = () => {
 };
 
 export default TaskList;
-
