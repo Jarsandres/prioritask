@@ -21,6 +21,8 @@ class TaskRead(BaseModel):
     peso: float = Field(gt=0, lt=100, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
     due_date: Optional[datetime] = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
     created_at: datetime = Field(description="Fecha de creación de la tarea.", json_schema_extra={"example": "2025-05-27T12:00:00"})
+    user_id: UUID = Field(description="Identificador del usuario asociado a la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
+    deleted_at: Optional[datetime] = Field(default=None, description="Fecha de eliminación de la tarea, si aplica.", json_schema_extra={"example": None})
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):

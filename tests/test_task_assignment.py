@@ -6,12 +6,14 @@ from tests.utils import create_user_and_token, create_task
 @pytest.mark.asyncio
 async def test_assign_task(async_client: AsyncClient):
     # Crear usuario y obtener token
-    user, token = await create_user_and_token(async_client, email="test1@example.com")
-    another_user, _ = await create_user_and_token(async_client, email="test2@example.com")
+    email1 = f"test1-{uuid4().hex}@example.com"
+    email2 = f"test2-{uuid4().hex}@example.com"
+    user, token = await create_user_and_token(async_client, email=email1)
+    another_user, _ = await create_user_and_token(async_client, email=email2)
 
     # Crear tarea con el primer usuario
     task = await create_task(async_client, token, {
-        "titulo": "Tarea compartida",
+        "titulo": f"Tarea compartida {uuid4().hex}",
         "categoria": "OTRO"
     })
 
@@ -67,3 +69,55 @@ async def test_get_assigned_tasks(async_client: AsyncClient):
     data = response.json()
     assert isinstance(data, list)
     assert any(str(task["id"]) == str(item["task_id"]) for item in data)
+
+@pytest.mark.asyncio
+async def test_remove_task_assignment(async_client: AsyncClient):
+    # Crear usuario y obtener token
+    email1 = f"test1-{uuid4().hex}@example.com"
+    email2 = f"test2-{uuid4().hex}@example.com"
+    user, token = await create_user_and_token(async_client, email=email1)
+    another_user, _ = await create_user_and_token(async_client, email=email2)
+
+    # Crear tarea con el primer usuario
+    task = await create_task(async_client, token, {
+        "titulo": f"Tarea compartida {uuid4().hex}",
+        "categoria": "OTRO"
+    })
+
+    # Asignar tarea al segundo usuario
+    response = await async_client.post(
+        "/api/v1/tasks/assign",
+        json={
+            "task_id": str(task["id"]),
+            "user_id": str(another_user["id"])
+        },
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 201
+
+    # Verificar que la asignación fue creada correctamente
+    response = await async_client.get(
+        f"/api/v1/tasks/assigned/{another_user['id']}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["task_id"] == str(task["id"])
+    assert data[0]["user_id"] == str(another_user["id"])
+
+    # Eliminar asignación
+    response = await async_client.delete(
+        f"/api/v1/tasks/{task['id']}/assignees/{another_user['id']}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 204
+
+    # Verificar que la asignación fue eliminada
+    response = await async_client.get(
+        f"/api/v1/tasks/assigned/{another_user['id']}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0

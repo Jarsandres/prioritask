@@ -20,6 +20,12 @@ async def test_update_task_no_changes(async_client):
     assert resp.status_code == 200
     assert resp.json()["titulo"] == "Sin cambios"
 
+    # Validar que la tarea creada esté asociada al usuario actual
+    assert task['user_id'] == user['id']
+
+    # Validar que la tarea no esté eliminada
+    assert task['deleted_at'] is None
+
 @pytest.mark.asyncio
 async def test_delete_task_not_found(async_client):
     _, token = await create_user_and_token(async_client)

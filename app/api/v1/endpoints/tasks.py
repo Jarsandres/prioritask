@@ -10,7 +10,7 @@ from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc, asc
 from app.db.session import get_session
-from app.models import CategoriaTarea, TaskTag
+from app.models import CategoriaTarea, TaskTag, TaskAssignment
 from app.services.auth import get_current_user
 from app.models.task import Task, TaskHistory, EstadoTarea
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead
@@ -37,8 +37,8 @@ async def get_tasks(
 
     filters = [
         Task.user_id == current_user.id,
-        Task.deleted_at.is_(None),
-        ]
+        Task.deleted_at.is_(None)
+    ]
 
     if estado:
         filters.append(Task.estado == estado)
@@ -51,12 +51,10 @@ async def get_tasks(
     if hasta:
         filters.append(Task.due_date <= hasta)
     if tag_id:
-        filters.append(Task.id.in_(
-            select(TaskTag.task_id).where(TaskTag.tag_id == tag_id)
-        ))
+        subquery = select(TaskTag.task_id).where(TaskTag.tag_id == tag_id).distinct()
+        filters.append(Task.id.in_(subquery))
 
-    # Corrección en la lógica de ordenamiento
-    if order_by in {"due_date", "peso", "created_at"}:
+    if order_by and hasattr(Task, order_by):
         order_attr = getattr(Task, order_by)
         order_clause = desc(order_attr) if is_descending else asc(order_attr)
     else:
@@ -140,10 +138,10 @@ async def get_task_history(
         return ERROR_BAD_REQUEST
 
     result = await session.exec(
-        select(TaskHistory)
-        .where(TaskHistory.task_id == task_uuid)
-        .order_by(asc(TaskHistory.timestamp))
-    )
+        select(TaskHistory).filter(
+            TaskHistory.task_id == task_uuid
+        ).order_by(asc(TaskHistory.timestamp))
+    )  # Ajuste para usar Select correctamente
     history = result.all()
     if not history:
         raise HTTPException(status_code=404, detail="Historial no encontrado")
@@ -158,16 +156,19 @@ async def get_task(
     result = await session.exec(
         select(Task).where(
             Task.id == task_id,
-            Task.deleted_at.is_(None),
+            Task.deleted_at.is_(None)
         )
     )
     task = result.one_or_none()
+
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
     if task.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="No tienes acceso a esta tarea")
+        raise HTTPException(status_code=403, detail="No tienes permiso para acceder a esta tarea")
+
     return task
+
 @router.put("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK, summary="Actualizar tarea", description="Actualiza una tarea existente del usuario actual.")
 async def update_task(
         task_id: UUID,
@@ -212,6 +213,7 @@ async def update_task(
     await session.refresh(task)
 
     return task
+
 @router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual. Devuelve un error 403 si el usuario no tiene permisos para eliminar la tarea.")
 async def delete_task(
         task_id: UUID,
@@ -222,7 +224,7 @@ async def delete_task(
         select(Task).where(
             Task.id == task_id,
             Task.user_id == current_user.id,
-            Task.deleted_at.is_(None),
+            Task.deleted_at.is_(None)
         )
     )
     task = result.one_or_none()
@@ -246,13 +248,17 @@ async def patch_task(
         current_user: Usuario = Depends(get_current_user),
 ):
     try:
-        task = await session.get(Task, task_id)
+        result = await session.exec(
+            select(Task).where(
+                Task.id == task_id,
+                Task.deleted_at.is_(None),
+                Task.user_id == current_user.id
+            )
+        )
+        task = result.one_or_none()
 
-        if not task or task.deleted_at is not None:
+        if not task:
             raise HTTPException(status_code=404, detail="Tarea no encontrada.")
-
-        if task.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="No tienes acceso a esta tarea.")
 
         update_data = payload.model_dump(exclude_unset=True)
         for key, value in update_data.items():
@@ -285,13 +291,17 @@ async def patch_task_status(
         current_user: Usuario = Depends(get_current_user),
 ):
     try:
-        task = await session.get(Task, task_id)
+        result = await session.exec(
+            select(Task).where(
+                Task.id == task_id,
+                Task.user_id == current_user.id,
+                Task.deleted_at.is_(None)
+            )
+        )
+        task = result.one_or_none()
 
-        if not task or task.deleted_at is not None:
+        if not task:
             raise HTTPException(status_code=404, detail="Tarea no encontrada.")
-
-        if task.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="No tienes acceso a esta tarea.")
 
         task.estado = payload.estado
         task.updated_at = datetime.now(timezone.utc)
@@ -303,7 +313,7 @@ async def patch_task_status(
         history = TaskHistory(
             task_id=task.id,
             user_id=current_user.id,
-            action="UPDATED_STATUS",
+            action="STATUS_UPDATED",
             changes=json.dumps({"estado": payload.estado}, default=str),
         )
         session.add(history)
@@ -312,3 +322,26 @@ async def patch_task_status(
         return task
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
+
+@router.delete("/{task_id}/assignees/{user_id}", status_code=204, summary="Eliminar asignación de tarea", description="Elimina la asignación de una tarea a un usuario específico.")
+async def remove_task_assignment(
+        task_id: UUID,
+        user_id: UUID,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user),
+):
+    # Verificar existencia de la asignación
+    result = await session.exec(
+        select(TaskAssignment).where(
+            TaskAssignment.task_id == task_id,
+            TaskAssignment.user_id == user_id
+        )
+    )
+    assignment = result.one_or_none()
+
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Asignación no encontrada")
+
+    # Eliminar la asignación
+    await session.delete(assignment)
+    await session.commit()
