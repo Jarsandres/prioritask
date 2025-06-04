@@ -209,19 +209,8 @@ async def delete_task(
     if task.user_id != current_user.id:
         return ERROR_FORBIDDEN
 
-    task.deleted_at = datetime.now(timezone.utc)
-    task.updated_at = datetime.now(timezone.utc)
-    session.add(task)
-
-    history = TaskHistory(
-        task_id=task.id,
-        user_id=current_user.id,
-        action="DELETED",
-        timestamp=datetime.now(timezone.utc),
-    )
-    session.add(history)
+    await session.delete(task)
     await session.commit()
-    await session.refresh(task)
 
 @router.post("/assign", response_model=TaskAssignmentRead, status_code=201, summary="Asignar tarea", description="Asigna una tarea a otro usuario.")
 async def assign_task(
