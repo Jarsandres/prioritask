@@ -1,11 +1,11 @@
 # 🔧 Prioritask – API inteligente de gestión de tareas
 
 Prioritask es una API REST desarrollada con FastAPI que permite gestionar tareas domésticas de forma inteligente. Integra modelos de procesamiento de lenguaje natural (IA) para:
-- Clasificar tareas por prioridada
+- Clasificar tareas por prioridad
 - Agrupar tareas por similitud semántica
 - Reformular títulos de tareas para mejorar su claridad
 
-> Proyecto realizado como Trabajo de Fin de Grado en Desarrollo de Aplicaciones Multiplaforma 
+> Proyecto realizado como Trabajo de Fin de Grado en Desarrollo de Aplicaciones Multiplataforma 
 
 ---
 
