@@ -31,6 +31,12 @@ ERROR_FORBIDDEN = JSONResponse(
     content={"detail": "Acceso prohibido. No tiene permisos para realizar esta acción."}
 )
 
+# ERROR_TASK_HISTORY_NOT_FOUND: Indica que el historial de la tarea no fue encontrado.
+ERROR_TASK_HISTORY_NOT_FOUND = JSONResponse(
+    status_code=404,
+    content={"detail": "Historial de tarea no encontrado."}
+)
+
 # ERROR_INTERNAL_SERVER_ERROR: Indica que ocurrió un problema inesperado en el servidor.
 ERROR_INTERNAL_SERVER_ERROR = JSONResponse(
     status_code=500,
