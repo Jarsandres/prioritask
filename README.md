@@ -89,7 +89,7 @@ Una vez lanzado, puedes acceder a:
 
 ```env
 DATABASE_URL=sqlite:///./tareas.db
-SECRET_KEY=tu_clave_secreta
+JWT_SECRET_KEY=tu_clave_secreta
 
 ```
 
