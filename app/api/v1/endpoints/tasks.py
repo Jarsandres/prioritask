@@ -17,6 +17,7 @@ from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCre
 from app.models.user import Usuario
 from app.services.task_assignment import TaskAssignmentService
 from app.schemas.responses import ERROR_BAD_REQUEST, ERROR_ROOM_NOT_FOUND, ERROR_FORBIDDEN
+from pydantic import ValidationError
 
 router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
 
@@ -176,7 +177,6 @@ async def get_task(
     result = await session.exec(
         select(Task).where(
             Task.id == task_id,
-            Task.user_id == current_user.id,
             Task.deleted_at.is_(None),
         )
     )
@@ -251,35 +251,38 @@ async def get_assigned_tasks(
 @router.patch("/{task_id}", response_model=TaskRead, summary="Actualizar tarea parcialmente", description="Actualiza parcialmente una tarea, como cambiar su estado.")
 async def patch_task(
         task_id: UUID,
-        payload: Dict[str, Any],
+        payload: TaskUpdate,  # Usar esquema de validación
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
-    task = await session.get(Task, task_id)
+    try:
+        task = await session.get(Task, task_id)
 
-    if not task or task.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+        if not task or task.deleted_at is not None:
+            raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
-    if task.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta tarea.")
+        if task.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="No tienes acceso a esta tarea.")
 
-    for key, value in payload.items():
-        if hasattr(task, key):
+        update_data = payload.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
             setattr(task, key, value)
 
-    task.updated_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(timezone.utc)
 
-    session.add(task)
-    await session.commit()
-    await session.refresh(task)
+        session.add(task)
+        await session.commit()
+        await session.refresh(task)
 
-    history = TaskHistory(
-        task_id=task.id,
-        user_id=current_user.id,
-        action="UPDATED",
-        changes=json.dumps(payload, default=str),
-    )
-    session.add(history)
-    await session.commit()
+        history = TaskHistory(
+            task_id=task.id,
+            user_id=current_user.id,
+            action="UPDATED",
+            changes=json.dumps(update_data, default=str),
+        )
+        session.add(history)
+        await session.commit()
 
-    return task
+        return task
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
