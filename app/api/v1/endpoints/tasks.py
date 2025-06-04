@@ -161,7 +161,9 @@ async def get_task_history(
         return ERROR_BAD_REQUEST
 
     result = await session.exec(
-        select(TaskHistory).where(TaskHistory.task_id == task_uuid)
+        select(TaskHistory)
+        .where(TaskHistory.task_id == task_uuid)
+        .order_by(asc(TaskHistory.timestamp))
     )
     history = result.all()
     if not history:
