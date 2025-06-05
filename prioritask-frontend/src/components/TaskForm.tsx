@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../api";
 import { useNavigate, useParams } from "react-router-dom";
 
 const TaskForm = () => {
@@ -26,13 +26,8 @@ const TaskForm = () => {
   useEffect(() => {
     if (taskId) {
       const fetchTask = async () => {
-        const token = localStorage.getItem("token");
         try {
-          const response = await axios.get(`http://localhost:8000/api/v1/tasks/${taskId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
+          const response = await api.get(`/tasks/${taskId}`);
           const { titulo, descripcion, categoria, peso, due_date, estado } = response.data;
           setTitulo(titulo);
           setDescripcion(descripcion);
@@ -53,7 +48,6 @@ const TaskForm = () => {
     e.preventDefault();
     setError("");
 
-    const token = localStorage.getItem("token");
     const taskData = {
       titulo,
       descripcion,
@@ -65,25 +59,9 @@ const TaskForm = () => {
 
     try {
       if (taskId) {
-        await axios.put(
-          `http://localhost:8000/api/v1/tasks/${taskId}`,
-          taskData,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        await api.put(`/tasks/${taskId}`, taskData);
       } else {
-        await axios.post(
-          "http://localhost:8000/api/v1/tasks",
-          taskData,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        await api.post("/tasks", taskData);
       }
 
       navigate("/tasks");
