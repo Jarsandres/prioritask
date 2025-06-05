@@ -1,9 +1,10 @@
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Path
+from fastapi import APIRouter, Depends, HTTPException, status, Path, Response
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import select, delete
+from sqlmodel import  delete
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
@@ -100,6 +101,53 @@ async def delete_tag(
 
     await session.delete(tag)
     await session.commit()
+
+@router.delete(
+    "/tasks/{task_id}/tags/{tag_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Desasignar etiqueta de tarea",
+    description="Elimina el vínculo entre la etiqueta y la tarea indicada. "
+                "Verifica que tanto la tarea como la etiqueta existan y pertenezcan al usuario."
+)
+async def remove_tag_from_task(
+        task_id: UUID = Path(..., description="ID de la tarea de la que se quiere desasignar la etiqueta"),
+        tag_id: UUID = Path(..., description="ID de la etiqueta que se quiere desasignar"),
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user)
+):
+    # 1) Verificar que la tarea exista y pertenezca al usuario
+    task = await session.get(Task, task_id)
+    if not task or task.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+
+    # 2) Verificar que la etiqueta exista y pertenezca al usuario
+    tag = await session.get(Tag, tag_id)
+    if not tag or tag.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Etiqueta no encontrada.")
+
+    # 3) Verificar que exista la relación TaskTag(task_id, tag_id)
+
+    result = await session.exec(
+        select(TaskTag).where(
+            TaskTag.task_id == task_id,
+            TaskTag.tag_id == tag_id
+        )
+    )
+    link = result.one_or_none()
+
+    if not link:
+        raise HTTPException(status_code=404, detail="La etiqueta no está asignada a esta tarea.")
+
+    # 4) Eliminar la relación
+    stmt = delete(TaskTag).where(
+        TaskTag.task_id == task_id,
+        TaskTag.tag_id == tag_id
+    )
+    await session.exec(stmt)
+    await session.commit()
+
+    # 5) Respuesta vacía con 204
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @router.patch(
     "/{tag_id}",
