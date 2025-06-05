@@ -23,8 +23,9 @@ a:hover {
 
 body {
   margin: 0;
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  background-color: #f8f9fa; /* Gris claro */
+  font-family: 'Inter', sans-serif;
+  background-color: #f4f6f8;
+  color: #1f2937;
 }
 
 html {
@@ -67,4 +68,3 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
-

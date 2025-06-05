@@ -19,14 +19,19 @@ export default function Login() {
       const { access_token } = response.data;
       localStorage.setItem("token", access_token);
       navigate("/dashboard");
-    } catch (err) {
-      setError("Error al iniciar sesión. Revisa tus credenciales.");
+    } catch (err: any) {
+      if (err.response && err.response.status === 401) {
+        setError("Credenciales inválidas. Por favor, verifica tu correo y contraseña.");
+      } else {
+        setError("Error al iniciar sesión. Revisa tus credenciales.");
+      }
     }
   };
 
   return (
     <div className={styles.container}>
       <div className={styles.card}>
+        <img src="/logo.png" alt="Prioritask logo" className={styles.logo} />
         <h1 className={styles.title}>Iniciar sesión</h1>
         <form onSubmit={handleLogin}>
           <input
@@ -53,4 +58,3 @@ export default function Login() {
     </div>
   );
 }
-

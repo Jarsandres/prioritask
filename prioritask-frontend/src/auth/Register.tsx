@@ -27,6 +27,7 @@ export default function Register() {
   return (
     <div className={styles.container}>
       <div className={styles.card}>
+        <img src="/logo.png" alt="Prioritask logo" className={styles.logo} />
         <h1 className={styles.title}>Crear cuenta</h1>
         <form onSubmit={handleRegister}>
           <input

@@ -1,6 +1,6 @@
 .sidebar {
   width: 220px;
-  background-color: #007bff;
+  background-color: #337ab7; /* Azul principal */
   color: white;
   height: 100vh;
   position: fixed;
@@ -9,7 +9,8 @@
   display: flex;
   flex-direction: column;
   padding: 20px 15px;
-  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1); /* Sombra más sutil */
+  font-family: 'Inter', sans-serif; /* Tipografía moderna */
 }
 
 .logo {
@@ -48,11 +49,11 @@
 }
 
 .nav a:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.15); /* Fondo semitransparente en hover */
 }
 
 .nav a.active {
-  background-color: rgba(255, 255, 255, 0.3);
+  background-color: rgba(255, 255, 255, 0.25); /* Fondo semitransparente más opaco para activo */
 }
 
 .nav-bottom {
@@ -76,6 +77,5 @@
 }
 
 .logout-btn:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.15); /* Fondo semitransparente en hover */
 }
-
