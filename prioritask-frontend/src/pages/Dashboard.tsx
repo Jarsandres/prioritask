@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../api";
 import { FaTasks, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
 import styles from "./Dashboard.module.css";
 
@@ -8,10 +8,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchTareas = async () => {
-      const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:8000/api/v1/tasks", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get("/tasks");
       setTareas(res.data);
     };
 

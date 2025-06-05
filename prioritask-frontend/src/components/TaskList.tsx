@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../api";
 import { useNavigate } from "react-router-dom";
 import debounce from "lodash/debounce";
 
@@ -32,8 +32,7 @@ const TaskList = () => {
       if (fechaLimite) params.due_date_max = fechaLimite;
       if (busqueda) params.search = busqueda;
 
-      const res = await axios.get("http://localhost:8000/api/v1/tasks", {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await api.get("/tasks", {
         params,
       });
 
@@ -53,11 +52,7 @@ const TaskList = () => {
 
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`http://localhost:8000/api/v1/tasks/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      await api.delete(`/tasks/${id}`);
       setTareas(tareas.filter((t) => t.id !== id));
     } catch (error) {
       console.error("Error al eliminar tarea:", error);
@@ -68,15 +63,7 @@ const TaskList = () => {
   const marcarComoCompletada = async (taskId: string) => {
     try {
       const token = localStorage.getItem("token");
-      await axios.patch(
-        `http://localhost:8000/api/v1/tasks/${taskId}`,
-        { estado: "DONE" },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      await api.patch(`/tasks/${taskId}`, { estado: "DONE" });
       // Recargar tareas
       fetchTareas();
     } catch (error) {
