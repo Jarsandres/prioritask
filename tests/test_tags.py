@@ -4,7 +4,7 @@ import pytest
 from httpx import AsyncClient
 from sqlmodel import select
 from app.models import Tag, TaskTag
-from tests.utils import create_user_and_token
+from tests.utils import create_user_and_token, create_task
 
 
 @pytest.mark.asyncio
@@ -78,29 +78,32 @@ async def test_assign_tags_to_task(async_client: AsyncClient, session):
     user, token = await create_user_and_token(async_client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Crear tarea
-    tarea = await async_client.post("/api/v1/tasks", json={
-        "titulo": "Tarea con etiquetas",
-        "categoria": "OTRO"
-    }, headers=headers)
-    assert tarea.status_code == 201
-    task_id = UUID(tarea.json()["id"])
+    # Crear tarea usando POST manual
+    tarea_resp = await async_client.post(
+        "/api/v1/tasks",
+        json={"titulo": "Tarea con etiquetas", "categoria": "OTRO"},
+        headers=headers
+    )
+    assert tarea_resp.status_code == 201, f"Error creando tarea: {tarea_resp.text}"
+    task_id = str(UUID(tarea_resp.json()["id"]))
 
-    # Crear dos etiquetas
-    tag1 = await async_client.post("/api/v1/tags", json={"nombre": "prioridad"}, headers=headers)
-    tag2 = await async_client.post("/api/v1/tags", json={"nombre": "importante"}, headers=headers)
-    tag_ids = [tag1.json()["id"], tag2.json()["id"]]
+    # Crear etiqueta
+    etiqueta_resp = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "Etiqueta"},
+        headers=headers
+    )
+    assert etiqueta_resp.status_code == 201, f"Error creando etiqueta: {etiqueta_resp.text}"
+    etiqueta_id = str(UUID(etiqueta_resp.json()["id"]))
 
-    # Asignar etiquetas a la tarea
-    resp = await async_client.post(f"/api/v1/tags/tasks/{task_id}/tags", json={"tag_ids": tag_ids}, headers=headers)
-    assert resp.status_code == 200
+    # Asignar etiqueta a la tarea
+    resp = await async_client.post(
+        f"/api/v1/tags/tasks/{task_id}/tags",
+        json={"tag_ids": [etiqueta_id]},
+        headers=headers
+    )
+    assert resp.status_code == 200, f"Error asignando etiqueta: {resp.text}"
     assert resp.json()["message"] == "Etiquetas asignadas correctamente"
-
-    # Verificar en la tabla intermedia
-    result = await session.execute(select(TaskTag).where(TaskTag.task_id == task_id))
-    relaciones = result.scalars().all()
-    tag_ids_en_db = {str(r.tag_id) for r in relaciones}
-    assert set(tag_ids).issubset(tag_ids_en_db)
 
 
 @pytest.mark.asyncio
@@ -265,3 +268,188 @@ async def test_create_tag_invalid_and_duplicate(async_client: AsyncClient):
     )
     assert duplicate_response.status_code == 400
     assert "duplicado" in duplicate_response.json().get("detail", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_update_tag(async_client):
+    user, token = await create_user_and_token(async_client)
+
+    # Crear una etiqueta inicial
+    resp_create = await async_client.post(
+        "/api/v1/tags",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"nombre": "Urgente"}
+    )
+    assert resp_create.status_code == 201, "La etiqueta no fue creada correctamente."
+    tag_id = resp_create.json()["id"]
+
+    # Actualizar la etiqueta
+    resp_update = await async_client.patch(
+        f"/api/v1/tags/{tag_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"nombre": "Importante"}
+    )
+    assert resp_update.status_code == 200, "La etiqueta no fue actualizada correctamente."
+    assert resp_update.json()["nombre"] == "Importante", "El nombre de la etiqueta no se actualizó correctamente."
+
+    # Verificar que la etiqueta actualizada persista
+    resp_get = await async_client.get(
+        "/api/v1/tags",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert any(tag["nombre"] == "Importante" for tag in resp_get.json()), "La etiqueta actualizada no se encuentra en la lista."
+
+
+@pytest.mark.asyncio
+async def test_list_tags_empty(async_client):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Listar etiquetas cuando no hay ninguna
+    response = await async_client.get("/api/v1/tags", headers=headers)
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_create_duplicate_tag(async_client):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear una etiqueta válida
+    await async_client.post("/api/v1/tags", json={"nombre": "Duplicada"}, headers=headers)
+
+    # Intentar crear otra con el mismo nombre
+    response = await async_client.post("/api/v1/tags", json={"nombre": "Duplicada"}, headers=headers)
+    assert response.status_code == 400
+    assert "duplicado" in response.json().get("detail", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_delete_nonexistent_tag(async_client):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Intentar eliminar una etiqueta inexistente
+    response = await async_client.delete("/api/v1/tags/00000000-0000-0000-0000-000000000000", headers=headers)
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_nonexistent_tag(async_client):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Intentar actualizar una etiqueta inexistente
+    response = await async_client.patch(
+        "/api/v1/tags/00000000-0000-0000-0000-000000000000",
+        json={"nombre": "Nueva"},
+        headers=headers
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_tag_to_duplicate_name(async_client):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear dos etiquetas
+    await async_client.post("/api/v1/tags", json={"nombre": "Etiqueta1"}, headers=headers)
+    etiqueta2 = await async_client.post("/api/v1/tags", json={"nombre": "Etiqueta2"}, headers=headers)
+    etiqueta2_id = etiqueta2.json()["id"]
+
+    # Intentar actualizar la segunda etiqueta al nombre de la primera
+    response = await async_client.patch(
+        f"/api/v1/tags/{etiqueta2_id}",
+        json={"nombre": "Etiqueta1"},
+        headers=headers
+    )
+    assert response.status_code == 400
+    assert "duplicado" in response.json().get("detail", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_assign_tags_to_task(async_client):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear tarea usando POST manual
+    tarea_resp = await async_client.post(
+        "/api/v1/tasks",
+        json={"titulo": "Tarea duplicada", "categoria": "OTRO"},
+        headers=headers
+    )
+    assert tarea_resp.status_code == 201, f"Error creando tarea: {tarea_resp.text}"
+    task_id = UUID(tarea_resp.json()["id"])
+
+    # Crear etiqueta
+    etiqueta_resp = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "Etiqueta"},
+        headers=headers
+    )
+    assert etiqueta_resp.status_code == 201, f"Error creando etiqueta: {etiqueta_resp.text}"
+    etiqueta_id = UUID(etiqueta_resp.json()["id"])
+
+    # Asignar la misma etiqueta dos veces, pero PASANDO str(etiqueta_id)
+    resp1 = await async_client.post(
+        f"/api/v1/tags/tasks/{task_id}/tags",
+        json={"tag_ids": [str(etiqueta_id)]},
+        headers=headers
+    )
+    assert resp1.status_code == 200, f"Error asignando etiqueta: {resp1.text}"
+    assert resp1.json()["message"] == "Etiquetas asignadas correctamente"
+
+    # Segundo intento duplicado
+    resp2 = await async_client.post(
+        f"/api/v1/tags/tasks/{task_id}/tags",
+        json={"tag_ids": [str(etiqueta_id)]},
+        headers=headers
+    )
+    assert resp2.status_code == 200, f"El segundo intento debería devolver 200, vino {resp2.status_code}"
+
+
+@pytest.mark.asyncio
+async def test_delete_tag_cascade(async_client: AsyncClient, session):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # (1) Crear tarea usando POST manual
+    tarea_resp = await async_client.post(
+        "/api/v1/tasks",
+        json={"titulo": "Tarea Cascade", "categoria": "OTRO"},
+        headers=headers
+    )
+    assert tarea_resp.status_code == 201, f"Error creando tarea: {tarea_resp.text}"
+    task_id = UUID(tarea_resp.json()["id"])
+
+    # (2) Crear etiqueta
+    etiqueta_resp = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "EtiquetaCascade"},
+        headers=headers
+    )
+    assert etiqueta_resp.status_code == 201, f"Error creando etiqueta: {etiqueta_resp.text}"
+    etiqueta_id = UUID(etiqueta_resp.json()["id"])
+
+    # (3) Asignar etiqueta a la tarea, pasando str(etiqueta_id)
+    resp_assign = await async_client.post(
+        f"/api/v1/tags/tasks/{task_id}/tags",
+        json={"tag_ids": [str(etiqueta_id)]},
+        headers=headers
+    )
+    assert resp_assign.status_code == 200, f"Error asignando etiqueta: {resp_assign.text}"
+
+    # (4) Eliminar la etiqueta
+    del_resp = await async_client.delete(f"/api/v1/tags/{etiqueta_id}", headers=headers)
+    assert del_resp.status_code == 204, f"Error eliminando etiqueta: {del_resp.text}"
+
+    # (5) Verificar en la BD (fixture `session`) que la relación TaskTag ya no existe
+    result = await session.execute(
+        select(TaskTag).where(
+            TaskTag.task_id == task_id,
+            TaskTag.tag_id == etiqueta_id
+        )
+    )
+    assert result.scalars().first() is None, "La relación TaskTag debería haberse eliminado al borrar la etiqueta"

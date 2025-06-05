@@ -12,3 +12,6 @@ class TagRead(BaseModel):
 
 class TagAssignRequest(BaseModel):
     tag_ids: List[UUID] = Field(description="Lista de identificadores únicos de etiquetas.", json_schema_extra={"example": ["123e4567-e89b-12d3-a456-426614174000", "123e4567-e89b-12d3-a456-426614174001"]})
+
+class TagUpdate(BaseModel):
+    nombre: str = Field(..., min_length=2, max_length=50, description="Nuevo nombre de la etiqueta.", json_schema_extra={"example": "Importante"})
