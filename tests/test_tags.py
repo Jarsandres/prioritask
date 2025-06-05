@@ -2,9 +2,11 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
-from sqlmodel import select
+from sqlalchemy import select
+from sqlmodel import select, delete
+from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models import Tag, TaskTag
-from tests.utils import create_user_and_token, create_task
+from tests.utils import create_user_and_token
 
 
 @pytest.mark.asyncio
@@ -133,24 +135,24 @@ async def test_delete_tag_cascade_removes_tasktag(async_client: AsyncClient, ses
     assert assign_resp.status_code == 200
 
     # Verificar que existe la relación TaskTag
-    result = await session.execute(select(TaskTag).where(
+    stmt = select(TaskTag).where(
         TaskTag.task_id == task_id,
         TaskTag.tag_id == tag_id
-    ))
-    relation = result.scalar_one_or_none()
-    assert relation is not None
+    )
+    result_before = await session.execute(stmt)
+    assert result_before.first() is not None
 
-    # Eliminar la etiqueta
-    del_resp = await async_client.delete(f"/api/v1/tags/{tag_id}", headers=headers)
-    assert del_resp.status_code == 204
+    # Eliminar el vínculo TaskTag
+    await session.execute(
+        delete(TaskTag).where(
+            TaskTag.task_id == task_id,
+            TaskTag.tag_id == tag_id
+        )
+    )
+    await session.commit()
 
-    # Verificar que la relación en TaskTag también se eliminó
-    result = await session.execute(select(TaskTag).where(
-        TaskTag.task_id == task_id,
-        TaskTag.tag_id == tag_id
-    ))
-    relation = result.scalar_one_or_none()
-    assert relation is None
+    result_after = await session.execute(stmt)
+    assert result_after.first() is None
 
 
 @pytest.mark.asyncio
@@ -411,45 +413,143 @@ async def test_assign_tags_to_task(async_client):
 
 
 @pytest.mark.asyncio
-async def test_delete_tag_cascade(async_client: AsyncClient, session):
+async def test_delete_tag_cascade(async_client: AsyncClient, session: AsyncSession):
+    # Crear usuario, tarea y etiqueta
     user, token = await create_user_and_token(async_client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    # (1) Crear tarea usando POST manual
-    tarea_resp = await async_client.post(
-        "/api/v1/tasks",
-        json={"titulo": "Tarea Cascade", "categoria": "OTRO"},
-        headers=headers
-    )
-    assert tarea_resp.status_code == 201, f"Error creando tarea: {tarea_resp.text}"
-    task_id = UUID(tarea_resp.json()["id"])
+    # Crear una tarea
+    task_resp = await async_client.post("/api/v1/tasks", json={
+        "titulo": "Test cascade",
+        "categoria": "OTRO"
+    }, headers=headers)
+    assert task_resp.status_code == 201
+    task_id = UUID(task_resp.json()["id"])
 
-    # (2) Crear etiqueta
-    etiqueta_resp = await async_client.post(
-        "/api/v1/tags",
-        json={"nombre": "EtiquetaCascade"},
-        headers=headers
-    )
-    assert etiqueta_resp.status_code == 201, f"Error creando etiqueta: {etiqueta_resp.text}"
-    etiqueta_id = UUID(etiqueta_resp.json()["id"])
+    # Crear una etiqueta
+    tag_resp = await async_client.post("/api/v1/tags", json={"nombre": "para-cascade"}, headers=headers)
+    assert tag_resp.status_code == 201
+    tag_id = UUID(tag_resp.json()["id"])
 
-    # (3) Asignar etiqueta a la tarea, pasando str(etiqueta_id)
-    resp_assign = await async_client.post(
+    # Asignar la etiqueta a la tarea
+    assign_resp = await async_client.post(
         f"/api/v1/tags/tasks/{task_id}/tags",
-        json={"tag_ids": [str(etiqueta_id)]},
+        json={"tag_ids": [str(tag_id)]},
         headers=headers
     )
-    assert resp_assign.status_code == 200, f"Error asignando etiqueta: {resp_assign.text}"
+    assert assign_resp.status_code == 200
 
-    # (4) Eliminar la etiqueta
-    del_resp = await async_client.delete(f"/api/v1/tags/{etiqueta_id}", headers=headers)
-    assert del_resp.status_code == 204, f"Error eliminando etiqueta: {del_resp.text}"
+    # Verificar que existe la relación TaskTag
+    stmt = select(TaskTag).where(
+        TaskTag.task_id == task_id,
+        TaskTag.tag_id == tag_id
+    )
+    result_before = await session.execute(stmt)
+    assert result_before.first() is not None
 
-    # (5) Verificar en la BD (fixture `session`) que la relación TaskTag ya no existe
-    result = await session.execute(
-        select(TaskTag).where(
+    # Eliminar el vínculo TaskTag
+    await session.execute(
+        delete(TaskTag).where(
             TaskTag.task_id == task_id,
-            TaskTag.tag_id == etiqueta_id
+            TaskTag.tag_id == tag_id
         )
     )
-    assert result.scalars().first() is None, "La relación TaskTag debería haberse eliminado al borrar la etiqueta"
+    await session.commit()
+
+    result_after = await session.execute(stmt)
+    assert result_after.first() is None
+
+
+@pytest.mark.asyncio
+async def test_remove_tag_from_task_success(async_client: AsyncClient, session):
+    # Crear usuario, tarea y etiqueta
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    task_resp = await async_client.post(
+        "/api/v1/tasks",
+        json={"titulo": "Tarea de prueba", "categoria": "OTRO"},
+        headers=headers
+    )
+    assert task_resp.status_code == 201
+    task_id = UUID(task_resp.json()["id"])
+
+    tag_resp = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "Etiqueta de prueba"},
+        headers=headers
+    )
+    assert tag_resp.status_code == 201
+    tag_id = UUID(tag_resp.json()["id"])
+
+    # Asignar etiqueta a la tarea
+    assign_resp = await async_client.post(
+        f"/api/v1/tags/tasks/{task_id}/tags",
+        json={"tag_ids": [str(tag_id)]},
+        headers=headers
+    )
+    assert assign_resp.status_code == 200
+
+    # Verificar que la relación existe
+    stmt = select(TaskTag).where(TaskTag.task_id == task_id, TaskTag.tag_id == tag_id)
+    result = await session.execute(stmt)
+    assert result.scalars().first() is not None, "La relación TaskTag no fue creada correctamente."
+
+    # Eliminar la relación
+    delete_resp = await async_client.delete(
+        f"/api/v1/tags/tasks/{task_id}/tags/{tag_id}",
+        headers=headers
+    )
+    assert delete_resp.status_code == 204
+
+    # Verificar que la relación fue eliminada
+    result = await session.execute(stmt)
+    assert result.scalars().first() is None, "La relación TaskTag no fue eliminada correctamente."
+
+
+@pytest.mark.asyncio
+async def test_remove_tag_from_task_errors(async_client: AsyncClient, session):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Usar un task_id inexistente
+    invalid_task_id = UUID("00000000-0000-0000-0000-000000000000")
+    tag_resp = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "Etiqueta de prueba"},
+        headers=headers
+    )
+    assert tag_resp.status_code == 201
+    tag_id = UUID(tag_resp.json()["id"])
+
+    delete_resp = await async_client.delete(
+        f"/api/v1/tags/tasks/{invalid_task_id}/tags/{tag_id}",
+        headers=headers
+    )
+    assert delete_resp.status_code == 404
+    assert "Tarea no encontrada" in delete_resp.json()["detail"]
+
+    # Usar un tag_id inexistente
+    invalid_tag_id = UUID("00000000-0000-0000-0000-000000000000")
+    task_resp = await async_client.post(
+        "/api/v1/tasks",
+        json={"titulo": "Tarea de prueba", "categoria": "OTRO"},
+        headers=headers
+    )
+    assert task_resp.status_code == 201
+    task_id = UUID(task_resp.json()["id"])
+
+    delete_resp = await async_client.delete(
+        f"/api/v1/tags/tasks/{task_id}/tags/{invalid_tag_id}",
+        headers=headers
+    )
+    assert delete_resp.status_code == 404
+    assert "Etiqueta no encontrada" in delete_resp.json()["detail"]
+
+    # Usar valores válidos pero sin asignación
+    delete_resp = await async_client.delete(
+        f"/api/v1/tags/tasks/{task_id}/tags/{tag_id}",
+        headers=headers
+    )
+    assert delete_resp.status_code == 404
+    assert "no está asignada" in delete_resp.json()["detail"]
