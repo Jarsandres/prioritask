@@ -1,5 +1,10 @@
 from fastapi.testclient import TestClient
 from app.main import app
+import pytest
+from app.services.auth import SECRET_KEY, ALGORITHM
+from jose import jwt
+from uuid import uuid4
+from tests.utils import create_user_and_token
 
 client = TestClient(app)
 
@@ -53,10 +58,6 @@ def test_refresh_token():
     assert "token_type" in refresh_resp.json() and refresh_resp.json()["token_type"] == "bearer"
 
 def test_refresh_returns_new_token():
-    from uuid import uuid4
-    from jose import jwt
-    from app.services.auth import SECRET_KEY, ALGORITHM
-
     email = f"{uuid4()}@example.com"
 
     # Registro
@@ -88,3 +89,23 @@ def test_refresh_returns_new_token():
 
     payload = jwt.decode(data["access_token"], SECRET_KEY, algorithms=[ALGORITHM])
     assert payload["sub"] == user_id
+
+@pytest.mark.asyncio
+async def test_login_invalid_password(async_client):
+    # Crea usuario válido
+    user, _ = await create_user_and_token(async_client)
+    # Intenta hacer login con contraseña incorrecta
+    response = await async_client.post("/api/v1/auth/login", json={
+        "email": user["email"],
+        "password": "contraseña-incorrecta"
+    })
+    assert response.status_code == 401
+
+@pytest.mark.asyncio
+async def test_refresh_token_invalid(async_client):
+    # Intenta usar un token inválido
+    invalid_token = "token-invalido"
+    response = await async_client.post("/api/v1/auth/refresh", headers={
+        "Authorization": f"Bearer {invalid_token}"
+    })
+    assert response.status_code == 401
