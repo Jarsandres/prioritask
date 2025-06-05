@@ -47,11 +47,14 @@ async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_sessi
 )
 async def refresh_token(current_user: Usuario = Depends(get_current_user)):
     """Devuelve un nuevo JWT para el usuario autenticado."""
-    token = auth_srv.create_access_token(
-        sub=current_user.id,
-        secret=SECRET_KEY,
-        expires_minutes=60
-    )
-    return {"access_token": token, "token_type": "bearer"}
-
-
+    try:
+        token = auth_srv.create_access_token(
+            sub=current_user.id,
+            secret=SECRET_KEY,
+            expires_minutes=60
+        )
+        return {"access_token": token, "token_type": "bearer"}
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            return {"detail": "Token inválido o expirado"}, 401
+        raise exc

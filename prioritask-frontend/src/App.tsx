@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import Login from "./auth/Login";
 import Register from "./auth/Register";
 import Dashboard from "./pages/Dashboard";
+import Tags from "./pages/Tags";
+import Profile from "./pages/Profile";
 import Sidebar from "./components/Sidebar";
 import TaskList from "./components/TaskList";
 import TaskForm from "./components/TaskForm";
@@ -22,6 +24,8 @@ const AppContent = () => {
           <Route path="/tasks" element={<TaskList />} />
           <Route path="/tasks/create" element={<TaskForm />} />
           <Route path="/tasks/edit/:taskId" element={<TaskForm />} />
+          <Route path="/tags" element={<Tags />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </div>
     </div>

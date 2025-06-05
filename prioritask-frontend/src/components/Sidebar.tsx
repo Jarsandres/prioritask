@@ -31,6 +31,11 @@ const Sidebar = () => {
             <span role="img" aria-label="Tasks">📝</span> Tareas
           </NavLink>
         </li>
+        <li>
+          <NavLink to="/tags" className={({ isActive }) => isActive ? "active" : ""}>
+            <span role="img" aria-label="Tags">🏷️</span> Etiquetas
+          </NavLink>
+        </li>
 
         <li className="nav-bottom">
           <NavLink to="/profile" className={({ isActive }) => isActive ? "active" : ""}>
