@@ -31,6 +31,8 @@ async def get_tasks(
         order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
         is_descending: Optional[bool] = Query(False),
         tag_id: Optional[UUID] = Query(None),
+        skip: int = Query(0, ge=0),
+        limit: int = Query(10, gt=0),
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
@@ -51,20 +53,18 @@ async def get_tasks(
     if hasta:
         filters.append(Task.due_date <= hasta)
     if tag_id:
-        subquery = select(TaskTag.task_id).where(TaskTag.tag_id == tag_id).distinct()
-        filters.append(Task.id.in_(subquery))
+        filters.append(Task.id.in_(
+            select(TaskTag.task_id).where(TaskTag.tag_id == tag_id)
+        ))
 
-    if order_by and hasattr(Task, order_by):
+    if order_by in {"due_date", "peso", "created_at"}:
         order_attr = getattr(Task, order_by)
         order_clause = desc(order_attr) if is_descending else asc(order_attr)
     else:
         order_clause = desc(Task.created_at) if is_descending else asc(Task.created_at)
 
-    result = await session.exec(
-        select(Task).filter(
-            *filters
-        ).order_by(order_clause)
-    )
+    query = select(Task).filter(*filters).order_by(order_clause)
+    result = await session.exec(query.offset(skip).limit(limit))
     return result.all()
 
 @router.post("", response_model=TaskRead, status_code=201, summary="Crear tarea", description="Crea una nueva tarea para el usuario actual.")

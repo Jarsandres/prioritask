@@ -124,3 +124,44 @@ async def test_get_tasks_filtered_by_tag(async_client: AsyncClient):
     tasks = filter_resp.json()
     assert len(tasks) == 1
     assert tasks[0]["titulo"] == "Tarea filtrable"
+
+@pytest.mark.asyncio
+async def test_get_tasks_with_pagination(async_client):
+    _, token = await create_user_and_token(async_client)
+
+    # Crear múltiples tareas para probar la paginación
+    for i in range(15):
+        await create_task(async_client, token, {
+            "titulo": f"Tarea {i}",
+            "categoria": "OTRO",
+            "estado": "TODO",
+            "peso": i + 1
+        })
+
+    # Probar paginación con skip=0 y limit=5
+    resp = await async_client.get("/api/v1/tasks?skip=0&limit=5", headers={
+        "Authorization": f"Bearer {token}"
+    })
+    assert resp.status_code == 200
+    assert len(resp.json()) == 5
+
+    # Probar paginación con skip=5 y limit=5
+    resp = await async_client.get("/api/v1/tasks?skip=5&limit=5", headers={
+        "Authorization": f"Bearer {token}"
+    })
+    assert resp.status_code == 200
+    assert len(resp.json()) == 5
+
+    # Probar paginación con skip=10 y limit=5
+    resp = await async_client.get("/api/v1/tasks?skip=10&limit=5", headers={
+        "Authorization": f"Bearer {token}"
+    })
+    assert resp.status_code == 200
+    assert len(resp.json()) == 5
+
+    # Probar paginación fuera de rango
+    resp = await async_client.get("/api/v1/tasks?skip=20&limit=5", headers={
+        "Authorization": f"Bearer {token}"
+    })
+    assert resp.status_code == 200
+    assert len(resp.json()) == 0
