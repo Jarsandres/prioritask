@@ -34,7 +34,7 @@ async def create_tag(
         await session.rollback()
         raise HTTPException(
             status_code=400,
-            detail="Ya existe una etiqueta con ese nombre para este usuario."
+            detail="Duplicado: ya existe una etiqueta con ese nombre para este usuario."
         )
 
 @router.get("", response_model=List[TagRead], summary="Obtener etiquetas", description="Devuelve todas las etiquetas asociadas al usuario autenticado.")
@@ -82,3 +82,23 @@ async def delete_tag(
 
     await session.delete(tag)
     await session.commit()
+
+@router.patch("/{tag_id}", response_model=TagRead, summary="Actualizar etiqueta", description="Actualiza el nombre de una etiqueta existente.")
+async def update_tag(
+        tag_id: UUID,
+        payload: TagCreate,
+        session: AsyncSession = Depends(get_session),
+        current_user: Usuario = Depends(get_current_user)
+):
+    statement = select(Tag).where(Tag.id == tag_id, Tag.user_id == current_user.id)
+    result = await session.exec(statement)
+    tag = result.one_or_none()
+
+    if not tag:
+        raise HTTPException(status_code=404, detail="Etiqueta no encontrada.")
+
+    tag.nombre = payload.nombre
+    session.add(tag)
+    await session.commit()
+    await session.refresh(tag)
+    return tag

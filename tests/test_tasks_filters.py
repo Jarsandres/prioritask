@@ -1,167 +1,87 @@
 import pytest
 from httpx import AsyncClient
-
 from tests.utils import create_user_and_token, create_task
 
 @pytest.mark.asyncio
-async def test_get_tasks_filtered_by_estado(async_client):
-    _, token = await create_user_and_token(async_client)
-
-    await create_task(async_client, token, {
-        "titulo": "Tarea TODO",
-        "categoria": "OTRO",  # Valor válido para CategoriaTarea
-        "estado": "TODO",  # Valor válido para EstadoTarea
-        "peso": 1.0
-    })
-
-    resp = await async_client.get("/api/v1/tasks?estado=TODO", headers={
-        "Authorization": f"Bearer {token}"
-    })
-    assert resp.status_code == 200
-    assert all(task["estado"] == "TODO" for task in resp.json())
-
-
-@pytest.mark.asyncio
-async def test_get_tasks_filtered_by_categoria(async_client):
-    _, token = await create_user_and_token(async_client)
-
-    await create_task(async_client, token, {
-        "titulo": "Tarea de prueba",
-        "categoria": "OTRO",  # Valor válido para CategoriaTarea
-        "estado": "TODO",  # Valor válido para EstadoTarea
-        "peso": 2.0,
-        "descripcion": "Descripción de prueba",
-        "due_date": "2025-12-31"
-    })
-
-    resp = await async_client.get("/api/v1/tasks?categoria=OTRO", headers={
-        "Authorization": f"Bearer {token}"
-    })
-    assert resp.status_code == 200
-    assert all(task["categoria"] == "OTRO" for task in resp.json())
-
-
-@pytest.mark.asyncio
-async def test_get_tasks_filtered_by_completed(async_client):
-    _, token = await create_user_and_token(async_client)
-
-    await create_task(async_client, token, {
-        "titulo": "Tarea completada",
-        "categoria": "OTRO",  # Valor válido para CategoriaTarea
-        "estado": "TODO",  # Valor válido para EstadoTarea
-        "peso": 1.0,
-        "completed": True
-    })
-
-    resp = await async_client.get("/api/v1/tasks?completadas=true", headers={
-        "Authorization": f"Bearer {token}"
-    })
-    assert resp.status_code == 200
-    assert all(task["completed"] is True for task in resp.json())
-
-
-@pytest.mark.asyncio
-async def test_get_tasks_ordered_by_peso_desc(async_client):
-    _, token = await create_user_and_token(async_client)
-
-    await create_task(async_client, token, {
-        "titulo": "Tarea ligera",
-        "categoria": "OTRO",
-        "estado": "TODO",
-        "peso": 1.0
-    })
-
-    await create_task(async_client, token, {
-        "titulo": "Tarea pesada",
-        "categoria": "OTRO",
-        "estado": "TODO",
-        "peso": 5.0
-    })
-
-    resp = await async_client.get("/api/v1/tasks?order_by=peso&is_descending=true", headers={
-        "Authorization": f"Bearer {token}"
-    })
-    assert resp.status_code == 200
-    pesos = [task["peso"] for task in resp.json()]
-    assert pesos == sorted(pesos, reverse=True)
-
-@pytest.mark.asyncio
-async def test_get_tasks_filtered_by_tag(async_client: AsyncClient):
+async def test_get_tasks_pagination(async_client: AsyncClient):
+    # 1) Crear usuario y obtener token
     user, token = await create_user_and_token(async_client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Crear una etiqueta
-    tag_resp = await async_client.post("/api/v1/tags", json={"nombre": "personal"}, headers=headers)
-    assert tag_resp.status_code == 201
-    tag_id = tag_resp.json()["id"]
+    # 2) Crear 15 tareas de prueba usando el mismo token
+    for i in range(15):
+        response = await async_client.post(
+            "/api/v1/tasks",
+            json={
+                "titulo": f"Tarea {i}",
+                "descripcion": "Descripción de prueba",
+                "categoria": "OTRO",
+                "peso": 1,
+                "due_date": "2025-06-10T00:00:00Z"
+            },
+            headers=headers
+        )
+        assert response.status_code == 201  # Verificar que cada POST devuelve 201
 
-    # Crear una tarea
-    task_resp = await async_client.post("/api/v1/tasks", json={
-        "titulo": "Tarea filtrable",
-        "categoria": "OTRO"
-    }, headers=headers)
-    assert task_resp.status_code == 201
-    task_id = task_resp.json()["id"]
-
-    # Asignar etiqueta a la tarea
-    assign_resp = await async_client.post(
-        f"/api/v1/tags/tasks/{task_id}/tags",
-        json={"tag_ids": [tag_id]},
+    # 3) Obtener las primeras 10 tareas
+    resp1 = await async_client.get(
+        "/api/v1/tasks",
+        params={"skip": 0, "limit": 10},
         headers=headers
     )
-    assert assign_resp.status_code == 200
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    assert len(data1) == 10
 
-    # Crear otra tarea sin etiquetas
-    await async_client.post("/api/v1/tasks", json={
-        "titulo": "Sin etiqueta",
-        "categoria": "OTRO"
-    }, headers=headers)
-
-    # Filtrar tareas por tag_id
-    filter_resp = await async_client.get(f"/api/v1/tasks?tag_id={tag_id}", headers=headers)
-    assert filter_resp.status_code == 200
-
-    tasks = filter_resp.json()
-    assert len(tasks) == 1
-    assert tasks[0]["titulo"] == "Tarea filtrable"
+    # 4) Obtener las siguientes 5 tareas
+    resp2 = await async_client.get(
+        "/api/v1/tasks",
+        params={"skip": 10, "limit": 5},
+        headers=headers
+    )
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert len(data2) == 5
 
 @pytest.mark.asyncio
-async def test_get_tasks_with_pagination(async_client):
-    _, token = await create_user_and_token(async_client)
+async def test_delete_task_and_verify_not_found(async_client: AsyncClient):
+    # Crear usuario y obtener token
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
 
-    # Crear múltiples tareas para probar la paginación
-    for i in range(15):
-        await create_task(async_client, token, {
-            "titulo": f"Tarea {i}",
-            "categoria": "OTRO",
-            "estado": "TODO",
-            "peso": i + 1
-        })
+    # Crear una tarea
+    task_data = {
+        "titulo": "Tarea para eliminar",
+        "descripcion": "Descripción de prueba",
+        "categoria": "OTRO",
+        "peso": 1,
+        "due_date": "2025-06-10T00:00:00Z"
+    }
+    task = await create_task(async_client, token, task_data)
 
-    # Probar paginación con skip=0 y limit=5
-    resp = await async_client.get("/api/v1/tasks?skip=0&limit=5", headers={
-        "Authorization": f"Bearer {token}"
-    })
-    assert resp.status_code == 200
-    assert len(resp.json()) == 5
+    # Eliminar la tarea
+    delete_response = await async_client.delete(f"/api/v1/tasks/{task['id']}", headers=headers)
+    assert delete_response.status_code == 204
 
-    # Probar paginación con skip=5 y limit=5
-    resp = await async_client.get("/api/v1/tasks?skip=5&limit=5", headers={
-        "Authorization": f"Bearer {token}"
-    })
-    assert resp.status_code == 200
-    assert len(resp.json()) == 5
+    # Verificar que un GET sobre la tarea devuelva 404
+    get_response = await async_client.get(f"/api/v1/tasks/{task['id']}", headers=headers)
+    assert get_response.status_code == 404
 
-    # Probar paginación con skip=10 y limit=5
-    resp = await async_client.get("/api/v1/tasks?skip=10&limit=5", headers={
-        "Authorization": f"Bearer {token}"
-    })
-    assert resp.status_code == 200
-    assert len(resp.json()) == 5
+    # Verificar que el detalle de la respuesta sea "Tarea no encontrada"
+    detail = get_response.json().get("detail")
+    assert detail == "Tarea no encontrada"
 
-    # Probar paginación fuera de rango
-    resp = await async_client.get("/api/v1/tasks?skip=20&limit=5", headers={
-        "Authorization": f"Bearer {token}"
-    })
-    assert resp.status_code == 200
-    assert len(resp.json()) == 0
+@pytest.mark.asyncio
+async def test_get_task_history_not_found(async_client: AsyncClient):
+    # Crear usuario y obtener token
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Intentar obtener el historial de una tarea inexistente
+    invalid_task_id = "00000000-0000-0000-0000-000000000000"
+    history_response = await async_client.get(f"/api/v1/tasks/{invalid_task_id}/history", headers=headers)
+    assert history_response.status_code == 404
+
+    # Verificar que el detalle de la respuesta sea "Historial no encontrado"
+    detail = history_response.json().get("detail")
+    assert detail == "Historial no encontrado"

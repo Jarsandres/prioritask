@@ -46,6 +46,7 @@ async def test_get_my_tags(async_client: AsyncClient):
     assert "urgente" in nombres
     assert "finanzas" in nombres
 
+
 @pytest.mark.asyncio
 async def test_delete_tag(async_client: AsyncClient, session):
     # Crear usuario y token
@@ -70,6 +71,7 @@ async def test_delete_tag(async_client: AsyncClient, session):
     result = await session.execute(select(Tag).where(Tag.id == tag_id))
     tag = result.scalar_one_or_none()
     assert tag is None
+
 
 @pytest.mark.asyncio
 async def test_assign_tags_to_task(async_client: AsyncClient, session):
@@ -99,6 +101,7 @@ async def test_assign_tags_to_task(async_client: AsyncClient, session):
     relaciones = result.scalars().all()
     tag_ids_en_db = {str(r.tag_id) for r in relaciones}
     assert set(tag_ids).issubset(tag_ids_en_db)
+
 
 @pytest.mark.asyncio
 async def test_delete_tag_cascade_removes_tasktag(async_client: AsyncClient, session):
@@ -145,3 +148,120 @@ async def test_delete_tag_cascade_removes_tasktag(async_client: AsyncClient, ses
     ))
     relation = result.scalar_one_or_none()
     assert relation is None
+
+
+@pytest.mark.asyncio
+async def test_create_and_list_tags(async_client: AsyncClient):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear 3 etiquetas
+    for i in range(3):
+        response = await async_client.post(
+            "/api/v1/tags",
+            json={"nombre": f"Etiqueta {i}"},
+            headers=headers
+        )
+        assert response.status_code == 201
+
+    # Consultar lista de etiquetas
+    list_response = await async_client.get("/api/v1/tags", headers=headers)
+    assert list_response.status_code == 200
+    tags = list_response.json()
+    assert len(tags) == 3
+    for i in range(3):
+        assert any(tag["nombre"] == f"Etiqueta {i}" for tag in tags)
+
+
+@pytest.mark.asyncio
+async def test_delete_tag_and_verify_absence(async_client: AsyncClient):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear una etiqueta
+    create_response = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "Etiqueta para eliminar"},
+        headers=headers
+    )
+    assert create_response.status_code == 201
+    tag_id = create_response.json()["id"]
+
+    # Eliminar la etiqueta
+    delete_response = await async_client.delete(f"/api/v1/tags/{tag_id}", headers=headers)
+    assert delete_response.status_code == 204
+
+    # Verificar que ya no está en la lista
+    list_response = await async_client.get("/api/v1/tags", headers=headers)
+    assert list_response.status_code == 200
+    tags = list_response.json()
+    assert all(tag["id"] != tag_id for tag in tags)
+
+    # Intentar borrarla nuevamente
+    second_delete_response = await async_client.delete(f"/api/v1/tags/{tag_id}", headers=headers)
+    assert second_delete_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_tag_success_and_not_found(async_client: AsyncClient):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear una etiqueta
+    create_response = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "Etiqueta para actualizar"},
+        headers=headers
+    )
+    assert create_response.status_code == 201
+    tag_id = create_response.json()["id"]
+
+    # Actualizar el nombre de la etiqueta
+    update_response = await async_client.patch(
+        f"/api/v1/tags/{tag_id}",
+        json={"nombre": "Etiqueta actualizada"},
+        headers=headers
+    )
+    assert update_response.status_code == 200
+    updated_tag = update_response.json()
+    assert updated_tag["nombre"] == "Etiqueta actualizada"
+
+    # Intentar actualizar una etiqueta inexistente
+    invalid_tag_id = "00000000-0000-0000-0000-000000000000"
+    not_found_response = await async_client.patch(
+        f"/api/v1/tags/{invalid_tag_id}",
+        json={"nombre": "Etiqueta inexistente"},
+        headers=headers
+    )
+    assert not_found_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_tag_invalid_and_duplicate(async_client: AsyncClient):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Intentar crear una etiqueta con nombre demasiado corto
+    invalid_response = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "A"},
+        headers=headers
+    )
+    assert invalid_response.status_code == 422
+
+    # Crear una etiqueta válida
+    valid_response = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "Etiqueta válida"},
+        headers=headers
+    )
+    assert valid_response.status_code == 201
+
+    # Intentar crear otra con el mismo nombre
+    duplicate_response = await async_client.post(
+        "/api/v1/tags",
+        json={"nombre": "Etiqueta válida"},
+        headers=headers
+    )
+    assert duplicate_response.status_code == 400
+    assert "duplicado" in duplicate_response.json().get("detail", "").lower()

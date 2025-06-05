@@ -9,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc, asc
+from sqlalchemy.sql.expression import func
 from app.db.session import get_session
 from app.models import CategoriaTarea, TaskTag, TaskAssignment
 from app.services.auth import get_current_user
@@ -39,7 +40,7 @@ async def get_tasks(
 
     filters = [
         Task.user_id == current_user.id,
-        Task.deleted_at.is_(None)
+        Task.deleted_at.is_(None)  # Asegurarse de que la tarea no esté eliminada
     ]
 
     if estado:
@@ -57,14 +58,18 @@ async def get_tasks(
             select(TaskTag.task_id).where(TaskTag.tag_id == tag_id)
         ))
 
+    # Corrección de order_clause para tipos de datos datetime
     if order_by in {"due_date", "peso", "created_at"}:
         order_attr = getattr(Task, order_by)
         order_clause = desc(order_attr) if is_descending else asc(order_attr)
     else:
-        order_clause = desc(Task.created_at) if is_descending else asc(Task.created_at)
+        order_clause = desc(func.coalesce(Task.created_at, func.now())) if is_descending else asc(func.coalesce(Task.created_at, func.now()))
 
-    query = select(Task).filter(*filters).order_by(order_clause)
-    result = await session.exec(query.offset(skip).limit(limit))
+    result = await session.exec(
+        select(Task).filter(
+            *filters
+        ).order_by(order_clause).offset(skip).limit(limit)
+    )
     return result.all()
 
 @router.post("", response_model=TaskRead, status_code=201, summary="Crear tarea", description="Crea una nueva tarea para el usuario actual.")
