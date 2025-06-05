@@ -8,6 +8,7 @@ from app.main import app
 from app.services.auth import create_access_token, hash_password
 from app.models.user import Usuario
 from app.core.config import settings
+from uuid import uuid4
 
 TEST_DB = "sqlite+aiosqlite:///./prioritask.db"
 test_engine = create_async_engine(TEST_DB, echo=False)
@@ -15,9 +16,12 @@ async_session = async_sessionmaker(test_engine, expire_on_commit=False)
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 def reset_test_db():
-    if os.path.exists("prioritask.db"):
-        asyncio.run(test_engine.dispose())
-        os.remove("prioritask.db")
+    db_path = "prioritask.db"
+    if os.path.exists(db_path):
+        try:
+            os.remove(db_path)
+        except OSError as e:
+            print(f"Error al eliminar la base de datos de prueba: {e}")
 
     async def init_models():
         async with test_engine.begin() as conn:
@@ -41,10 +45,11 @@ async def session():
 
 @pytest_asyncio.fixture
 def auth_headers(session):
-    # Crear un usuario de prueba
+    # Crear un usuario de prueba con un UUID válido y un email único
+    unique_email = f"test-{uuid4()}@example.com"
     user = Usuario(
-        id="test-user-id",
-        email="test@example.com",
+        id=uuid4(),
+        email=unique_email,
         hashed_password=hash_password("password123"),
         is_active=True,
     )
@@ -52,5 +57,5 @@ def auth_headers(session):
     asyncio.run(session.commit())
 
     # Generar un token válido usando el JWT_SECRET_KEY de la configuración
-    token = create_access_token(sub=user.id, secret=settings.JWT_SECRET_KEY)
+    token = create_access_token(sub=str(user.id), secret=settings.JWT_SECRET_KEY)
     return {"Authorization": f"Bearer {token}"}
