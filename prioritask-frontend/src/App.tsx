@@ -7,7 +7,6 @@ import Profile from "./pages/Profile";
 import Sidebar from "./components/Sidebar";
 import TaskList from "./components/TaskList";
 import TaskForm from "./components/TaskForm";
-import AssignTaskForm from "./components/AssignTaskForm";
 
 const AppContent = () => {
   const location = useLocation();
@@ -25,7 +24,6 @@ const AppContent = () => {
           <Route path="/tasks" element={<TaskList />} />
           <Route path="/tasks/create" element={<TaskForm />} />
           <Route path="/tasks/edit/:taskId" element={<TaskForm />} />
-          <Route path="/tasks/assign" element={<AssignTaskForm />} />
           <Route path="/tags" element={<Tags />} />
           <Route path="/profile" element={<Profile />} />
         </Routes>

@@ -11,8 +11,6 @@ tests/test_AI.py
 tests/test_auth_endpoints.py
 tests/test_auth_service.py
 tests/test_get_task_history.py
-tests/test_patch_task.py
-tests/test_patch_task_status.py
 tests/test_rooms.py
 tests/test_rooms_persistence.py
 tests/test_sample.py
