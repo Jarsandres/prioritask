@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from starlette import status
 from starlette.status import HTTP_401_UNAUTHORIZED
 from sqlalchemy import select
 
