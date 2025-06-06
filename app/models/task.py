@@ -8,8 +8,10 @@ from app.models import Usuario
 from app.models.enums import CategoriaTarea, EstadoTarea
 from .task_assignment import TaskAssignment
 
+
 if TYPE_CHECKING:
     from .task_tag import TaskTag
+    from .tag import Tag
 
 class Task(SQLModel, table=True):
     __table_args__ = (
@@ -33,6 +35,13 @@ class Task(SQLModel, table=True):
     history: List["TaskHistory"] = Relationship(back_populates="task", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     colaboradores: List["TaskAssignment"] = Relationship(back_populates="task")
     etiquetas: List["TaskTag"] = Relationship(back_populates="tarea", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+
+    @property
+    def tags(self) -> List["Tag"]:
+        """Return associated Tag objects for this task without lazy loading."""
+        if "etiquetas" not in self.__dict__:
+            return []
+        return [tt.etiqueta for tt in self.etiquetas if tt.etiqueta]
 
     @property
     def owner_id(self) -> UUID:

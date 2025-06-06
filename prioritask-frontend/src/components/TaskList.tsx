@@ -13,7 +13,6 @@ interface Tarea {
   peso: number;
   due_date?: string;
   tags?: { id: string; nombre: string }[];
-  etiquetas?: { etiqueta?: { id: string; nombre: string } }[];
 }
 
 const TaskList = () => {
@@ -65,30 +64,6 @@ const TaskList = () => {
     }
   };
 
-  const handleRemoveTag = async (taskId: string, tagId: string) => {
-    try {
-      await api.delete(`/tags/tasks/${taskId}/tags/${tagId}`);
-      setTareas((prev) =>
-        prev.map((t) => {
-          if (t.id !== taskId) return t;
-          if (t.tags) {
-            return { ...t, tags: t.tags.filter((tg) => tg.id !== tagId) };
-          }
-          if (t.etiquetas) {
-            return {
-              ...t,
-              etiquetas: t.etiquetas.filter(
-                (tg) => (tg.etiqueta?.id ?? tg.id) !== tagId
-              ),
-            };
-          }
-          return t;
-        })
-      );
-    } catch (error) {
-      console.error("Error al eliminar etiqueta de tarea:", error);
-    }
-  };
 
   const marcarComoCompletada = async (taskId: string) => {
     try {
@@ -225,17 +200,8 @@ const TaskList = () => {
                   <div className="mt-1">
                     {tarea.tags &&
                       tarea.tags.map((tag) => (
-                        <span key={tag.id} className="badge bg-primary me-1">
-                          {tag.nombre}
-                        </span>
-                      ))}
-                    {tarea.etiquetas &&
-                      tarea.etiquetas.map((etiqueta) => (
-                        <span
-                          key={etiqueta.etiqueta?.id ?? etiqueta.id}
-                          className="badge bg-secondary me-1"
-                        >
-                          {etiqueta.etiqueta?.nombre ?? "Etiqueta desconocida"}
+                        <span key={tag.id} className="badge text-bg-info tag-badge">
+                          #{tag.nombre}
                         </span>
                       ))}
                   </div>
