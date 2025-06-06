@@ -6,12 +6,21 @@ from app.db.session import get_session
 from app.schemas.task import GroupedTasks
 from app.models.task import Task
 from app.models.user import Usuario
-from app.schemas.task import PrioritizedTask, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
+from app.schemas.task import (
+    PrioritizedTask,
+    GroupedTasksResponse,
+    TaskGroupRequest,
+    TaskRewriteRequest,
+    RewrittenTask,
+    PrioritySuggestRequest,
+    PrioritySuggestion,
+)
 from app.services.auth import get_current_user
 from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
 from app.services.AI.priority_classifier import clasificar_prioridad
-from app.services.AI.reformulator import  reformular_titulo_con_traduccion
+from app.services.AI.reformulator import reformular_titulo_con_traduccion
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
+from datetime import datetime, timezone, timedelta
 import re
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
@@ -107,4 +116,32 @@ async def rewrite_tasks(
             motivo=resultado["motivo"]
         ))
     return result
+
+
+@router.post(
+    "/suggest",
+    response_model=PrioritySuggestion,
+    summary="Sugerir prioridad de una tarea",
+    description="Devuelve una prioridad sugerida para la tarea enviada.",
+)
+async def suggest_priority(payload: PrioritySuggestRequest) -> PrioritySuggestion:
+    texto = f"{payload.titulo} {payload.descripcion or ''}"
+    if contiene_palabra_clave(texto):
+        prioridad = "alta"
+        motivo = "Palabra clave de urgencia detectada."
+    elif payload.due_date:
+        limite = payload.due_date
+        ahora = datetime.now(timezone.utc)
+        if limite.tzinfo is None:
+            limite = limite.replace(tzinfo=timezone.utc)
+        if limite - ahora <= timedelta(days=1):
+            prioridad = "alta"
+            motivo = "La fecha límite está muy próxima."
+        else:
+            prioridad = clasificar_prioridad(payload.titulo)
+            motivo = "IA personalizada basada en entrenamiento en tareas reales."
+    else:
+        prioridad = clasificar_prioridad(payload.titulo)
+        motivo = "IA personalizada basada en entrenamiento en tareas reales."
+    return PrioritySuggestion(prioridad=prioridad, motivo=motivo)
 

@@ -153,3 +153,23 @@ async def test_rewrite_tasks_real(async_client: AsyncClient):
         assert "reformulada" in tarea
         assert tarea["reformulada"].strip() != ""
         # Puede estar marcada como "sin cambios sugeridos" si no cambió
+
+@pytest.mark.asyncio
+async def test_suggest_priority(async_client: AsyncClient):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await async_client.post(
+        "/api/v1/tasks/ai/suggest",
+        headers=headers,
+        json={
+            "titulo": "Entregar informe urgente",
+            "descripcion": "Debe enviarse hoy",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "prioridad" in data
+    assert data["prioridad"] in ["alta", "media", "baja"]
+    assert "motivo" in data

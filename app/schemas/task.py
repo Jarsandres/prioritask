@@ -99,3 +99,12 @@ class RewrittenTask(BaseModel):
     original : str
     reformulada : str
     motivo: str
+
+class PrioritySuggestRequest(BaseModel):
+    titulo: str
+    descripcion: Optional[str] = None
+    due_date: Optional[datetime] = None
+
+class PrioritySuggestion(BaseModel):
+    prioridad: str
+    motivo: str
