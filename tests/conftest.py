@@ -1,9 +1,45 @@
 import os
 import asyncio
+import sys
+from types import ModuleType
 import pytest_asyncio
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from httpx import AsyncClient, ASGITransport
+
+# ---------------------------------------------------------------------------
+# Mock heavy AI modules so tests do not require network access or large models
+# ---------------------------------------------------------------------------
+
+priority_mock = ModuleType("app.services.AI.priority_classifier")
+
+def _fake_priority(title: str) -> str:
+    return "alta" if "urgente" in title.lower() else "media"
+
+priority_mock.clasificar_prioridad = _fake_priority
+sys.modules.setdefault("app.services.AI.priority_classifier", priority_mock)
+
+reform_mock = ModuleType("app.services.AI.reformulator")
+
+def _fake_reform(title: str) -> dict:
+    return {"reformulada": f"{title} (mock)", "cambio": True, "motivo": "mock"}
+
+reform_mock.reformular_titulo_con_traduccion = _fake_reform
+sys.modules.setdefault("app.services.AI.reformulator", reform_mock)
+
+organizer_mock = ModuleType("app.services.AI.task_organizer")
+
+def _fake_group(tasks, umbral: float = 0.4):
+    grupos = {}
+    for task in tasks:
+        grupo = getattr(task, "categoria", "General")
+        grupos.setdefault(grupo, []).append(task)
+    return grupos
+
+organizer_mock.agrupar_tareas_por_similitud = _fake_group
+organizer_mock.agrupar_por_categoria = _fake_group
+sys.modules.setdefault("app.services.AI.task_organizer", organizer_mock)
+
 from app.main import app
 from app.services.auth import create_access_token, hash_password
 from app.models.user import Usuario
