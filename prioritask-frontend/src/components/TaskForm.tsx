@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../api";
 import { useNavigate, useParams } from "react-router-dom";
+import Select from "react-select";
 
 interface Tag {
   id: string;
@@ -16,7 +17,7 @@ const TaskForm = () => {
   const [estado, setEstado] = useState("TODO");
   const [error, setError] = useState("");
   const [tags, setTags] = useState<Tag[]>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<{ value: string; label: string }[]>([]);
 
   const { taskId } = useParams();
   const navigate = useNavigate();
@@ -43,7 +44,7 @@ const TaskForm = () => {
   };
 
   useEffect(() => {
-    if (taskId) {
+    if (taskId && tags.length > 0) {
       const fetchTask = async () => {
         try {
           const response = await api.get(`/tasks/${taskId}`);
@@ -60,7 +61,12 @@ const TaskForm = () => {
             response.data.tag_ids ??
             response.data.etiquetas?.map((t: any) => t.etiqueta?.id ?? t.id) ??
             [];
-          setSelectedTags(taskTags);
+          setSelectedTags(
+            taskTags.map((id: string) => {
+              const t = tags.find((tg) => tg.id === id);
+              return { value: id, label: t ? t.nombre : id };
+            })
+          );
         } catch (err) {
           console.error(err);
           setError("Error al cargar la tarea");
@@ -68,7 +74,7 @@ const TaskForm = () => {
       };
       fetchTask();
     }
-  }, [taskId]);
+  }, [taskId, tags]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +100,7 @@ const TaskForm = () => {
 
       if (selectedTags.length > 0 && id) {
         await api.post(`/tags/tasks/${id}/tags`, {
-          tag_ids: selectedTags,
+          tag_ids: selectedTags.map((t) => t.value),
         });
       }
 
@@ -183,20 +189,13 @@ const TaskForm = () => {
 
         <div className="mb-3">
           <label>Etiquetas</label>
-          <select
-            multiple
-            className="form-select"
+          <Select
+            isMulti
+            options={tags.map((t) => ({ value: t.id, label: t.nombre }))}
             value={selectedTags}
-            onChange={(e) =>
-              setSelectedTags(Array.from(e.target.selectedOptions, (o) => o.value))
-            }
-          >
-            {tags.map((tag) => (
-              <option key={tag.id} value={tag.id}>
-                {tag.nombre}
-              </option>
-            ))}
-          </select>
+            onChange={(opts) => setSelectedTags(opts as { value: string; label: string }[])}
+            classNamePrefix="select"
+          />
         </div>
 
         <button type="submit" className="btn btn-primary">
