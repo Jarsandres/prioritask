@@ -32,6 +32,11 @@ const Sidebar = () => {
           </NavLink>
         </li>
         <li>
+          <NavLink to="/tasks/grouped" className={({ isActive }) => isActive ? "active" : ""}>
+            <span role="img" aria-label="Grouped">🧠</span> Agrupadas
+          </NavLink>
+        </li>
+        <li>
           <NavLink to="/tasks/assign" className={({ isActive }) => isActive ? "active" : ""}>
             <span role="img" aria-label="Assign">🤝</span> Asignar
           </NavLink>
