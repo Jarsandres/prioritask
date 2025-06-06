@@ -1,20 +1,26 @@
 import { useEffect, useState, useContext } from "react";
 import api from "../api";
 import { FaTasks, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
+import { FaRobot } from "react-icons/fa";
 import styles from "./Dashboard.module.css";
 import { TaskUpdateContext } from "../context/TaskUpdateContext";
 
 const Dashboard = () => {
   const [tareas, setTareas] = useState([]);
+  const [stats, setStats] = useState({ rewritten: 0, prioritized: 0, grouped: 0 });
   const { version } = useContext(TaskUpdateContext);
 
   useEffect(() => {
-    const fetchTareas = async () => {
-      const res = await api.get("/tasks");
-      setTareas(res.data);
+    const fetchData = async () => {
+      const [tasksRes, statsRes] = await Promise.all([
+        api.get("/tasks"),
+        api.get("/tasks/ai/stats"),
+      ]);
+      setTareas(tasksRes.data);
+      setStats(statsRes.data);
     };
 
-    fetchTareas();
+    fetchData();
   }, [version]);
 
   return (
@@ -59,6 +65,24 @@ const Dashboard = () => {
                 <h5 className={`card-title ${styles.cardTitle}`}>Pendientes</h5>
                 <p className={styles.display6}>
                   {tareas.filter((t: any) => t.estado !== "DONE").length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-md-4">
+            <div className={`card shadow-sm border-start border-info border-4 bg-light ${styles.card}`}>
+              <div className={`card-body ${styles.cardBody}`}>
+                <FaRobot className={`text-info ${styles.icon}`} />
+                <h5 className={`card-title ${styles.cardTitle}`}>Uso IA</h5>
+                <p className="mb-0">
+                  <strong>{stats.rewritten}</strong> reescritas
+                </p>
+                <p className="mb-0">
+                  <strong>{stats.prioritized}</strong> sugerencias
+                </p>
+                <p className="mb-0">
+                  <strong>{stats.grouped}</strong> grupos
                 </p>
               </div>
             </div>

@@ -10,8 +10,10 @@ from app.schemas.task import PrioritizedTask, GroupedTasksResponse, TaskGroupReq
 from app.services.auth import get_current_user
 from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
 from app.services.AI.priority_classifier import clasificar_prioridad
-from app.services.AI.reformulator import  reformular_titulo_con_traduccion
+from app.services.AI.reformulator import reformular_titulo_con_traduccion
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
+from app.models.ai_usage import AIUsage
+from sqlalchemy.sql.expression import func
 import re
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
@@ -54,6 +56,8 @@ async def prioritize(
     result = await session.exec(select(Task).where(Task.user_id == current_user.id))
     tasks_list = result.all()
     prioritized_tasks = clasificar_prioridad_batch(tasks_list)
+    session.add(AIUsage(user_id=current_user.id, action="PRIORITY"))
+    await session.commit()
     return prioritized_tasks
 
 @router.post("/group", response_model=GroupedTasksResponse, summary="Agrupar tareas", description="Agrupa las tareas del usuario autenticado en categorías específicas.",
@@ -79,6 +83,8 @@ async def group_tasks(
         ]
         for nombre_grupo, tareas in group.items()
     }
+    session.add(AIUsage(user_id=current_user.id, action="GROUP"))
+    await session.commit()
     return {"grupos": response}
 
 
@@ -106,5 +112,25 @@ async def rewrite_tasks(
             reformulada=resultado["reformulada"],
             motivo=resultado["motivo"]
         ))
+    session.add(AIUsage(user_id=current_user.id, action="REWRITE"))
+    await session.commit()
     return result
+
+
+@router.get("/stats", summary="Contadores de uso de IA")
+async def ai_stats(
+    session: AsyncSession = Depends(get_session),
+    current_user: Usuario = Depends(get_current_user),
+):
+    result = await session.exec(
+        select(AIUsage.action, func.count(AIUsage.id))
+        .where(AIUsage.user_id == current_user.id)
+        .group_by(AIUsage.action)
+    )
+    counts = {row[0]: row[1] for row in result.all()}
+    return {
+        "rewritten": counts.get("REWRITE", 0),
+        "prioritized": counts.get("PRIORITY", 0),
+        "grouped": counts.get("GROUP", 0),
+    }
 
