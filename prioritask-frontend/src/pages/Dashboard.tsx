@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import api from "../api";
 import { FaTasks, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
 import styles from "./Dashboard.module.css";
+import { TaskUpdateContext } from "../context/TaskUpdateContext";
 
 const Dashboard = () => {
   const [tareas, setTareas] = useState([]);
+  const { version } = useContext(TaskUpdateContext);
 
   useEffect(() => {
     const fetchTareas = async () => {
@@ -13,7 +15,7 @@ const Dashboard = () => {
     };
 
     fetchTareas();
-  }, []);
+  }, [version]);
 
   return (
     <>
@@ -44,7 +46,7 @@ const Dashboard = () => {
                 <FaCheckCircle className={`text-success ${styles.icon}`} />
                 <h5 className={`card-title ${styles.cardTitle}`}>Completadas</h5>
                 <p className={styles.display6}>
-                  {tareas.filter((t: any) => t.estado === "completada").length}
+                  {tareas.filter((t: any) => t.estado === "DONE").length}
                 </p>
               </div>
             </div>
@@ -56,7 +58,7 @@ const Dashboard = () => {
                 <FaExclamationTriangle className={`text-warning ${styles.icon}`} />
                 <h5 className={`card-title ${styles.cardTitle}`}>Pendientes</h5>
                 <p className={styles.display6}>
-                  {tareas.filter((t: any) => t.estado !== "completada").length}
+                  {tareas.filter((t: any) => t.estado !== "DONE").length}
                 </p>
               </div>
             </div>
