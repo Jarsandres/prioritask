@@ -4,6 +4,7 @@ from sqlmodel import select
 from typing import List
 from app.db.session import get_session
 from app.schemas.task import GroupedTasks
+from app.models.ai_usage import log_ai_usage
 from app.models.task import Task
 from app.models.user import Usuario
 from app.schemas.task import PrioritizedTask, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
