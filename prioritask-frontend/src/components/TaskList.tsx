@@ -11,6 +11,8 @@ interface Tarea {
   categoria: string;
   peso: number;
   due_date?: string;
+  tags?: { id: string; nombre: string }[];
+  etiquetas?: { etiqueta?: { id: string; nombre: string } }[];
 }
 
 const TaskList = () => {
@@ -60,6 +62,56 @@ const TaskList = () => {
     }
   };
 
+  const handleRemoveTag = async (taskId: string, tagId: string) => {
+    try {
+      await api.delete(`/tags/tasks/${taskId}/tags/${tagId}`);
+      setTareas((prev) =>
+        prev.map((t) => {
+          if (t.id !== taskId) return t;
+          if (t.tags) {
+            return { ...t, tags: t.tags.filter((tg) => tg.id !== tagId) };
+          }
+          if (t.etiquetas) {
+            return {
+              ...t,
+              etiquetas: t.etiquetas.filter(
+                (tg) => (tg.etiqueta?.id ?? tg.id) !== tagId
+              ),
+            };
+          }
+          return t;
+        })
+      );
+    } catch (error) {
+      console.error("Error al eliminar etiqueta de tarea:", error);
+    }
+  };
+
+  const handleRemoveTag = async (taskId: string, tagId: string) => {
+    try {
+      await api.delete(`/tags/tasks/${taskId}/tags/${tagId}`);
+      setTareas((prev) =>
+        prev.map((t) => {
+          if (t.id !== taskId) return t;
+          if (t.tags) {
+            return { ...t, tags: t.tags.filter((tg) => tg.id !== tagId) };
+          }
+          if (t.etiquetas) {
+            return {
+              ...t,
+              etiquetas: t.etiquetas.filter(
+                (tg) => (tg.etiqueta?.id ?? tg.id) !== tagId
+              ),
+            };
+          }
+          return t;
+        })
+      );
+    } catch (error) {
+      console.error("Error al eliminar etiqueta de tarea:", error);
+    }
+  };
+  
   const marcarComoCompletada = async (taskId: string) => {
     try {
       const token = localStorage.getItem("token");
@@ -191,6 +243,24 @@ const TaskList = () => {
                   <small className="text-muted">
                     {tarea.categoria} · {tarea.estado}
                   </small>
+                       {(tarea.tags || tarea.etiquetas)?.length > 0 && (
+                    <div className="mt-1">
+                      {(tarea.tags || tarea.etiquetas).map((tg: any) => {
+                        const tag = tg.nombre ? tg : tg.etiqueta ?? tg;
+                        return (
+                          <span key={tag.id} className="badge bg-secondary me-1">
+                            {tag.nombre}
+                            <button
+                              type="button"
+                              className="btn-close btn-close-white ms-1"
+                              style={{ fontSize: "0.6rem" }}
+                              onClick={() => handleRemoveTag(tarea.id, tag.id)}
+                            ></button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div>
