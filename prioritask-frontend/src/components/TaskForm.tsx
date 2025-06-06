@@ -2,6 +2,11 @@ import { useState, useEffect } from "react";
 import api from "../api";
 import { useNavigate, useParams } from "react-router-dom";
 
+interface Tag {
+  id: string;
+  nombre: string;
+}
+
 const TaskForm = () => {
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -10,9 +15,23 @@ const TaskForm = () => {
   const [dueDate, setDueDate] = useState("");
   const [estado, setEstado] = useState("TODO");
   const [error, setError] = useState("");
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const { taskId } = useParams();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const res = await api.get("/tags");
+        setTags(res.data);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchTags();
+  }, []);
 
   const formatearFecha = (fecha: string) => {
     const partes = fecha.split("/");
@@ -35,6 +54,13 @@ const TaskForm = () => {
           setPeso(peso);
           setDueDate(due_date);
           setEstado(estado);
+
+          const taskTags =
+            response.data.tags?.map((t: any) => t.id) ??
+            response.data.tag_ids ??
+            response.data.etiquetas?.map((t: any) => t.etiqueta?.id ?? t.id) ??
+            [];
+          setSelectedTags(taskTags);
         } catch (err) {
           console.error(err);
           setError("Error al cargar la tarea");
@@ -58,10 +84,18 @@ const TaskForm = () => {
     };
 
     try {
+      let id = taskId;
       if (taskId) {
         await api.put(`/tasks/${taskId}`, taskData);
       } else {
-        await api.post("/tasks", taskData);
+       const res = await api.post("/tasks", taskData);
+        id = res.data.id;
+      }
+
+      if (selectedTags.length > 0 && id) {
+        await api.post(`/tags/tasks/${id}/tags`, {
+          tag_ids: selectedTags,
+        });
       }
 
       navigate("/tasks");
@@ -144,6 +178,24 @@ const TaskForm = () => {
             <option value="TODO">Pendiente</option>
             <option value="IN_PROGRESS">En progreso</option>
             <option value="DONE">Completada</option>
+          </select>
+        </div>
+
+        <div className="mb-3">
+          <label>Etiquetas</label>
+          <select
+            multiple
+            className="form-select"
+            value={selectedTags}
+            onChange={(e) =>
+              setSelectedTags(Array.from(e.target.selectedOptions, (o) => o.value))
+            }
+          >
+            {tags.map((tag) => (
+              <option key={tag.id} value={tag.id}>
+                {tag.nombre}
+              </option>
+            ))}
           </select>
         </div>
 
