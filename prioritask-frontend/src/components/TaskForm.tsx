@@ -19,6 +19,7 @@ const TaskForm = () => {
   const [error, setError] = useState("");
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<{ value: string; label: string }[]>([]);
+  const [sugerencia, setSugerencia] = useState<{ prioridad: string; motivo: string } | null>(null);
 
   const { taskId } = useParams();
   const navigate = useNavigate();
@@ -77,6 +78,28 @@ const TaskForm = () => {
       fetchTask();
     }
   }, [taskId, tags]);
+
+  const prioridadAPeso = (p: string) => {
+    if (p === "alta") return 5;
+    if (p === "media") return 3;
+    return 1;
+  };
+
+  const handleSuggest = async () => {
+    try {
+      const res = await api.post("/tasks/ai/suggest", {
+        titulo,
+        descripcion,
+        due_date: dueDate ? formatearFecha(dueDate) : undefined,
+      });
+      const { prioridad, motivo } = res.data;
+      setPeso(prioridadAPeso(prioridad));
+      setSugerencia({ prioridad, motivo });
+    } catch (err) {
+      console.error(err);
+      alert("Error al obtener sugerencia");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,6 +188,20 @@ const TaskForm = () => {
             max="5"
           />
         </div>
+        <button
+          type="button"
+          className="btn btn-outline-secondary mb-2"
+          onClick={handleSuggest}
+        >
+          🧠 Sugerir prioridad
+        </button>
+        {sugerencia && (
+          <div className="alert alert-info p-2" role="alert">
+            Prioridad sugerida: <strong>{sugerencia.prioridad}</strong> -
+            {" "}
+            {sugerencia.motivo}
+          </div>
+        )}
 
         <div className="mb-3">
           <label>Fecha de vencimiento</label>
