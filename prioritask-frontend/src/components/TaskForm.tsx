@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import api from "../api";
 import { useNavigate, useParams } from "react-router-dom";
 import Select from "react-select";
+import { TaskUpdateContext } from "../context/TaskUpdateContext";
 
 interface Tag {
   id: string;
@@ -21,6 +22,7 @@ const TaskForm = () => {
 
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const { notifyUpdate } = useContext(TaskUpdateContext);
 
   useEffect(() => {
     const fetchTags = async () => {
@@ -104,6 +106,7 @@ const TaskForm = () => {
         });
       }
 
+      notifyUpdate();
       navigate("/tasks");
     } catch (err: any) {
       console.error(err);

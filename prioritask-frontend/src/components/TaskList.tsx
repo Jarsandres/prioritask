@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
 import debounce from "lodash/debounce";
+import { TaskUpdateContext } from "../context/TaskUpdateContext";
 
 interface Tarea {
   id: string;
@@ -23,6 +24,7 @@ const TaskList = () => {
   const [fechaLimite, setFechaLimite] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const navigate = useNavigate();
+  const { notifyUpdate } = useContext(TaskUpdateContext);
 
   const fetchTareas = async () => {
     try {
@@ -56,6 +58,7 @@ const TaskList = () => {
       const token = localStorage.getItem("token");
       await api.delete(`/tasks/${id}`);
       setTareas(tareas.filter((t) => t.id !== id));
+      notifyUpdate();
     } catch (error) {
       console.error("Error al eliminar tarea:", error);
       alert("Ocurrió un error al eliminar la tarea.");
@@ -93,6 +96,7 @@ const TaskList = () => {
       await api.patch(`/tasks/${taskId}/status`, { estado: "DONE" });
       // Recargar tareas
       fetchTareas();
+      notifyUpdate();
     } catch (error) {
       console.error("Error al marcar como completada:", error);
     }

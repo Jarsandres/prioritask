@@ -8,6 +8,7 @@ import Sidebar from "./components/Sidebar";
 import TaskList from "./components/TaskList";
 import TaskForm from "./components/TaskForm";
 import AssignTaskForm from "./components/AssignTaskForm";
+import { TaskUpdateProvider } from "./context/TaskUpdateContext";
 
 const AppContent = () => {
   const location = useLocation();
@@ -37,7 +38,9 @@ const AppContent = () => {
 function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <TaskUpdateProvider>
+        <AppContent />
+      </TaskUpdateProvider>
     </BrowserRouter>
   );
 }
