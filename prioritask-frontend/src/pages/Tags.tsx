@@ -30,6 +30,10 @@ const Tags = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (tags.some((t) => t.nombre.toLowerCase() === nombre.toLowerCase())) {
+      setError("Etiqueta duplicada");
+      return;
+    }
     try {
       await api.post("/tags", { nombre });
       setNombre("");
@@ -115,7 +119,7 @@ const Tags = () => {
               </form>
             ) : (
               <>
-                {tag.nombre}
+                <span className="badge bg-secondary me-2">{tag.nombre}</span>
                 <div>
                   <button
                     className="btn btn-sm btn-outline-primary me-2"
