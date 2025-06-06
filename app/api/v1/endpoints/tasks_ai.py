@@ -88,8 +88,7 @@ async def group_tasks(
         ]
         for nombre_grupo, tareas in group.items()
     }
-    session.add(AIUsage(user_id=current_user.id, action="GROUP"))
-    await session.commit()
+    await log_ai_usage(current_user.id, "GROUP", session)
     return {"grupos": response}
 
 @router.post("/rewrite", response_model=List[RewrittenTask], summary="Reescribir tareas", description="Reescribe las tareas del usuario autenticado para mejorar su claridad y enfoque.",
