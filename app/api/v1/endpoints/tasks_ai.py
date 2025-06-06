@@ -7,7 +7,15 @@ from app.schemas.task import GroupedTasks
 from app.models.ai_usage import log_ai_usage
 from app.models.task import Task
 from app.models.user import Usuario
-from app.schemas.task import PrioritizedTask, GroupedTasksResponse, TaskGroupRequest, TaskRewriteRequest, RewrittenTask
+from app.schemas.task import (
+    PrioritizedTask,
+    GroupedTasksResponse,
+    TaskGroupRequest,
+    TaskRewriteRequest,
+    RewrittenTask,
+    PrioritySuggestRequest,
+    PrioritySuggestion,
+)
 from app.services.auth import get_current_user
 from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
 from app.services.AI.priority_classifier import clasificar_prioridad
@@ -15,10 +23,10 @@ from app.services.AI.reformulator import reformular_titulo_con_traduccion
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
 from app.models.ai_usage import AIUsage
 from sqlalchemy.sql.expression import func
+from datetime import datetime, timezone, timedelta
 import re
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
-
 
 PALABRAS_URGENCIA = ["urgente", "hoy", "mañana", "prioritario", "inmediato", "rápido", "entregar", "última hora"]
 
@@ -44,9 +52,6 @@ def clasificar_prioridad_batch(tasks: List[Task]) -> List[PrioritizedTask]:
         ))
         print(f"[PRIORITY-IA+H] '{task.titulo}' → {prioridad} ({motivo})")
     return resultado
-
-
-
 
 @router.post("/prioritize", response_model=List[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.",
               responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": PRIORITIZED_TASK_EXAMPLE}}}})
@@ -87,7 +92,6 @@ async def group_tasks(
     await session.commit()
     return {"grupos": response}
 
-
 @router.post("/rewrite", response_model=List[RewrittenTask], summary="Reescribir tareas", description="Reescribe las tareas del usuario autenticado para mejorar su claridad y enfoque.",
               responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": REWRITTEN_TASK_EXAMPLE}}}})
 async def rewrite_tasks(
@@ -116,7 +120,7 @@ async def rewrite_tasks(
     await session.commit()
     return result
 
-
+# --- Ambos endpoints fusionados ---
 @router.get("/stats", summary="Contadores de uso de IA")
 async def ai_stats(
     session: AsyncSession = Depends(get_session),
@@ -134,3 +138,29 @@ async def ai_stats(
         "grouped": counts.get("GROUP", 0),
     }
 
+@router.post(
+    "/suggest",
+    response_model=PrioritySuggestion,
+    summary="Sugerir prioridad de una tarea",
+    description="Devuelve una prioridad sugerida para la tarea enviada.",
+)
+async def suggest_priority(payload: PrioritySuggestRequest) -> PrioritySuggestion:
+    texto = f"{payload.titulo} {payload.descripcion or ''}"
+    if contiene_palabra_clave(texto):
+        prioridad = "alta"
+        motivo = "Palabra clave de urgencia detectada."
+    elif payload.due_date:
+        limite = payload.due_date
+        ahora = datetime.now(timezone.utc)
+        if limite.tzinfo is None:
+            limite = limite.replace(tzinfo=timezone.utc)
+        if limite - ahora <= timedelta(days=1):
+            prioridad = "alta"
+            motivo = "La fecha límite está muy próxima."
+        else:
+            prioridad = clasificar_prioridad(payload.titulo)
+            motivo = "IA personalizada basada en entrenamiento en tareas reales."
+    else:
+        prioridad = clasificar_prioridad(payload.titulo)
+        motivo = "IA personalizada basada en entrenamiento en tareas reales."
+    return PrioritySuggestion(prioridad=prioridad, motivo=motivo)
