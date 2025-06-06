@@ -3,6 +3,7 @@ from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
 from app.models.enums import CategoriaTarea, EstadoTarea
+from .tag import TagRead
 
 class TaskCreate(BaseModel):
     titulo: str = Field(min_length=3, max_length=100, description="Título de la tarea.", json_schema_extra={"example": "Comprar comida"})
@@ -23,6 +24,7 @@ class TaskRead(BaseModel):
     created_at: datetime = Field(description="Fecha de creación de la tarea.", json_schema_extra={"example": "2025-05-27T12:00:00"})
     user_id: UUID = Field(description="Identificador del usuario asociado a la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
     deleted_at: Optional[datetime] = Field(default=None, description="Fecha de eliminación de la tarea, si aplica.", json_schema_extra={"example": None})
+    tags: List[TagRead] = Field(default_factory=list, description="Etiquetas asociadas a la tarea")
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):
@@ -98,4 +100,13 @@ class RewrittenTask(BaseModel):
     id : UUID
     original : str
     reformulada : str
+    motivo: str
+
+class PrioritySuggestRequest(BaseModel):
+    titulo: str
+    descripcion: Optional[str] = None
+    due_date: Optional[datetime] = None
+
+class PrioritySuggestion(BaseModel):
+    prioridad: str
     motivo: str

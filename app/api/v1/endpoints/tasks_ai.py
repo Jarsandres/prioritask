@@ -4,7 +4,7 @@ from sqlmodel import select
 from typing import List
 from app.db.session import get_session
 from app.schemas.task import GroupedTasks
-from app.models.ai_usage import log_ai_usage
+from app.models.ai_usage import log_ai_usage, AIUsage
 from app.models.task import Task
 from app.models.user import Usuario
 from app.schemas.task import (
@@ -17,18 +17,28 @@ from app.schemas.task import (
     PrioritySuggestion,
 )
 from app.services.auth import get_current_user
-from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
+from app.schemas.responses import (
+    PRIORITIZED_TASK_EXAMPLE,
+    GROUPED_TASKS_EXAMPLE,
+    REWRITTEN_TASK_EXAMPLE,
+)
 from app.services.AI.priority_classifier import clasificar_prioridad
 from app.services.AI.reformulator import reformular_titulo_con_traduccion
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
-from app.models.ai_usage import AIUsage
 from sqlalchemy.sql.expression import func
 from datetime import datetime, timezone, timedelta
 import re
 
+# Constantes para acciones IA
+ACTION_PRIORITY = "PRIORITY"
+ACTION_GROUP = "GROUP"
+ACTION_REWRITE = "REWRITE"
+
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
 
-PALABRAS_URGENCIA = ["urgente", "hoy", "mañana", "prioritario", "inmediato", "rápido", "entregar", "última hora"]
+PALABRAS_URGENCIA = [
+    "urgente", "hoy", "mañana", "prioritario", "inmediato", "rápido", "entregar", "última hora"
+]
 
 def contiene_palabra_clave(titulo: str) -> bool:
     titulo_lower = titulo.lower()
@@ -53,11 +63,21 @@ def clasificar_prioridad_batch(tasks: List[Task]) -> List[PrioritizedTask]:
         print(f"[PRIORITY-IA+H] '{task.titulo}' → {prioridad} ({motivo})")
     return resultado
 
-@router.post("/prioritize", response_model=List[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.",
-              responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": PRIORITIZED_TASK_EXAMPLE}}}})
+@router.post(
+    "/prioritize",
+    response_model=List[PrioritizedTask],
+    summary="Priorizar tareas",
+    description="Prioriza las tareas del usuario autenticado según criterios específicos.",
+    responses={
+        200: {
+            "description": "Ejemplo de respuesta",
+            "content": {"application/json": {"example": PRIORITIZED_TASK_EXAMPLE}},
+        }
+    },
+)
 async def prioritize(
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    current_user: Usuario = Depends(get_current_user),
 ):
     result = await session.exec(select(Task).where(Task.user_id == current_user.id))
     tasks_list = result.all()
@@ -65,12 +85,22 @@ async def prioritize(
     await log_ai_usage(current_user.id, ACTION_PRIORITY, session)
     return prioritized_tasks
 
-@router.post("/group", response_model=GroupedTasksResponse, summary="Agrupar tareas", description="Agrupa las tareas del usuario autenticado en categorías específicas.",
-              responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": GROUPED_TASKS_EXAMPLE}}}})
+@router.post(
+    "/group",
+    response_model=GroupedTasksResponse,
+    summary="Agrupar tareas",
+    description="Agrupa las tareas del usuario autenticado en categorías específicas.",
+    responses={
+        200: {
+            "description": "Ejemplo de respuesta",
+            "content": {"application/json": {"example": GROUPED_TASKS_EXAMPLE}},
+        }
+    },
+)
 async def group_tasks(
-        payload: TaskGroupRequest,
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
+    payload: TaskGroupRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: Usuario = Depends(get_current_user),
 ):
     stmt = select(Task).where(Task.user_id == current_user.id)
     if payload.task_ids:
@@ -88,15 +118,25 @@ async def group_tasks(
         ]
         for nombre_grupo, tareas in group.items()
     }
-    await log_ai_usage(current_user.id, "GROUP", session)
+    await log_ai_usage(current_user.id, ACTION_GROUP, session)
     return {"grupos": response}
 
-@router.post("/rewrite", response_model=List[RewrittenTask], summary="Reescribir tareas", description="Reescribe las tareas del usuario autenticado para mejorar su claridad y enfoque.",
-              responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": REWRITTEN_TASK_EXAMPLE}}}})
+@router.post(
+    "/rewrite",
+    response_model=List[RewrittenTask],
+    summary="Reescribir tareas",
+    description="Reescribe las tareas del usuario autenticado para mejorar su claridad y enfoque.",
+    responses={
+        200: {
+            "description": "Ejemplo de respuesta",
+            "content": {"application/json": {"example": REWRITTEN_TASK_EXAMPLE}},
+        }
+    },
+)
 async def rewrite_tasks(
-        payload: TaskRewriteRequest,
-        session: AsyncSession = Depends(get_session),
-        current_user: Usuario = Depends(get_current_user),
+    payload: TaskRewriteRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: Usuario = Depends(get_current_user),
 ):
     stmt = select(Task).where(Task.user_id == current_user.id)
     if payload.task_ids:
@@ -108,18 +148,19 @@ async def rewrite_tasks(
 
     result = []
     for task in tasks:
-        resultado =  reformular_titulo_con_traduccion(task.titulo)
-        result.append(RewrittenTask(
-            id=task.id,
-            original=task.titulo,
-            reformulada=resultado["reformulada"],
-            motivo=resultado["motivo"]
-        ))
-    session.add(AIUsage(user_id=current_user.id, action="REWRITE"))
-    await session.commit()
+        resultado = reformular_titulo_con_traduccion(task.titulo)
+        result.append(
+            RewrittenTask(
+                id=task.id,
+                original=task.titulo,
+                reformulada=resultado["reformulada"],
+                motivo=resultado["motivo"],
+            )
+        )
+
+    await log_ai_usage(current_user.id, ACTION_REWRITE, session)
     return result
 
-# --- Ambos endpoints fusionados ---
 @router.get("/stats", summary="Contadores de uso de IA")
 async def ai_stats(
     session: AsyncSession = Depends(get_session),
@@ -132,9 +173,9 @@ async def ai_stats(
     )
     counts = {row[0]: row[1] for row in result.all()}
     return {
-        "rewritten": counts.get("REWRITE", 0),
-        "prioritized": counts.get("PRIORITY", 0),
-        "grouped": counts.get("GROUP", 0),
+        "rewritten": counts.get(ACTION_REWRITE, 0),
+        "prioritized": counts.get(ACTION_PRIORITY, 0),
+        "grouped": counts.get(ACTION_GROUP, 0),
     }
 
 @router.post(

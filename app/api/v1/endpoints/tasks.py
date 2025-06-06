@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc, asc
 from sqlalchemy.sql.expression import func
@@ -66,9 +67,12 @@ async def get_tasks(
         order_clause = desc(func.coalesce(Task.created_at, func.now())) if is_descending else asc(func.coalesce(Task.created_at, func.now()))
 
     result = await session.exec(
-        select(Task).filter(
-            *filters
-        ).order_by(order_clause).offset(skip).limit(limit)
+        select(Task)
+        .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+        .filter(*filters)
+        .order_by(order_clause)
+        .offset(skip)
+        .limit(limit)
     )
     return result.all()
 
@@ -159,7 +163,9 @@ async def get_task(
         current_user: Usuario = Depends(get_current_user),
 ):
     result = await session.exec(
-        select(Task).where(
+        select(Task)
+        .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+        .where(
             Task.id == task_id,
             Task.deleted_at.is_(None)
         )
@@ -182,7 +188,9 @@ async def update_task(
         session: AsyncSession = Depends(get_session),
 ):
     result = await session.exec(
-        select(Task).where(
+        select(Task)
+        .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+        .where(
             Task.id == task_id,
             Task.user_id == current_user.id,
             Task.deleted_at.is_(None)
@@ -254,7 +262,9 @@ async def patch_task(
 ):
     try:
         result = await session.exec(
-            select(Task).where(
+            select(Task)
+            .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+            .where(
                 Task.id == task_id,
                 Task.deleted_at.is_(None),
                 Task.user_id == current_user.id
@@ -297,7 +307,9 @@ async def patch_task_status(
 ):
     try:
         result = await session.exec(
-            select(Task).where(
+            select(Task)
+            .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+            .where(
                 Task.id == task_id,
                 Task.user_id == current_user.id,
                 Task.deleted_at.is_(None)
