@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field, Relationship, Session
 from typing import Optional
 from uuid import uuid4, UUID
 from datetime import datetime, timezone
@@ -14,3 +14,17 @@ class AIUsage(SQLModel, table=True):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     usuario: Optional["Usuario"] = Relationship(back_populates="ai_actions")
+
+def log_ai_usage(user_id: UUID, action: str, session: Session):
+    """
+    Registra una acción de uso de IA en la base de datos.
+
+    Args:
+        user_id (UUID): ID del usuario que realiza la acción.
+        action (str): Descripción de la acción realizada.
+        session (Session): Sesión activa de la base de datos.
+    """
+    nuevo_log = AIUsage(user_id=user_id, action=action)
+    session.add(nuevo_log)
+    session.commit()
+    return nuevo_log
