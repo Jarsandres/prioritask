@@ -10,6 +10,9 @@ const Tags = () => {
   const [tags, setTags] = useState<Tag[]>([]);
   const [nombre, setNombre] = useState("");
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingNombre, setEditingNombre] = useState("");
+  
 
   const fetchTags = async () => {
     try {
@@ -46,6 +49,26 @@ const Tags = () => {
     }
   };
 
+  const startEdit = (tag: Tag) => {
+    setEditingId(tag.id);
+    setEditingNombre(tag.nombre);
+    setError("");
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId) return;
+    setError("");
+    try {
+      await api.patch(`/tags/${editingId}`, { nombre: editingNombre });
+      setEditingId(null);
+      setEditingNombre("");
+      fetchTags();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Error al actualizar etiqueta");
+    }
+  };
+  
   return (
     <div className="container mt-4">
       <h2>Etiquetas</h2>
@@ -63,11 +86,48 @@ const Tags = () => {
       {error && <div className="alert alert-danger">{error}</div>}
       <ul className="list-group">
         {tags.map((tag) => (
-          <li key={tag.id} className="list-group-item d-flex justify-content-between align-items-center">
-            {tag.nombre}
-            <button className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(tag.id)}>
-              Eliminar
-            </button>
+          <li
+            key={tag.id}
+            className="list-group-item d-flex justify-content-between align-items-center"
+          >
+            {editingId === tag.id ? (
+              <form onSubmit={handleUpdate} className="d-flex gap-2 flex-grow-1">
+                <input
+                  className="form-control"
+                  value={editingNombre}
+                  onChange={(e) => setEditingNombre(e.target.value)}
+                  autoFocus
+                />
+                <button className="btn btn-sm btn-primary" type="submit">
+                  Guardar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setEditingId(null)}
+                >
+                  Cancelar
+                </button>
+              </form>
+            ) : (
+              <>
+                {tag.nombre}
+                <div>
+                  <button
+                    className="btn btn-sm btn-outline-primary me-2"
+                    onClick={() => startEdit(tag)}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline-danger"
+                    onClick={() => handleDelete(tag.id)}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </>
+            )}
           </li>
         ))}
       </ul>
