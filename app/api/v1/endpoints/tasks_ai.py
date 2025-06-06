@@ -57,7 +57,7 @@ async def prioritize(
     result = await session.exec(select(Task).where(Task.user_id == current_user.id))
     tasks_list = result.all()
     prioritized_tasks = clasificar_prioridad_batch(tasks_list)
-    await log_ai_usage(session, current_user.id, "PRIORITY")
+    await log_ai_usage(current_user.id, "PRIORITY", session)
     return prioritized_tasks
 
 @router.post("/group", response_model=GroupedTasksResponse, summary="Agrupar tareas", description="Agrupa las tareas del usuario autenticado en categorías específicas.",
