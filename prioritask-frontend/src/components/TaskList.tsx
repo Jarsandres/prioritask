@@ -163,10 +163,13 @@ const TaskList = () => {
                 Aplicar filtros
               </button>
             </div>
-          </div>
         </div>
+      </div>
+      <div className="d-flex justify-content-end mt-3">
+        <button className="btn btn-outline-secondary" onClick={() => navigate("/tasks/rewrite")}>🧠 Mejorar títulos</button>
+      </div>
 
-        <h2 className="mb-4">
+      <h2 className="mb-4">
           <span role="img" aria-label="Lista">
             📝
           </span>{" "}
