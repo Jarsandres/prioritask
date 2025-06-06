@@ -74,6 +74,8 @@ const Tags = () => {
       <h2>Etiquetas</h2>
       <form onSubmit={handleCreate} className="mb-3 d-flex gap-2">
         <input
+          id="create-tag-name"
+          name="createTagName"
           className="form-control"
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
@@ -93,6 +95,8 @@ const Tags = () => {
             {editingId === tag.id ? (
               <form onSubmit={handleUpdate} className="d-flex gap-2 flex-grow-1">
                 <input
+                  id="update-tag-name"
+                  name="updateTagName"
                   className="form-control"
                   value={editingNombre}
                   onChange={(e) => setEditingNombre(e.target.value)}
