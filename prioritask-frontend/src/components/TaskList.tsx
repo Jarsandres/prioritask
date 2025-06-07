@@ -3,6 +3,7 @@ import api from "../api";
 import { useNavigate } from "react-router-dom";
 import debounce from "lodash/debounce";
 import { TaskUpdateContext } from "../context/TaskUpdateContext";
+import { getCurrentRoomId } from "../utils/room";
 
 interface Tarea {
   id: string;
@@ -34,6 +35,8 @@ const TaskList = () => {
       if (categoria) params.categoria = categoria;
       if (fechaLimite) params.due_date_max = fechaLimite;
       if (busqueda) params.search = busqueda;
+      const roomId = getCurrentRoomId();
+      if (roomId) params.room_id = roomId;
 
       const res = await api.get("/tasks", {
         params,

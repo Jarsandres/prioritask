@@ -3,6 +3,7 @@ import api from "../api";
 import { useNavigate, useParams } from "react-router-dom";
 import Select from "react-select";
 import { TaskUpdateContext } from "../context/TaskUpdateContext";
+import { getCurrentRoomId } from "../utils/room";
 
 interface Tag {
   id: string;
@@ -123,6 +124,7 @@ const TaskForm = () => {
       peso,
       due_date: formatearFecha(dueDate),
       estado,
+      room_id: getCurrentRoomId() || undefined,
     };
 
     try {

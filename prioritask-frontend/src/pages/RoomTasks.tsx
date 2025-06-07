@@ -1,11 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api";
+import { RoomContext } from "../context/RoomContext";
 
 const RoomTasks = () => {
   const { roomId } = useParams();
+  const { setRoomId } = useContext(RoomContext);
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setRoomId(roomId || null);
+  }, [roomId]);
 
   useEffect(() => {
     const fetch = async () => {
