@@ -25,6 +25,17 @@ const TaskForm = () => {
   const navigate = useNavigate();
   const { notifyUpdate } = useContext(TaskUpdateContext);
 
+  const today = new Date().toISOString().split("T")[0];
+
+  const handleDueDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value && value < today) {
+      alert("La fecha no puede ser anterior a hoy");
+      return;
+    }
+    setDueDate(value);
+  };
+
   useEffect(() => {
     const fetchTags = async () => {
       try {
@@ -139,7 +150,10 @@ const TaskForm = () => {
 
   return (
     <div className="container mt-4">
-      <h2>{taskId ? "Editar tarea" : "Crear nueva tarea"}</h2>
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h2 className="mb-0">{taskId ? "Editar tarea" : "Crear nueva tarea"}</h2>
+        <button type="button" className="btn btn-secondary" onClick={() => navigate("/tasks")}>Volver</button>
+      </div>
       {error && <div className="alert alert-danger">{error}</div>}
 
       <form onSubmit={handleSubmit}>
@@ -209,7 +223,8 @@ const TaskForm = () => {
             type="date"
             className="form-control"
             value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
+            min={today}
+            onChange={handleDueDateChange}
           />
         </div>
 

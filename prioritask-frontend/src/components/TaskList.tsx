@@ -165,11 +165,12 @@ const TaskList = () => {
             </div>
         </div>
       </div>
-      <div className="d-flex justify-content-end mt-3">
+      <div className="d-flex justify-content-end mt-3 gap-2">
         <button className="btn btn-outline-secondary" onClick={() => navigate("/tasks/rewrite")}>🧠 Mejorar títulos</button>
+        <button className="btn btn-primary" onClick={() => navigate("/tasks/create")}>Crear nueva tarea</button>
       </div>
 
-      <h2 className="mb-4">
+      <h2 className="mb-4 mt-4">
           <span role="img" aria-label="Lista">
             📝
           </span>{" "}
@@ -177,15 +178,7 @@ const TaskList = () => {
         </h2>
 
         {tareas.length === 0 ? (
-          <>
-            <p>No tienes tareas aún.</p>
-            <button
-              className="btn btn-primary mt-3"
-              onClick={() => navigate("/tasks/create")}
-            >
-              Crear nueva tarea
-            </button>
-          </>
+          <p>No tienes tareas aún.</p>
         ) : (
           <ul className="list-group">
             {tareas.map((tarea) => (
