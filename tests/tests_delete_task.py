@@ -75,3 +75,12 @@ async def test_delete_task_creates_history(async_client):
     )
 
     assert response.status_code == 204
+
+    history_resp = await async_client.get(
+        f"/api/v1/tasks/{task['id']}/history",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert history_resp.status_code == 200
+    actions = [h["action"] for h in history_resp.json()]
+    assert "DELETED" in actions

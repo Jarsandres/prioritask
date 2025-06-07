@@ -321,7 +321,15 @@ async def delete_task(
     if task.user_id != current_user.id:
         return ERROR_FORBIDDEN
 
+    task_id_to_delete = task.id
     await session.delete(task)
+
+    history = TaskHistory(
+        task_id=task_id_to_delete,
+        user_id=current_user.id,
+        action="DELETED",
+    )
+    session.add(history)
     await session.commit()
 
 class UpdateTaskStatus(BaseModel):
