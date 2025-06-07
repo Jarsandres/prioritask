@@ -12,6 +12,7 @@ class TaskCreate(BaseModel):
     estado: EstadoTarea = Field(default=EstadoTarea.TODO, description="Estado inicial de la tarea.", json_schema_extra={"example": "TODO"})
     peso: float = Field(default=1.0, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
     due_date: Optional[datetime] = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
+    room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
 
 class TaskRead(BaseModel):
     id: UUID = Field(description="Identificador único de la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
@@ -23,6 +24,7 @@ class TaskRead(BaseModel):
     due_date: Optional[datetime] = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
     created_at: datetime = Field(description="Fecha de creación de la tarea.", json_schema_extra={"example": "2025-05-27T12:00:00"})
     user_id: UUID = Field(description="Identificador del usuario asociado a la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
+    room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     deleted_at: Optional[datetime] = Field(default=None, description="Fecha de eliminación de la tarea, si aplica.", json_schema_extra={"example": None})
     tags: List[TagRead] = Field(default_factory=list, description="Etiquetas asociadas a la tarea")
 
@@ -46,6 +48,7 @@ class TaskUpdate(BaseModel):
     estado: Optional[EstadoTarea] = Field(None, description="Estado actual de la tarea.", json_schema_extra={"example": "TODO"})
     peso: Optional[float] = Field(None, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
     due_date: Optional[datetime] = Field(None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
+    room_id: Optional[UUID] = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):

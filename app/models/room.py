@@ -18,3 +18,4 @@ class Room(SQLModel, table=True):
 
     owner_id: UUID = Field(foreign_key="usuario.id")
     owner: Optional["Usuario"] = Relationship(back_populates="rooms")
+    parent_id: UUID | None = Field(default=None, foreign_key="room.id", nullable=True)
