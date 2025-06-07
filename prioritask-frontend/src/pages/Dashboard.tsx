@@ -54,6 +54,10 @@ const Dashboard = () => {
     };
 
     loadData();
+
+    return () => {
+      controller.abort();
+    };
   }, [version]);
 
   return (
