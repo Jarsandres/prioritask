@@ -16,7 +16,7 @@ interface HistoryEntry {
 
 const History = () => {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
-  const [rooms, setRooms] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [period, setPeriod] = useState("7");
   const [roomId, setRoomId] = useState("");
