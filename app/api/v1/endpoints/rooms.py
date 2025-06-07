@@ -63,6 +63,10 @@ async def get_rooms(
         current_user: Usuario = Depends(get_current_user),
         session: AsyncSession = Depends(get_session)
 ):
+    """List rooms for the authenticated user.
+
+    If ``parent_id`` is provided, only rooms with that parent are returned.
+    """
     filters = [Room.owner_id == current_user.id]
     if parent_id is not None:
         filters.append(Room.parent_id == parent_id)
