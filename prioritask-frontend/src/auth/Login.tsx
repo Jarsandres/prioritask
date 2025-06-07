@@ -27,7 +27,6 @@ export default function Login() {
         navigate("/rooms/create");
       } else {
         const id = rooms[0].id;
-        localStorage.setItem("roomId", id);
         setRoomId(id);
         navigate("/dashboard");
       }
