@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from app.db.session import get_session
@@ -58,11 +58,16 @@ async def create_room(
 )
 async def get_rooms(
         current_user: Usuario = Depends(get_current_user),
-        session: AsyncSession = Depends(get_session)
+        session: AsyncSession = Depends(get_session),
+        parent_id: UUID | None = Query(
+            None, description="Filtrar por ID del hogar padre"
+        ),
 ):
-    result = await session.exec(
-        select(Room).where(Room.owner_id == current_user.id)
-    )
+    filters = [Room.owner_id == current_user.id]
+    if parent_id is not None:
+        filters.append(Room.parent_id == parent_id)
+
+    result = await session.exec(select(Room).where(*filters))
     rooms = result.all()
     return [
         RoomRead(
