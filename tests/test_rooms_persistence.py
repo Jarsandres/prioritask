@@ -131,3 +131,39 @@ def test_get_rooms_and_update():
         headers={"Authorization": f"Bearer {token}"}
     )
     assert invalid.status_code == 404
+
+
+def test_room_parent_filtering():
+    token, _ = register_and_login()
+
+    root_resp = client.post(
+        "/api/v1/rooms",
+        json={"nombre": "Casa"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert root_resp.status_code == 201
+    root_id = root_resp.json()["id"]
+
+    child_resp = client.post(
+        "/api/v1/rooms",
+        json={"nombre": "Habitacion", "parent_id": root_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert child_resp.status_code == 201
+    assert child_resp.json()["parent_id"] == root_id
+
+    client.post(
+        "/api/v1/rooms",
+        json={"nombre": "Otro"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    filtered = client.get(
+        f"/api/v1/rooms?parent_id={root_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert filtered.status_code == 200
+    rooms = filtered.json()
+    assert len(rooms) == 1
+    assert rooms[0]["id"] == child_resp.json()["id"]
+    assert rooms[0]["parent_id"] == root_id

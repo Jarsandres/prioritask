@@ -12,13 +12,21 @@ from app.schemas.responses import (
     ERROR_INTERNAL_SERVER_ERROR,
     ERROR_ROOM_NOT_FOUND,
 )
+
 router = APIRouter(prefix="/rooms", tags=["Hogar"])
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=RoomRead, summary="Crear Hogar", description="Crea un nuevo Hogar asociado al usuario autenticado. Devuelve un error 500 si ocurre un problema inesperado en el servidor.")
+
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=RoomRead,
+    summary="Crear Hogar",
+    description="Crea un nuevo Hogar asociado al usuario autenticado. Devuelve un error 500 si ocurre un problema inesperado en el servidor."
+)
 async def create_room(
-        payload: RoomCreate,
-        current_user: Usuario = Depends(get_current_user),
-        session: AsyncSession = Depends(get_session)
+    payload: RoomCreate,
+    current_user: Usuario = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ):
     try:
         result = await session.exec(
@@ -57,12 +65,15 @@ async def create_room(
     description="Devuelve los hogares del usuario autenticado.",
 )
 async def get_rooms(
-        current_user: Usuario = Depends(get_current_user),
-        session: AsyncSession = Depends(get_session),
-        parent_id: UUID | None = Query(
-            None, description="Filtrar por ID del hogar padre"
-        ),
+    parent_id: UUID | None = Query(None, description="Filtrar por ID de hogar padre"),
+    current_user: Usuario = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ):
+    """
+    List rooms for the authenticated user.
+
+    If ``parent_id`` is provided, only rooms with that parent are returned.
+    """
     filters = [Room.owner_id == current_user.id]
     if parent_id is not None:
         filters.append(Room.parent_id == parent_id)
@@ -88,10 +99,10 @@ async def get_rooms(
     description="Actualiza el nombre de un hogar existente del usuario.",
 )
 async def update_room(
-        room_id: UUID,
-        payload: RoomUpdate,
-        current_user: Usuario = Depends(get_current_user),
-        session: AsyncSession = Depends(get_session)
+    room_id: UUID,
+    payload: RoomUpdate,
+    current_user: Usuario = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ):
     room = await session.get(Room, room_id)
     if not room or room.owner_id != current_user.id:
