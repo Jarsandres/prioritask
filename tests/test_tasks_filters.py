@@ -162,8 +162,8 @@ async def test_room_tasks_filter_by_search(async_client: AsyncClient):
     tag_resp = await async_client.post("/api/v1/tags", json={"nombre": "Casa"}, headers=headers)
     tag_id = tag_resp.json()["id"]
 
-    t1 = await create_task(async_client, token, {"titulo": "Lavar platos", "categoria": "OTRO"})
-    t2 = await create_task(async_client, token, {"titulo": "Limpiar patio", "categoria": "OTRO"})
+    t1 = await create_task(async_client, token, {"titulo": "Lavar platos", "categoria": "OTRO", "room_id": room_id})
+    t2 = await create_task(async_client, token, {"titulo": "Limpiar patio", "categoria": "OTRO", "room_id": room_id})
     await async_client.post(f"/api/v1/tags/tasks/{t1['id']}/tags", json={"tag_ids": [tag_id]}, headers=headers)
     await async_client.post(f"/api/v1/tags/tasks/{t2['id']}/tags", json={"tag_ids": [tag_id]}, headers=headers)
 
