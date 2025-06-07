@@ -118,3 +118,60 @@ async def test_get_tasks_filter_by_room(async_client: AsyncClient):
     ids = {task["id"] for task in tasks}
     assert ids == {t1["id"]}
     assert all(task["room_id"] == room1_id for task in tasks)
+
+
+@pytest.mark.asyncio
+async def test_get_tasks_filter_by_search(async_client: AsyncClient):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    t1 = await create_task(
+        async_client,
+        token,
+        {"titulo": "Lavar platos", "descripcion": "Usar jabon", "categoria": "OTRO"},
+    )
+    t2 = await create_task(
+        async_client,
+        token,
+        {"titulo": "Pasear al perro", "descripcion": "Ir al parque", "categoria": "OTRO"},
+    )
+    await create_task(
+        async_client,
+        token,
+        {"titulo": "Hacer la compra", "descripcion": "Supermercado", "categoria": "OTRO"},
+    )
+
+    resp = await async_client.get("/api/v1/tasks", params={"search": "platos"}, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1 and data[0]["id"] == t1["id"]
+
+    resp = await async_client.get("/api/v1/tasks", params={"search": "parque"}, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1 and data[0]["id"] == t2["id"]
+
+
+@pytest.mark.asyncio
+async def test_room_tasks_filter_by_search(async_client: AsyncClient):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    room_resp = await async_client.post("/api/v1/rooms", json={"nombre": "Casa"}, headers=headers)
+    room_id = room_resp.json()["id"]
+    tag_resp = await async_client.post("/api/v1/tags", json={"nombre": "Casa"}, headers=headers)
+    tag_id = tag_resp.json()["id"]
+
+    t1 = await create_task(async_client, token, {"titulo": "Lavar platos", "categoria": "OTRO", "room_id": room_id})
+    t2 = await create_task(async_client, token, {"titulo": "Limpiar patio", "categoria": "OTRO", "room_id": room_id})
+    await async_client.post(f"/api/v1/tags/tasks/{t1['id']}/tags", json={"tag_ids": [tag_id]}, headers=headers)
+    await async_client.post(f"/api/v1/tags/tasks/{t2['id']}/tags", json={"tag_ids": [tag_id]}, headers=headers)
+
+    resp = await async_client.get(
+        f"/api/v1/rooms/{room_id}/tasks",
+        params={"search": "platos"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1 and data[0]["id"] == t1["id"]
