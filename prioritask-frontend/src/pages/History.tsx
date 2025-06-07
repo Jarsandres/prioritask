@@ -89,26 +89,29 @@ const History = () => {
       const entries: HistoryRow[] = [];
       const since = sinceDate();
 
-      for (const t of tasks) {
+      const historyPromises = tasks.map(async (t) => {
         try {
           const res = await api.get(`/tasks/${t.id}/history`);
-          res.data.forEach((h: any) => {
-            const ts = new Date(h.timestamp);
-            if (ts >= since && (!memberId || h.user_id === memberId)) {
-              entries.push({
-                id: h.id,
-                task: t,
-                user_id: h.user_id,
-                action: h.action,
-                timestamp: h.timestamp,
-                changes: h.changes,
-              });
-            }
-          });
+          return res.data
+            .filter((h: any) => {
+              const ts = new Date(h.timestamp);
+              return ts >= since && (!memberId || h.user_id === memberId);
+            })
+            .map((h: any) => ({
+              id: h.id,
+              task: t,
+              user_id: h.user_id,
+              action: h.action,
+              timestamp: h.timestamp,
+              changes: h.changes,
+            }));
         } catch (err) {
           console.error(err);
+          return []; // Return an empty array if the API call fails
         }
-      }
+      });
+      const results = await Promise.all(historyPromises);
+      const entries = results.flat();
 
       entries.sort(
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
