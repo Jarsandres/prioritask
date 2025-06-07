@@ -11,6 +11,8 @@ import TaskList from "./components/TaskList";
 import TaskForm from "./components/TaskForm";
 import AssignTaskForm from "./components/AssignTaskForm";
 import { TaskUpdateProvider } from "./context/TaskUpdateContext";
+import { RoomProvider } from "./context/RoomContext";
+import CreateRoom from "./pages/CreateRoom";
 
 const AppContent = () => {
   const location = useLocation();
@@ -24,6 +26,7 @@ const AppContent = () => {
           <Route path="/" element={<Navigate to="/login" />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/rooms/create" element={<CreateRoom />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/tasks" element={<TaskList />} />
           <Route path="/tasks/create" element={<TaskForm />} />
@@ -43,7 +46,9 @@ function App() {
   return (
     <BrowserRouter>
       <TaskUpdateProvider>
-        <AppContent />
+        <RoomProvider>
+          <AppContent />
+        </RoomProvider>
       </TaskUpdateProvider>
     </BrowserRouter>
   );

@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
 import styles from "./Login.module.css";
+import { RoomContext } from "../context/RoomContext";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { setRoomId } = useContext(RoomContext);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,7 +20,17 @@ export default function Login() {
       });
       const { access_token } = response.data;
       localStorage.setItem("token", access_token);
-      navigate("/dashboard");
+
+      const roomsRes = await api.get("/rooms");
+      const rooms = roomsRes.data;
+      if (rooms.length === 0) {
+        navigate("/rooms/create");
+      } else {
+        const id = rooms[0].id;
+        localStorage.setItem("roomId", id);
+        setRoomId(id);
+        navigate("/dashboard");
+      }
     } catch (err: any) {
       if (err.response && err.response.status === 401) {
         setError("Credenciales inválidas. Por favor, verifica tu correo y contraseña.");
