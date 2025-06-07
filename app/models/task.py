@@ -31,7 +31,7 @@ class Task(SQLModel, table=True):
     deleted_at: Optional[datetime] = None
 
     user_id: UUID = Field(foreign_key="usuario.id")
-    room_id: UUID | None = Field(default=None, foreign_key="room.id", nullable=True)
+    room_id: UUID = Field(foreign_key="room.id", nullable=False)
     usuario: Optional["Usuario"] = Relationship(back_populates="tasks")
     history: List["TaskHistory"] = Relationship(back_populates="task", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     colaboradores: List["TaskAssignment"] = Relationship(back_populates="task")
