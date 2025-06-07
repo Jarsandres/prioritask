@@ -19,6 +19,7 @@ from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCre
 from app.models.user import Usuario
 from app.services.task_assignment import TaskAssignmentService
 from app.schemas.responses import ERROR_BAD_REQUEST, ERROR_FORBIDDEN
+from app.schemas.history import TaskHistoryRead
 from pydantic import BaseModel, ValidationError
 
 router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
@@ -208,6 +209,45 @@ async def get_assigned_tasks(
         current_user: Usuario = Depends(get_current_user),
 ):
     return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
+
+
+@router.get("/history", response_model=list[TaskHistoryRead], summary="Historial de tareas")
+async def list_task_history(
+    desde: Optional[datetime] = Query(None),
+    hasta: Optional[datetime] = Query(None),
+    room_id: Optional[UUID] = Query(None),
+    user_id: Optional[UUID] = Query(None),
+    session: AsyncSession = Depends(get_session),
+    current_user: Usuario = Depends(get_current_user),
+):
+    filters = [Task.user_id == current_user.id]
+    if desde:
+        filters.append(TaskHistory.timestamp >= desde)
+    if hasta:
+        filters.append(TaskHistory.timestamp <= hasta)
+    if user_id:
+        filters.append(TaskHistory.user_id == user_id)
+    if room_id:
+        room = await session.get(Room, room_id)
+        if not room or room.owner_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Hogar no encontrado")
+        tag_result = await session.exec(
+            select(Tag).where(Tag.nombre == room.nombre, Tag.user_id == current_user.id)
+        )
+        tag = tag_result.one_or_none()
+        if not tag:
+            return []
+        filters.append(
+            Task.id.in_(select(TaskTag.task_id).where(TaskTag.tag_id == tag.id))
+        )
+    stmt = (
+        select(TaskHistory)
+        .join(Task, Task.id == TaskHistory.task_id)
+        .where(*filters)
+        .order_by(asc(TaskHistory.timestamp))
+    )
+    result = await session.exec(stmt)
+    return result.all()
 
 @router.get("/{task_id}/history", summary="Historial de tarea", description="Obtiene el historial de cambios de una tarea específica. Devuelve un error 404 si la tarea no existe.")
 async def get_task_history(
@@ -436,3 +476,5 @@ async def remove_task_assignment(
     # Eliminar la asignación
     await session.delete(assignment)
     await session.commit()
+
+
