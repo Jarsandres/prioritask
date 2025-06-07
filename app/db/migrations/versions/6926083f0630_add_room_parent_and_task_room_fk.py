@@ -20,9 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     op.add_column('room', sa.Column('parent_id', sa.Uuid(), nullable=True))
-    op.create_foreign_key(None, 'room', 'room', ['parent_id'], ['id'])
+    op.create_foreign_key('room_parent_id_fkey', 'room', 'room', ['parent_id'], ['id'])
     op.add_column('task', sa.Column('room_id', sa.Uuid(), nullable=False))
-    op.create_foreign_key(None, 'task', 'room', ['room_id'], ['id'])
+    op.create_foreign_key('task_room_id_fkey', 'task', 'room', ['room_id'], ['id'])
 
 
 def downgrade() -> None:
