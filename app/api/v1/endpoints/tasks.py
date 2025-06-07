@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc, asc
 from sqlalchemy.sql.expression import func
 from app.db.session import get_session
-from app.models import CategoriaTarea, TaskTag, TaskAssignment
+from app.models import CategoriaTarea, TaskTag, TaskAssignment, Tag, Room
 from app.services.auth import get_current_user
 from app.models.task import Task, TaskHistory, EstadoTarea
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead
@@ -22,6 +22,61 @@ from app.schemas.responses import ERROR_BAD_REQUEST, ERROR_FORBIDDEN
 from pydantic import BaseModel, ValidationError
 
 router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
+room_tasks_router = APIRouter(prefix="/rooms", tags=["Hogar"])
+
+
+async def _fetch_tasks(
+    *,
+    session: AsyncSession,
+    current_user: Usuario,
+    estado: Optional[EstadoTarea] = None,
+    categoria: Optional[CategoriaTarea] = None,
+    completadas: Optional[bool] = None,
+    desde: Optional[datetime] = None,
+    hasta: Optional[datetime] = None,
+    order_by: Optional[str] = None,
+    is_descending: bool = False,
+    tag_id: Optional[UUID] = None,
+    skip: int = 0,
+    limit: int = 10,
+) -> List[Task]:
+    """Retrieve tasks applying common filters."""
+    filters = [Task.user_id == current_user.id, Task.deleted_at.is_(None)]
+
+    if estado:
+        filters.append(Task.estado == estado)
+    if categoria:
+        filters.append(Task.categoria == categoria)
+    if completadas is not None:
+        filters.append(Task.completed == completadas)
+    if desde:
+        filters.append(Task.due_date >= desde)
+    if hasta:
+        filters.append(Task.due_date <= hasta)
+    if tag_id:
+        filters.append(
+            Task.id.in_(select(TaskTag.task_id).where(TaskTag.tag_id == tag_id))
+        )
+
+    if order_by in {"due_date", "peso", "created_at"}:
+        order_attr = getattr(Task, order_by)
+        order_clause = desc(order_attr) if is_descending else asc(order_attr)
+    else:
+        order_clause = (
+            desc(func.coalesce(Task.created_at, func.now()))
+            if is_descending
+            else asc(func.coalesce(Task.created_at, func.now()))
+        )
+
+    result = await session.exec(
+        select(Task)
+        .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+        .filter(*filters)
+        .order_by(order_clause)
+        .offset(skip)
+        .limit(limit)
+    )
+    return result.all()
 
 @router.get("", response_model=list[TaskRead], summary="Obtener tareas", description="Obtiene una lista de tareas del usuario actual con filtros opcionales.")
 async def get_tasks(
@@ -39,42 +94,61 @@ async def get_tasks(
         current_user: Usuario = Depends(get_current_user),
 ):
 
-    filters = [
-        Task.user_id == current_user.id,
-        Task.deleted_at.is_(None)  # Asegurarse de que la tarea no esté eliminada
-    ]
-
-    if estado:
-        filters.append(Task.estado == estado)
-    if categoria:
-        filters.append(Task.categoria == categoria)
-    if completadas is not None:
-        filters.append(Task.completed == completadas)
-    if desde:
-        filters.append(Task.due_date >= desde)
-    if hasta:
-        filters.append(Task.due_date <= hasta)
-    if tag_id:
-        filters.append(Task.id.in_(
-            select(TaskTag.task_id).where(TaskTag.tag_id == tag_id)
-        ))
-
-    # Corrección de order_clause para tipos de datos datetime
-    if order_by in {"due_date", "peso", "created_at"}:
-        order_attr = getattr(Task, order_by)
-        order_clause = desc(order_attr) if is_descending else asc(order_attr)
-    else:
-        order_clause = desc(func.coalesce(Task.created_at, func.now())) if is_descending else asc(func.coalesce(Task.created_at, func.now()))
-
-    result = await session.exec(
-        select(Task)
-        .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
-        .filter(*filters)
-        .order_by(order_clause)
-        .offset(skip)
-        .limit(limit)
+    return await _fetch_tasks(
+        session=session,
+        current_user=current_user,
+        estado=estado,
+        categoria=categoria,
+        completadas=completadas,
+        desde=desde,
+        hasta=hasta,
+        order_by=order_by,
+        is_descending=is_descending,
+        tag_id=tag_id,
+        skip=skip,
+        limit=limit,
     )
-    return result.all()
+
+
+@room_tasks_router.get("/{room_id}/tasks", response_model=list[TaskRead], summary="Obtener tareas de un hogar")
+async def get_tasks_by_room(
+    room_id: UUID,
+    estado: Optional[EstadoTarea] = Query(None),
+    categoria: Optional[CategoriaTarea] = Query(None),
+    completadas: Optional[bool] = Query(None),
+    desde: Optional[datetime] = Query(None),
+    hasta: Optional[datetime] = Query(None),
+    order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
+    is_descending: Optional[bool] = Query(False),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, gt=0),
+    session: AsyncSession = Depends(get_session),
+    current_user: Usuario = Depends(get_current_user),
+):
+    room = await session.get(Room, room_id)
+    if not room or room.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Hogar no encontrado")
+
+    tag_result = await session.exec(
+        select(Tag).where(Tag.nombre == room.nombre, Tag.user_id == current_user.id)
+    )
+    tag = tag_result.one_or_none()
+    tag_id = tag.id if tag else None
+
+    return await _fetch_tasks(
+        session=session,
+        current_user=current_user,
+        estado=estado,
+        categoria=categoria,
+        completadas=completadas,
+        desde=desde,
+        hasta=hasta,
+        order_by=order_by,
+        is_descending=is_descending,
+        tag_id=tag_id,
+        skip=skip,
+        limit=limit,
+    )
 
 @router.post("", response_model=TaskRead, status_code=201, summary="Crear tarea", description="Crea una nueva tarea para el usuario actual.")
 async def create_task(
