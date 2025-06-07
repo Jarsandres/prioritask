@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../api";
 import Select from "react-select";
+import { getCurrentRoomId } from "../utils/room";
 
 interface Assignment {
   id: number;
@@ -28,7 +29,9 @@ const AssignTaskForm = () => {
             label: u.nombre || u.email,
           }))
         );
-        const tasksRes = await api.get("/tasks");
+        const tasksRes = await api.get("/tasks", {
+          params: { room_id: getCurrentRoomId() || undefined },
+        });
         setTasks(
           tasksRes.data.map((t: any) => ({ value: t.id, label: t.titulo }))
         );

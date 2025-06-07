@@ -4,11 +4,13 @@ import api from "../api";
 import { FaTasks, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
 import styles from "./Dashboard.module.css";
 import { TaskUpdateContext } from "../context/TaskUpdateContext";
+import { RoomContext } from "../context/RoomContext";
 
 const Dashboard = () => {
   const [tareas, setTareas] = useState([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const { version } = useContext(TaskUpdateContext);
+  const { setRoomId } = useContext(RoomContext);
 
   useEffect(() => {
     const fetchTareas = async () => {
@@ -87,7 +89,10 @@ const Dashboard = () => {
           <ul>
             {rooms.map((room: any) => (
               <li key={room.id}>
-                <Link to={`/rooms/${room.id}/tasks`}>
+                <Link
+                  to={`/rooms/${room.id}/tasks`}
+                  onClick={() => setRoomId(room.id)}
+                >
                   {room.nombre} ({room.count})
                 </Link>
               </li>
