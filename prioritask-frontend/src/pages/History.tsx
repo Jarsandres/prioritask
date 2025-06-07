@@ -14,6 +14,17 @@ interface HistoryEntry {
   user_id: string;
 }
 
+interface Room {
+  id: string;
+  nombre: string;
+}
+
+interface User {
+  id: string;
+  email?: string;
+  nombre?: string;
+}
+
 const History = () => {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -99,7 +110,7 @@ const History = () => {
             onChange={(e) => setRoomId(e.target.value)}
           >
             <option value="">Todos</option>
-            {rooms.map((r: any) => (
+            {rooms.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.nombre}
               </option>
@@ -114,7 +125,7 @@ const History = () => {
             onChange={(e) => setMemberId(e.target.value)}
           >
             <option value="">Todos</option>
-            {users.map((u: any) => (
+            {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.email || u.nombre}
               </option>
