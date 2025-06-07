@@ -156,6 +156,21 @@ async def create_task(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
+    room_id = payload.room_id
+    if room_id is None:
+        result = await session.exec(
+            select(Room.id).where(Room.owner_id == current_user.id)
+        )
+        first_room = result.first()
+        if first_room:
+            room_id = first_room[0] if isinstance(first_room, tuple) else first_room
+        else:
+            default_room = Room(nombre="Default", owner_id=current_user.id)
+            session.add(default_room)
+            await session.commit()
+            await session.refresh(default_room)
+            room_id = default_room.id
+
     new_task = Task(
         titulo=payload.titulo,
         descripcion=payload.descripcion,
@@ -163,6 +178,7 @@ async def create_task(
         peso=payload.peso,
         due_date=payload.due_date,
         user_id=current_user.id,
+        room_id=room_id,
     )
 
     session.add(new_task)
