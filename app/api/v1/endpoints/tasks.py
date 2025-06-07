@@ -37,6 +37,7 @@ async def _fetch_tasks(
     order_by: Optional[str] = None,
     is_descending: bool = False,
     tag_id: Optional[UUID] = None,
+    room_id: Optional[UUID] = None,
     skip: int = 0,
     limit: int = 10,
 ) -> List[Task]:
@@ -57,6 +58,8 @@ async def _fetch_tasks(
         filters.append(
             Task.id.in_(select(TaskTag.task_id).where(TaskTag.tag_id == tag_id))
         )
+    if room_id:
+        filters.append(Task.room_id == room_id)
 
     if order_by in {"due_date", "peso", "created_at"}:
         order_attr = getattr(Task, order_by)
@@ -88,6 +91,7 @@ async def get_tasks(
         order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
         is_descending: Optional[bool] = Query(False),
         tag_id: Optional[UUID] = Query(None),
+        room_id: Optional[UUID] = Query(None),
         skip: int = Query(0, ge=0),
         limit: int = Query(10, gt=0),
         session: AsyncSession = Depends(get_session),
@@ -105,6 +109,7 @@ async def get_tasks(
         order_by=order_by,
         is_descending=is_descending,
         tag_id=tag_id,
+        room_id=room_id,
         skip=skip,
         limit=limit,
     )

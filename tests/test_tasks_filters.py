@@ -85,3 +85,28 @@ async def test_get_task_history_not_found(async_client: AsyncClient):
     # Verificar que el detalle de la respuesta sea "Historial no encontrado"
     detail = history_response.json().get("detail")
     assert detail == "Historial no encontrado"
+
+
+@pytest.mark.asyncio
+async def test_get_tasks_filter_by_room(async_client: AsyncClient):
+    user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Crear dos hogares
+    r1 = await async_client.post("/api/v1/rooms", json={"nombre": "Casa"}, headers=headers)
+    assert r1.status_code == 201
+    room1 = r1.json()["id"]
+    r2 = await async_client.post("/api/v1/rooms", json={"nombre": "Oficina"}, headers=headers)
+    assert r2.status_code == 201
+    room2 = r2.json()["id"]
+
+    # Crear tareas en cada hogar
+    t1 = await create_task(async_client, token, {"titulo": "Task One", "categoria": "OTRO", "room_id": room1})
+    t2 = await create_task(async_client, token, {"titulo": "Task Two", "categoria": "OTRO", "room_id": room2})
+
+    resp = await async_client.get("/api/v1/tasks", params={"room_id": room1}, headers=headers)
+    assert resp.status_code == 200
+    tasks = resp.json()
+    ids = {task["id"] for task in tasks}
+    assert ids == {t1["id"]}
+    assert {task["room_id"] for task in tasks} == {room1}
