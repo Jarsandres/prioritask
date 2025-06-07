@@ -32,13 +32,11 @@ async def test_history_filter_by_room(async_client: AsyncClient):
 
     room_resp = await async_client.post("/api/v1/rooms", json={"nombre": "Casa"}, headers=headers)
     room_id = room_resp.json()["id"]
-    tag_resp = await async_client.post("/api/v1/tags", json={"nombre": "Casa"}, headers=headers)
-    tag_id = tag_resp.json()["id"]
+    other_room_resp = await async_client.post("/api/v1/rooms", json={"nombre": "Oficina"}, headers=headers)
+    other_room_id = other_room_resp.json()["id"]
 
-    t1 = await create_task(async_client, token, {"titulo": "Uno", "categoria": "OTRO"})
-    await create_task(async_client, token, {"titulo": "Dos", "categoria": "OTRO"})
-
-    await async_client.post(f"/api/v1/tags/tasks/{t1['id']}/tags", json={"tag_ids": [tag_id]}, headers=headers)
+    t1 = await create_task(async_client, token, {"titulo": "Uno", "categoria": "OTRO", "room_id": room_id})
+    await create_task(async_client, token, {"titulo": "Dos", "categoria": "OTRO", "room_id": other_room_id})
 
     resp = await async_client.get("/api/v1/tasks/history", params={"room_id": room_id}, headers=headers)
     assert resp.status_code == 200
