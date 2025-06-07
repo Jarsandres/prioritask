@@ -6,11 +6,13 @@ import Tags from "./pages/Tags";
 import Profile from "./pages/Profile";
 import GroupedTasks from "./pages/GroupedTasks";
 import RewriteTitles from "./pages/RewriteTitles";
+import History from "./pages/History";
 import Sidebar from "./components/Sidebar";
 import TaskList from "./components/TaskList";
 import TaskForm from "./components/TaskForm";
 import AssignTaskForm from "./components/AssignTaskForm";
 import RoomTasks from "./pages/RoomTasks";
+import History from "./pages/History";
 import { TaskUpdateProvider } from "./context/TaskUpdateContext";
 import { RoomProvider } from "./context/RoomContext";
 import CreateRoom from "./pages/CreateRoom";
@@ -35,9 +37,11 @@ const AppContent = () => {
           <Route path="/tasks/assign" element={<AssignTaskForm />} />
           <Route path="/tasks/grouped" element={<GroupedTasks />} />
           <Route path="/tasks/rewrite" element={<RewriteTitles />} />
+          <Route path="/history" element={<History />} />
           <Route path="/tags" element={<Tags />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/rooms/:roomId/tasks" element={<RoomTasks />} />
+          <Route path="/history" element={<History />} />
         </Routes>
       </div>
     </div>
