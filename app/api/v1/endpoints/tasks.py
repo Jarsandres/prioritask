@@ -259,15 +259,7 @@ async def list_task_history(
         room = await session.get(Room, room_id)
         if not room or room.owner_id != current_user.id:
             raise HTTPException(status_code=404, detail="Hogar no encontrado")
-        tag_result = await session.exec(
-            select(Tag).where(Tag.nombre == room.nombre, Tag.user_id == current_user.id)
-        )
-        tag = tag_result.one_or_none()
-        if not tag:
-            return []
-        filters.append(
-            Task.id.in_(select(TaskTag.task_id).where(TaskTag.tag_id == tag.id))
-        )
+        filters.append(Task.room_id == room_id)
     stmt = (
         select(TaskHistory)
         .join(Task, Task.id == TaskHistory.task_id)
