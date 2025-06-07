@@ -165,9 +165,16 @@ async def create_task(
         if first_room:
             room_id = first_room[0] if isinstance(first_room, tuple) else first_room
         else:
-            default_room = Room(nombre="Default", owner_id=current_user.id)
-            session.add(default_room)
-            await session.commit()
+            try:
+                default_room = Room(nombre="Default", owner_id=current_user.id)
+                session.add(default_room)
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                result = await session.exec(
+                    select(Room.id).where(Room.owner_id == current_user.id, Room.nombre == "Default")
+                )
+                default_room = result.one()
             await session.refresh(default_room)
             room_id = default_room.id
 
