@@ -109,4 +109,4 @@ async def test_get_tasks_filter_by_room(async_client: AsyncClient):
     tasks = resp.json()
     ids = {task["id"] for task in tasks}
     assert ids == {t1["id"]}
-    assert all(task["room_id"] == room1 for task in tasks)
+    assert {task["room_id"] for task in tasks} == {room1}
