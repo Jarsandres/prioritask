@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import Select from "react-select";
-import { getCurrentRoomId } from "../utils/room";
 
 interface Task {
   id: string;
   titulo: string;
   estado: "TODO" | "IN_PROGRESS" | "DONE";
+  room_id?: string;
 }
 
-interface HistoryRow {
+interface HistoryEntry {
   id: string;
-  task: Task;
-  user_id: string;
   action: string;
   timestamp: string;
   changes?: string;
+  user_id: string;
+  task: Task;
 }
 
 interface Option {
@@ -24,32 +24,45 @@ interface Option {
 }
 
 const History = () => {
-  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [timeFilter, setTimeFilter] = useState("7d");
   const [rooms, setRooms] = useState<Option[]>([]);
-  const [roomId, setRoomId] = useState<string | null>(getCurrentRoomId());
   const [members, setMembers] = useState<Option[]>([]);
+  const [roomId, setRoomId] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
+    const loadAuxData = async () => {
       try {
-        const roomsRes = await api.get("/rooms");
-        setRooms(roomsRes.data.map((r: any) => ({ value: r.id, label: r.nombre })));
-        const usersRes = await api.get("/users");
+        const [roomsRes, usersRes] = await Promise.all([
+          api.get("/rooms"),
+          api.get("/users"),
+        ]);
+
+        setRooms(
+          roomsRes.data.map((r: any) => ({
+            value: r.id,
+            label: r.nombre,
+          }))
+        );
+
         setMembers(
-          usersRes.data.map((u: any) => ({ value: u.id, label: u.nombre || u.email }))
+          usersRes.data.map((u: any) => ({
+            value: u.id,
+            label: u.nombre ?? u.email,
+          }))
         );
       } catch (err) {
         console.error(err);
       }
     };
-    load();
+    loadAuxData();
   }, []);
 
   useEffect(() => {
     fetchHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeFilter, roomId, memberId]);
 
   const sinceDate = () => {
@@ -79,44 +92,13 @@ const History = () => {
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      let tasksRes;
-      if (roomId) {
-        tasksRes = await api.get(`/rooms/${roomId}/tasks`, { params: { limit: 100 } });
-      } else {
-        tasksRes = await api.get("/tasks", { params: { limit: 100 } });
-      }
-      const tasks: Task[] = tasksRes.data;
-      const entries: HistoryRow[] = [];
-      const since = sinceDate();
+      const since = sinceDate().toISOString();
+      const params: any = { since };
+      if (roomId) params.room_id = roomId;
+      if (memberId) params.user_id = memberId;
 
-      const historyPromises = tasks.map(async (t) => {
-        try {
-          const res = await api.get(`/tasks/${t.id}/history`);
-          return res.data
-            .filter((h: any) => {
-              const ts = new Date(h.timestamp);
-              return ts >= since && (!memberId || h.user_id === memberId);
-            })
-            .map((h: any) => ({
-              id: h.id,
-              task: t,
-              user_id: h.user_id,
-              action: h.action,
-              timestamp: h.timestamp,
-              changes: h.changes,
-            }));
-        } catch (err) {
-          console.error(err);
-          return []; // Return an empty array if the API call fails
-        }
-      });
-      const results = await Promise.all(historyPromises);
-      const entries = results.flat();
-
-      entries.sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-      setHistory(entries);
+      const res = await api.get("/history", { params });
+      setHistory(res.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -136,7 +118,7 @@ const History = () => {
 
   return (
     <div className="container mt-4">
-      <h2>Historial de tareas</h2>
+      <h2>Historial</h2>
       <div className="card p-3 mb-3">
         <div className="row g-3 align-items-end">
           <div className="col-md-3">
@@ -180,6 +162,7 @@ const History = () => {
           </div>
         </div>
       </div>
+
       {loading ? (
         <p>Cargando...</p>
       ) : history.length === 0 ? (
@@ -189,17 +172,32 @@ const History = () => {
           {history.map((h) => (
             <li
               key={h.id}
-              className="list-group-item d-flex justify-content-between align-items-center"
+              className="list-group-item d-flex justify-content-between align-items-start"
             >
               <div>
-                <strong>{h.task.titulo}</strong> - {new Date(h.timestamp).toLocaleString()} - {h.action}
+                <strong>{h.task.titulo}</strong> – {h.action}
+                <br />
+                <small className="text-muted">
+                  {new Date(h.timestamp).toLocaleString()}
+                </small>
               </div>
-              <button
-                className="btn btn-sm btn-outline-secondary"
-                onClick={() => toggleStatus(h.task)}
-              >
-                {h.task.estado === "DONE" ? "Deshacer" : "Marcar done"}
-              </button>
+              <div>
+                {h.task.estado === "DONE" ? (
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => toggleStatus(h.task)}
+                  >
+                    Deshacer
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-sm btn-success"
+                    onClick={() => toggleStatus(h.task)}
+                  >
+                    Marcar hecho
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>

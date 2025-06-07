@@ -12,6 +12,7 @@ import TaskList from "./components/TaskList";
 import TaskForm from "./components/TaskForm";
 import AssignTaskForm from "./components/AssignTaskForm";
 import RoomTasks from "./pages/RoomTasks";
+import History from "./pages/History";
 import { TaskUpdateProvider } from "./context/TaskUpdateContext";
 import { RoomProvider } from "./context/RoomContext";
 import CreateRoom from "./pages/CreateRoom";
@@ -40,6 +41,7 @@ const AppContent = () => {
           <Route path="/tags" element={<Tags />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/rooms/:roomId/tasks" element={<RoomTasks />} />
+          <Route path="/history" element={<History />} />
         </Routes>
       </div>
     </div>
