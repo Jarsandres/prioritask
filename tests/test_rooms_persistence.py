@@ -48,3 +48,60 @@ def test_room_unique_constraint():
         headers={"Authorization": f"Bearer {token}"}
     )
     assert r2.status_code == 422
+
+
+def test_get_rooms_and_update():
+    token, email = register_and_login()
+
+    # Sin hogares inicialmente
+    resp = client.get("/api/v1/rooms", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+    # Crear hogar
+    create = client.post(
+        "/api/v1/rooms",
+        json={"nombre": "Inicial"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert create.status_code == 201
+    room_id = create.json()["id"]
+
+    # Listar hogares
+    resp = client.get("/api/v1/rooms", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    rooms = resp.json()
+    assert len(rooms) == 1
+    assert rooms[0]["id"] == room_id
+
+    # Actualizar nombre
+    update = client.put(
+        f"/api/v1/rooms/{room_id}",
+        json={"nombre": "Actualizado"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert update.status_code == 200
+    assert update.json()["nombre"] == "Actualizado"
+
+    # Verificar duplicado
+    other = client.post(
+        "/api/v1/rooms",
+        json={"nombre": "Otro"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    other_id = other.json()["id"]
+
+    dup = client.put(
+        f"/api/v1/rooms/{other_id}",
+        json={"nombre": "Actualizado"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert dup.status_code == 422
+
+    # Not found
+    invalid = client.put(
+        "/api/v1/rooms/00000000-0000-0000-0000-000000000000",
+        json={"nombre": "x"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert invalid.status_code == 404
