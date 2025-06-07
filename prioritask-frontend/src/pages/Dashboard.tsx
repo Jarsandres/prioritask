@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { FaTasks, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
 import styles from "./Dashboard.module.css";
@@ -10,7 +10,8 @@ const Dashboard = () => {
   const [tareas, setTareas] = useState([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const { version } = useContext(TaskUpdateContext);
-  const { setRoomId } = useContext(RoomContext);
+  const { roomId, setRoomId } = useContext(RoomContext);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchTareas = async () => {
@@ -21,6 +22,11 @@ const Dashboard = () => {
     const fetchRooms = async () => {
       try {
         const r = await api.get("/rooms");
+        if (r.data.length === 0) {
+          navigate("/rooms/create");
+          return;
+        }
+
         const list = await Promise.all(
           r.data.map(async (room: any) => {
             const tasksRes = await api.get(`/rooms/${room.id}/tasks`, { params: { limit: 100 } });
@@ -28,6 +34,10 @@ const Dashboard = () => {
           })
         );
         setRooms(list);
+
+        if (!roomId) {
+          setRoomId(list[0].id);
+        }
       } catch (err) {
         console.error(err);
       }

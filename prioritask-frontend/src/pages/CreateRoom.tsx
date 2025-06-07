@@ -25,7 +25,7 @@ const CreateRoom = () => {
 
   return (
     <div className="container mt-4">
-      <h2>Crear Hogar</h2>
+      <h2>Crea tu hogar para comenzar</h2>
       {error && <div className="alert alert-danger">{error}</div>}
       <form onSubmit={handleSubmit}>
         <div className="mb-3">
@@ -33,12 +33,15 @@ const CreateRoom = () => {
           <input
             type="text"
             className="form-control"
+            placeholder="Mi Casa"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
           />
         </div>
-        <button type="submit" className="btn btn-primary">Crear</button>
+        <button type="submit" className="btn btn-primary" disabled={!name}>
+          Crear
+        </button>
       </form>
     </div>
   );
