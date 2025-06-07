@@ -9,3 +9,8 @@ class RoomRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class RoomUpdate(BaseModel):
+    nombre: str = Field(description="Nuevo nombre del hogar.",
+                         json_schema_extra={"example": "Mi Casa"})
+
