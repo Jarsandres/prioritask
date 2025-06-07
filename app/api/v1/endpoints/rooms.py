@@ -6,18 +6,13 @@ from app.models.room import Room
 from app.models.user import Usuario
 from app.services.auth import get_current_user
 from uuid import UUID
-from app.schemas.room import RoomRead, RoomUpdate
+from app.schemas.room import RoomRead, RoomUpdate, RoomCreate
 from app.schemas.responses import (
     ERROR_ROOM_DUPLICATE,
     ERROR_INTERNAL_SERVER_ERROR,
     ERROR_ROOM_NOT_FOUND,
 )
-from pydantic import BaseModel
-
 router = APIRouter(prefix="/rooms", tags=["Hogar"])
-
-class RoomCreate(BaseModel):
-    nombre: str
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=RoomRead, summary="Crear Hogar", description="Crea un nuevo Hogar asociado al usuario autenticado. Devuelve un error 500 si ocurre un problema inesperado en el servidor.")
 async def create_room(
@@ -36,7 +31,11 @@ async def create_room(
         if existing_room:
             return ERROR_ROOM_DUPLICATE
 
-        room = Room(nombre=payload.nombre, owner_id=current_user.id)
+        room = Room(
+            nombre=payload.nombre,
+            owner_id=current_user.id,
+            parent_id=payload.parent_id,
+        )
         session.add(room)
         await session.commit()
         await session.refresh(room)
@@ -44,7 +43,8 @@ async def create_room(
             id=room.id,
             nombre=room.nombre,
             owner_id=room.owner_id,
-            owner=current_user.email
+            owner=current_user.email,
+            parent_id=room.parent_id,
         )
     except Exception:
         return ERROR_INTERNAL_SERVER_ERROR
@@ -69,8 +69,10 @@ async def get_rooms(
             id=r.id,
             nombre=r.nombre,
             owner_id=r.owner_id,
-            owner=current_user.email
-        ) for r in rooms
+            owner=current_user.email,
+            parent_id=r.parent_id,
+        )
+        for r in rooms
     ]
 
 
@@ -108,5 +110,6 @@ async def update_room(
         id=room.id,
         nombre=room.nombre,
         owner_id=room.owner_id,
-        owner=current_user.email
+        owner=current_user.email,
+        parent_id=room.parent_id,
     )
