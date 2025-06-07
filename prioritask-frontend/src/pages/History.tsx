@@ -97,7 +97,7 @@ const History = () => {
       if (roomId) params.room_id = roomId;
       if (memberId) params.user_id = memberId;
 
-      const res = await api.get("/history", { params });
+      const res = await api.get("/tasks/history", { params }); // Actualizar la ruta
       setHistory(res.data);
     } catch (err) {
       console.error(err);
@@ -169,37 +169,39 @@ const History = () => {
         <p>No hay entradas.</p>
       ) : (
         <ul className="list-group">
-          {history.map((h) => (
-            <li
-              key={h.id}
-              className="list-group-item d-flex justify-content-between align-items-start"
-            >
-              <div>
-                <strong>{h.task.titulo}</strong> – {h.action}
-                <br />
-                <small className="text-muted">
-                  {new Date(h.timestamp).toLocaleString()}
-                </small>
-              </div>
-              <div>
-                {h.task.estado === "DONE" ? (
-                  <button
-                    className="btn btn-sm btn-outline-secondary"
-                    onClick={() => toggleStatus(h.task)}
-                  >
-                    Deshacer
-                  </button>
-                ) : (
-                  <button
-                    className="btn btn-sm btn-success"
-                    onClick={() => toggleStatus(h.task)}
-                  >
-                    Marcar hecho
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
+          {history.map((h) =>
+            h.task ? (
+              <li
+                key={h.id}
+                className="list-group-item d-flex justify-content-between align-items-start"
+              >
+                <div>
+                  <strong>{h.task.titulo}</strong> – {h.action}
+                  <br />
+                  <small className="text-muted">
+                    {new Date(h.timestamp).toLocaleString()}
+                  </small>
+                </div>
+                <div>
+                  {h.task.estado === "DONE" ? (
+                    <button
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => toggleStatus(h.task)}
+                    >
+                      Deshacer
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-sm btn-success"
+                      onClick={() => toggleStatus(h.task)}
+                    >
+                      Marcar hecho
+                    </button>
+                  )}
+                </div>
+              </li>
+            ) : null // Manejar casos donde h.task es undefined
+          )}
         </ul>
       )}
     </div>

@@ -15,14 +15,24 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const controller = new AbortController(); // Definir el AbortController
+
     const fetchTareas = async () => {
-      const res = await api.get("/tasks");
-      setTareas(res.data);
+      try {
+        const res = await api.get("/tasks", { signal: controller.signal }); // Pasar la señal
+        setTareas(res.data);
+      } catch (err: any) {
+        if (err.name === "CanceledError") {
+          console.log("Request canceled: fetchTareas");
+        } else {
+          console.error(err);
+        }
+      }
     };
 
     const fetchRooms = async () => {
       try {
-        const r = await api.get("/rooms");
+        const r = await api.get("/rooms", { signal: controller.signal }); // Pasar la señal
         if (r.data.length === 0) {
           navigate("/rooms/create");
           return;
@@ -30,8 +40,20 @@ const Dashboard = () => {
 
         const list = await Promise.all(
           r.data.map(async (room: any) => {
-            const tasksRes = await api.get(`/rooms/${room.id}/tasks`, { params: { limit: 100 } });
-            return { ...room, count: tasksRes.data.length };
+            try {
+              const tasksRes = await api.get(`/rooms/${room.id}/tasks`, {
+                params: { limit: 100 },
+                signal: controller.signal, // Pasar la señal
+              });
+              return { ...room, count: tasksRes.data.length };
+            } catch (err: any) {
+              if (err.name === "CanceledError") {
+                console.log("Request canceled: fetchRooms tasks");
+              } else {
+                console.error(err);
+              }
+              return room;
+            }
           })
         );
         setRooms(list);
@@ -39,8 +61,12 @@ const Dashboard = () => {
         if (!roomId) {
           setRoomId(list[0].id);
         }
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        if (err.name === "CanceledError") {
+          console.log("Request canceled: fetchRooms");
+        } else {
+          console.error(err);
+        }
       }
     };
 
@@ -56,7 +82,7 @@ const Dashboard = () => {
     loadData();
 
     return () => {
-      controller.abort();
+      controller.abort(); // Usar el AbortController para cancelar solicitudes
     };
   }, [version]);
 
