@@ -50,6 +50,32 @@ def test_room_unique_constraint():
     assert r2.status_code == 422
 
 
+def test_room_create_with_parent_id():
+    token, _ = register_and_login()
+
+    parent_resp = client.post(
+        "/api/v1/rooms",
+        json={"nombre": "Principal"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert parent_resp.status_code == 201
+    parent_id = parent_resp.json()["id"]
+
+    child_resp = client.post(
+        "/api/v1/rooms",
+        json={"nombre": "Hijo", "parent_id": parent_id},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert child_resp.status_code == 201
+    child_data = child_resp.json()
+    assert child_data["parent_id"] == parent_id
+
+    list_resp = client.get("/api/v1/rooms", headers={"Authorization": f"Bearer {token}"})
+    assert list_resp.status_code == 200
+    rooms = list_resp.json()
+    assert any(r["id"] == child_data["id"] and r["parent_id"] == parent_id for r in rooms)
+
+
 def test_get_rooms_and_update():
     token, email = register_and_login()
 
