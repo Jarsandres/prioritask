@@ -9,6 +9,7 @@ import { RoomContext } from "../context/RoomContext";
 const Dashboard = () => {
   const [tareas, setTareas] = useState([]);
   const [rooms, setRooms] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const { version } = useContext(TaskUpdateContext);
   const { roomId, setRoomId } = useContext(RoomContext);
   const navigate = useNavigate();
@@ -43,8 +44,16 @@ const Dashboard = () => {
       }
     };
 
-    fetchTareas();
-    fetchRooms();
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchTareas(), fetchRooms()]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, [version]);
 
   return (
@@ -97,17 +106,24 @@ const Dashboard = () => {
         <div className="mt-4">
           <h4>Hogares</h4>
           <ul>
-            {rooms.map((room: any) => (
-              <li key={room.id}>
-                <Link
-                  to={`/rooms/${room.id}/tasks`}
-                  onClick={() => setRoomId(room.id)}
-                >
-                  {room.nombre} ({room.count})
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {rooms.map((room: any) => (
+            <li key={room.id}>
+              <Link
+                to={`/rooms/${room.id}/tasks`}
+                onClick={() => setRoomId(room.id)}
+              >
+                {room.nombre} ({room.count})
+              </Link>
+            </li>
+          ))}
+        </ul>
+        { !loading && (
+          <div className="mt-3">
+            <Link to="/history" className="btn btn-secondary">
+              Historial
+            </Link>
+          </div>
+        ) }
         </div>
       </div>
     </>
