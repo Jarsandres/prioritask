@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from app.api.v1 import api_router
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.v1 import api_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -16,6 +16,7 @@ app = FastAPI(
         "url": "https://opensource.org/licenses/MIT"
     }
 )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -24,5 +25,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Aquí sí cargamos el router de la API
 app.include_router(api_router, prefix="/api/v1")
