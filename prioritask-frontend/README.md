@@ -52,3 +52,7 @@ export default tseslint.config({
   },
 })
 ```
+
+## Backend CORS configuration
+
+Si la API establece restricciones de CORS, define la variable de entorno `CORS_ORIGINS` como un array JSON con los dominios permitidos, tal y como se indica en el README principal.
