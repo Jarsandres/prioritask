@@ -21,3 +21,6 @@ class Settings(BaseSettings):
         return v
 
     model_config = ConfigDict(env_file=".env")
+
+# Crea una instancia de Settings
+settings = Settings()
