@@ -3,7 +3,6 @@ from app.api.v1 import api_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 
-
 app = FastAPI(
     title="Prioritask API",
     version="1.0",
@@ -17,13 +16,10 @@ app = FastAPI(
         "url": "https://opensource.org/licenses/MIT"
     }
 )
-origins = [o.strip() for o in (settings.CORS_ORIGINS or "").split(",") if o.strip()]
-if not origins:
-    origins = ["http://localhost:5173"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.CORS_ORIGINS,  # settings.CORS_ORIGINS siempre será una lista válida
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

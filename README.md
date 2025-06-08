@@ -18,7 +18,6 @@ Prioritask es una API REST desarrollada con FastAPI que permite gestionar tareas
 - **Pytest + HTTPX** · Tests automáticos
 - **Postman** · Pruebas manuales y exploración de la API
 
-
 ---
 
 ## 🧠 Funcionalidades
@@ -99,8 +98,13 @@ Una vez lanzado, puedes acceder a:
 ```env
 DATABASE_URL=sqlite:///./tareas.db
 JWT_SECRET_KEY=tu_clave_secreta
-CORS_ORIGINS=http://localhost:5173
+CORS_ORIGINS=["http://localhost:5173"]
+```
 
+`CORS_ORIGINS` debe ser un array en formato JSON que se convertirá en una lista en Python. Por ejemplo:
+
+```env
+CORS_ORIGINS=["http://localhost:5173","https://miapp.com"]
 ```
 
 ---
@@ -125,5 +129,3 @@ previsualizarlos usa `npm run preview`.
 ## 📄 Licencia
 
 Este proyecto está licenciado bajo la Licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más detalles.
-
----
