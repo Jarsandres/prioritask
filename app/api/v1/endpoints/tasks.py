@@ -270,13 +270,39 @@ async def list_task_history(
             raise HTTPException(status_code=404, detail="Hogar no encontrado")
         filters.append(Task.room_id == room_id)
     stmt = (
-        select(TaskHistory)
+        select(
+            TaskHistory.id,
+            TaskHistory.task_id,
+            TaskHistory.user_id,
+            TaskHistory.action,
+            TaskHistory.timestamp,
+            TaskHistory.changes,
+            Task.titulo.label("task_title")
+        )
         .join(Task, Task.id == TaskHistory.task_id)
         .where(*filters)
         .order_by(asc(TaskHistory.timestamp))
     )
     result = await session.exec(stmt)
-    return result.all()
+    rows = result.all()
+
+    # Log para depuración
+    print("Resultados de la consulta:", rows)
+
+    # Mapear los resultados al modelo TaskHistoryRead
+    history = [
+        TaskHistoryRead(
+            id=row[0],
+            task_id=row[1],
+            user_id=row[2],
+            action=row[3],
+            timestamp=row[4],
+            changes=row[5],
+            task_title=row[6]  # Asegurarse de mapear correctamente el título de la tarea
+        )
+        for row in rows
+    ]
+    return history
 
 @router.get("/{task_id}/history", summary="Historial de tarea", description="Obtiene el historial de cambios de una tarea específica. Devuelve un error 404 si la tarea no existe.")
 async def get_task_history(
@@ -513,5 +539,3 @@ async def remove_task_assignment(
     # Eliminar la asignación
     await session.delete(assignment)
     await session.commit()
-
-
