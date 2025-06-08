@@ -99,6 +99,7 @@ Una vez lanzado, puedes acceder a:
 ```env
 DATABASE_URL=sqlite:///./tareas.db
 JWT_SECRET_KEY=tu_clave_secreta
+CORS_ORIGINS=http://localhost:5173
 
 ```
 
