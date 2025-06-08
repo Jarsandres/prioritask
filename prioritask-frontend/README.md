@@ -8,7 +8,7 @@ Interfaz web desarrollada con **React**, **TypeScript** y **Vite** para consumir
 
 ```bash
 npm install
-cp .env.example .env
+cp .env.example .env  # en Windows usa "copy .env.example .env"
 ```
 
 2. Ejecuta el servidor de desarrollo:

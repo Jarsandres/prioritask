@@ -55,7 +55,7 @@ pip install -e .[dev]
 Crea un archivo `.env` a partir del ejemplo:
 
 ```bash
-cp .env.example .env
+cp .env.example .env  # en Windows usa "copy .env.example .env"
 ```
 
 ### 4. Lanza el servidor
@@ -111,7 +111,7 @@ La carpeta `prioritask-frontend` contiene la interfaz React que consume esta API
 ```bash
 cd prioritask-frontend
 npm install
-cp .env.example .env
+cp .env.example .env  # en Windows usa "copy .env.example .env"
 npm run dev
 ```
 La aplicación estará disponible en [http://localhost:5173](http://localhost:5173).
