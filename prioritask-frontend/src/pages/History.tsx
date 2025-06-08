@@ -15,7 +15,7 @@ interface HistoryEntry {
   timestamp: string;
   changes?: string;
   user_id: string;
-  task: Task;
+  task_title: string; // Adjusted to match backend response
 }
 
 interface Option {
@@ -169,39 +169,20 @@ const History = () => {
         <p>No hay entradas.</p>
       ) : (
         <ul className="list-group">
-          {history.map((h) =>
-            h.task ? (
-              <li
-                key={h.id}
-                className="list-group-item d-flex justify-content-between align-items-start"
-              >
-                <div>
-                  <strong>{h.task.titulo}</strong> – {h.action}
-                  <br />
-                  <small className="text-muted">
-                    {new Date(h.timestamp).toLocaleString()}
-                  </small>
-                </div>
-                <div>
-                  {h.task.estado === "DONE" ? (
-                    <button
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => toggleStatus(h.task)}
-                    >
-                      Deshacer
-                    </button>
-                  ) : (
-                    <button
-                      className="btn btn-sm btn-success"
-                      onClick={() => toggleStatus(h.task)}
-                    >
-                      Marcar hecho
-                    </button>
-                  )}
-                </div>
-              </li>
-            ) : null // Manejar casos donde h.task es undefined
-          )}
+          {history.map((h) => (
+            <li
+              key={h.id}
+              className="list-group-item d-flex justify-content-between align-items-start"
+            >
+              <div>
+                <strong>{h.task_title || "Tarea no especificada"}</strong> – {h.action}
+                <br />
+                <small className="text-muted">
+                  {new Date(h.timestamp).toLocaleString()} por {members.find((m) => m.value === h.user_id)?.label || h.user_id}
+                </small>
+              </div>
+            </li>
+          ))}
         </ul>
       )}
     </div>
@@ -209,3 +190,4 @@ const History = () => {
 };
 
 export default History;
+
