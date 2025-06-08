@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from app.api.v1 import api_router
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
 
 app = FastAPI(
     title="Prioritask API",
@@ -29,4 +28,3 @@ app.add_middleware(
 # Aquí sí cargamos el router de la API
 app.include_router(api_router, prefix="/api/v1")
 
-# Nota: Cambiar "*" por orígenes específicos una vez resuelto el problema.
