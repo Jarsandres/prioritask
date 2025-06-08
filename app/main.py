@@ -16,9 +16,10 @@ app = FastAPI(
         "url": "https://opensource.org/licenses/MIT"
     }
 )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.CORS_ORIGINS,  # settings.CORS_ORIGINS siempre será una lista válida
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
