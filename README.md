@@ -55,13 +55,22 @@ pip install -e .[dev]
 Crea un archivo `.env` a partir del ejemplo:
 
 ```bash
-cp .env.example .env
+cp .env.example .env  # en Windows usa "copy .env.example .env"
 ```
 
 ### 4. Lanza el servidor
 
 ```bash
 uvicorn app.main:app --reload
+```
+
+### 5. Aplica las migraciones
+
+Si es la primera vez que arrancas el proyecto o has modificado los modelos,
+ejecuta las migraciones de Alembic para crear el esquema de la base de datos:
+
+```bash
+alembic upgrade head
 ```
 
 ---
@@ -92,6 +101,23 @@ DATABASE_URL=sqlite:///./tareas.db
 JWT_SECRET_KEY=tu_clave_secreta
 
 ```
+
+---
+
+## 🖥️ Frontend
+
+La carpeta `prioritask-frontend` contiene la interfaz React que consume esta API.
+
+```bash
+cd prioritask-frontend
+npm install
+cp .env.example .env  # en Windows usa "copy .env.example .env"
+npm run dev
+```
+La aplicación estará disponible en [http://localhost:5173](http://localhost:5173).
+
+Para generar los archivos estáticos ejecuta `npm run build` y para
+previsualizarlos usa `npm run preview`.
 
 ---
 
