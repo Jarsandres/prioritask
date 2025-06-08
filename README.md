@@ -90,7 +90,13 @@ Una vez lanzado, puedes acceder a:
 ```env
 DATABASE_URL=sqlite:///./tareas.db
 JWT_SECRET_KEY=tu_clave_secreta
+CORS_ORIGINS=["http://localhost:5173"]
+```
 
+`CORS_ORIGINS` debe ser un array en formato JSON que se convertirá en una lista en Python. Por ejemplo:
+
+```env
+CORS_ORIGINS=["http://localhost:5173","https://miapp.com"]
 ```
 
 ---
