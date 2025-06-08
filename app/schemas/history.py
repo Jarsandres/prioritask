@@ -9,5 +9,6 @@ class TaskHistoryRead(BaseModel):
     action: str = Field(description="Acción registrada.")
     timestamp: datetime = Field(description="Momento en que ocurrió la acción.")
     changes: str | None = Field(default=None, description="Cambios realizados.")
+    task_title: str | None = Field(default=None, description="Título de la tarea asociada.")
 
     model_config = ConfigDict(from_attributes=True)
