@@ -19,15 +19,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.add_column('room', sa.Column('parent_id', sa.UUID(), nullable=True))
-    op.create_foreign_key('room_parent_id_fkey', 'room', 'room', ['parent_id'], ['id'])
-    op.add_column('task', sa.Column('room_id', sa.UUID(), nullable=False))
-    op.create_foreign_key('task_room_id_fkey', 'task', 'room', ['room_id'], ['id'])
+    # La columna 'parent_id' ya fue creada en una migración anterior, no es necesario agregarla nuevamente.
+    # La clave foránea 'room_parent_id_fkey' también ya existe.
+    pass
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_constraint('task_room_id_fkey', 'task', type_='foreignkey')
-    op.drop_column('task', 'room_id')
-    op.drop_constraint('room_parent_id_fkey', 'room', type_='foreignkey')
-    op.drop_column('room', 'parent_id')
+    # No se requiere eliminar columnas o claves foráneas redundantes.
+    pass

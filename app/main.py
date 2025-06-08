@@ -17,9 +17,10 @@ app = FastAPI(
     }
 )
 
+# Registrar CORSMiddleware antes de cualquier otra configuración
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,  # settings.CORS_ORIGINS siempre será una lista válida
+    allow_origins=["*"],  # Permitir todos los orígenes temporalmente para depuración
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,3 +28,5 @@ app.add_middleware(
 
 # Aquí sí cargamos el router de la API
 app.include_router(api_router, prefix="/api/v1")
+
+# Nota: Cambiar "*" por orígenes específicos una vez resuelto el problema.
