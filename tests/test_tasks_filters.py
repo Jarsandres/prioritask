@@ -1,6 +1,10 @@
+import os
 import pytest
 from httpx import AsyncClient
 from tests.utils import create_user_and_token, create_task
+
+# Configurar variable de entorno para permitir fechas pasadas en pruebas
+os.environ["ALLOW_PAST_DUE_DATES"] = "1"
 
 @pytest.mark.asyncio
 async def test_get_tasks_pagination(async_client: AsyncClient):

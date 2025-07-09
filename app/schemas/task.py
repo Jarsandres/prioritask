@@ -4,6 +4,7 @@ from uuid import UUID
 from datetime import datetime
 from app.models.enums import CategoriaTarea, EstadoTarea
 from .tag import TagRead
+import os
 
 class TaskCreate(BaseModel):
     titulo: str = Field(min_length=3, max_length=100, description="Título de la tarea.", json_schema_extra={"example": "Comprar comida"})
@@ -35,7 +36,8 @@ class TaskRead(BaseModel):
                 value = datetime.fromisoformat(value) if isinstance(value, str) else value
             except ValueError:
                 raise ValueError("Formato de fecha inválido")
-            if value < datetime.now():
+            # Permitir fechas pasadas en un entorno de pruebas
+            if value < datetime.now() and not os.getenv("ALLOW_PAST_DUE_DATES"):
                 raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
         return value
 
@@ -57,7 +59,8 @@ class TaskUpdate(BaseModel):
                 value = datetime.fromisoformat(value) if isinstance(value, str) else value
             except ValueError:
                 raise ValueError("Formato de fecha inválido")
-            if value < datetime.now():
+            # Permitir fechas pasadas en un entorno de pruebas
+            if value < datetime.now() and not os.getenv("ALLOW_PAST_DUE_DATES"):
                 raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
         return value
 
