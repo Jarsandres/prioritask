@@ -2,6 +2,7 @@ import os
 import asyncio
 import sys
 from types import ModuleType
+import pytest
 import pytest_asyncio
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
@@ -50,7 +51,7 @@ TEST_DB = "sqlite+aiosqlite:///./prioritask.db"
 test_engine = create_async_engine(TEST_DB, echo=False)
 async_session = async_sessionmaker(test_engine, expire_on_commit=False)
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def reset_test_db():
     db_path = "prioritask.db"
     if os.path.exists(db_path):
@@ -80,7 +81,7 @@ async def session():
         await session.close()
 
 @pytest_asyncio.fixture
-def auth_headers(session):
+async def auth_headers(session):
     # Crear un usuario de prueba con un UUID válido y un email único
     unique_email = f"test-{uuid4()}@example.com"
     user = Usuario(
@@ -90,7 +91,7 @@ def auth_headers(session):
         is_active=True,
     )
     session.add(user)
-    asyncio.run(session.commit())
+    await session.commit()
 
     # Generar un token válido usando el JWT_SECRET_KEY de la configuración
     token = create_access_token(sub=str(user.id), secret=settings.JWT_SECRET_KEY)
