@@ -12,39 +12,69 @@ interface Suggestion {
 const RewriteTitles = () => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchSuggestions = async () => {
+      setError(null);
       try {
-        const res = await api.post("/tasks/ai/rewrite", {});
+        const res = await api.post<Suggestion[]>(
+          "/tasks/ai/rewrite",
+          {},
+          { signal: controller.signal }
+        );
         setSuggestions(res.data);
-      } catch (err) {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "CanceledError") {
+          return;
+        }
         console.error(err);
-        alert("Error al obtener sugerencias");
+        setError("Error al obtener sugerencias para mejorar títulos.");
       } finally {
         setLoading(false);
       }
     };
+
     fetchSuggestions();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const acceptSuggestion = async (s: Suggestion) => {
+    setAcceptingId(s.id);
+    setError(null);
     try {
       await api.patch(`/tasks/${s.id}`, { titulo: s.reformulada });
       setSuggestions((prev) => prev.filter((item) => item.id !== s.id));
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      alert("Error al actualizar tarea");
+      setError(`Error al actualizar la tarea "${s.original}".`);
+    } finally {
+      setAcceptingId(null);
     }
   };
 
-  if (loading) return <p>Cargando sugerencias...</p>;
+  if (loading) return <p className="container mt-4">Cargando sugerencias...</p>;
 
   return (
     <div className="container mt-4">
       <h2>🧠 Mejorar títulos</h2>
-      <button className="btn btn-secondary mb-3" onClick={() => navigate("/tasks")}>Volver</button>
+      <button className="btn btn-secondary mb-3" onClick={() => navigate("/tasks")}>
+        Volver
+      </button>
+
+      {error && (
+        <div className="alert alert-danger" role="alert">
+          {error}
+        </div>
+      )}
+
       {suggestions.length === 0 ? (
         <p>No hay sugerencias disponibles.</p>
       ) : (
@@ -53,7 +83,7 @@ const RewriteTitles = () => {
             <tr>
               <th>Tarea original</th>
               <th>Título sugerido</th>
-              <th></th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -62,8 +92,12 @@ const RewriteTitles = () => {
                 <td>{s.original}</td>
                 <td>{s.reformulada}</td>
                 <td>
-                  <button className="btn btn-primary btn-sm" onClick={() => acceptSuggestion(s)}>
-                    Aceptar
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => acceptSuggestion(s)}
+                    disabled={acceptingId === s.id}
+                  >
+                    {acceptingId === s.id ? "Aceptando..." : "Aceptar"}
                   </button>
                 </td>
               </tr>

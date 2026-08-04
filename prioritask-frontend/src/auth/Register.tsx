@@ -1,6 +1,6 @@
 import { useState } from "react";
 import api from "../api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import styles from "./Login.module.css";
 
 export default function Register() {
@@ -8,10 +8,14 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  // FE-005 (bonus): Estado de carga para prevenir doble submit
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setIsLoading(true);
     try {
       await api.post("/auth/register", {
         nombre: username,
@@ -19,8 +23,20 @@ export default function Register() {
         password,
       });
       navigate("/login");
-    } catch (err) {
-      setError("Error al registrar. Revisa los datos.");
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        "response" in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      ) {
+        setError(
+          (err as { response: { data: { detail: string } } }).response.data.detail
+        );
+      } else {
+        setError("Error al registrar. Revisa los datos.");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -36,6 +52,7 @@ export default function Register() {
             className={styles.input}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            disabled={isLoading}
             required
           />
           <input
@@ -44,6 +61,7 @@ export default function Register() {
             className={styles.input}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={isLoading}
             required
           />
           <input
@@ -52,18 +70,25 @@ export default function Register() {
             className={styles.input}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={isLoading}
             required
           />
           {error && <p className={styles.error}>{error}</p>}
-          <button type="submit" className={styles.button}>
-            Registrarse
+          {/* FE-005: Botón deshabilitado durante el registro */}
+          <button
+            type="submit"
+            className={styles.button}
+            disabled={isLoading}
+          >
+            {isLoading ? "Registrando..." : "Registrarse"}
           </button>
         </form>
         <p className={styles.registerText}>
+          {/* FE-008: Sustituido <a href> por <Link to> para navegación SPA */}
           ¿Ya tienes cuenta?{" "}
-          <a href="/login" className={styles.registerLink}>
+          <Link to="/login" className={styles.registerLink}>
             Iniciar sesión
-          </a>
+          </Link>
         </p>
       </div>
     </div>

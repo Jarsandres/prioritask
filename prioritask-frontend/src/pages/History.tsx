@@ -1,73 +1,60 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import api from "../api";
 import Select from "react-select";
+import type { HistoryEntry, SelectOption } from "../types/task";
 
-interface Task {
-  id: string;
-  titulo: string;
-  estado: "TODO" | "IN_PROGRESS" | "DONE";
-  room_id?: string;
-}
-
-interface HistoryEntry {
-  id: string;
-  action: string;
-  timestamp: string;
-  changes?: string;
-  user_id: string;
-  task_title: string; // Adjusted to match backend response
-}
-
-interface Option {
-  value: string;
-  label: string;
-}
+// FE-010: Tipos importados del módulo compartido
 
 const History = () => {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [timeFilter, setTimeFilter] = useState("7d");
-  const [rooms, setRooms] = useState<Option[]>([]);
-  const [members, setMembers] = useState<Option[]>([]);
+  const [rooms, setRooms] = useState<SelectOption[]>([]);
+  const [members, setMembers] = useState<SelectOption[]>([]);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const loadAuxData = async () => {
       try {
         const [roomsRes, usersRes] = await Promise.all([
-          api.get("/rooms"),
-          api.get("/users"),
+          api.get<{ id: string; nombre: string }[]>("/rooms", {
+            signal: controller.signal,
+          }),
+          api.get<{ id: string; nombre?: string; email: string }[]>("/users", {
+            signal: controller.signal,
+          }),
         ]);
 
         setRooms(
-          roomsRes.data.map((r: any) => ({
+          roomsRes.data.map((r) => ({
             value: r.id,
             label: r.nombre,
           }))
         );
 
         setMembers(
-          usersRes.data.map((u: any) => ({
+          usersRes.data.map((u) => ({
             value: u.id,
             label: u.nombre ?? u.email,
           }))
         );
-      } catch (err) {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "CanceledError") return;
         console.error(err);
       }
     };
+
     loadAuxData();
+    return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    fetchHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeFilter, roomId, memberId]);
-
-  const sinceDate = () => {
+  const sinceDate = (filter: string): Date => {
     const d = new Date();
-    switch (timeFilter) {
+    switch (filter) {
       case "7d":
         d.setDate(d.getDate() - 7);
         break;
@@ -89,32 +76,31 @@ const History = () => {
     return d;
   };
 
-  const fetchHistory = async () => {
+  // useCallback para estabilizar la referencia y evitar closure stale
+  const fetchHistory = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
-      const since = sinceDate().toISOString();
-      const params: any = { since };
+      const since = sinceDate(timeFilter).toISOString();
+      const params: Record<string, string> = { since };
       if (roomId) params.room_id = roomId;
       if (memberId) params.user_id = memberId;
 
-      const res = await api.get("/tasks/history", { params }); // Actualizar la ruta
+      const res = await api.get<HistoryEntry[]>("/tasks/history", { params });
       setHistory(res.data);
-    } catch (err) {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "CanceledError") return;
       console.error(err);
+      setFetchError("Error al cargar el historial. Inténtalo de nuevo.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeFilter, roomId, memberId]);
 
-  const toggleStatus = async (task: Task) => {
-    try {
-      const newStatus = task.estado === "DONE" ? "TODO" : "DONE";
-      await api.patch(`/tasks/${task.id}/status`, { estado: newStatus });
-      fetchHistory();
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  // Reacciona a cambios de filtros — sin eslint-disable porque fetchHistory es estable
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   return (
     <div className="container mt-4">
@@ -140,7 +126,7 @@ const History = () => {
             <Select
               options={rooms}
               value={rooms.find((r) => r.value === roomId) || null}
-              onChange={(opt) => setRoomId(opt ? (opt as any).value : null)}
+              onChange={(opt) => setRoomId(opt ? (opt as SelectOption).value : null)}
               isClearable
               placeholder="Todos"
             />
@@ -150,18 +136,28 @@ const History = () => {
             <Select
               options={members}
               value={members.find((m) => m.value === memberId) || null}
-              onChange={(opt) => setMemberId(opt ? (opt as any).value : "")}
+              onChange={(opt) => setMemberId(opt ? (opt as SelectOption).value : "")}
               isClearable
               placeholder="Todos"
             />
           </div>
           <div className="col-md-3">
-            <button className="btn btn-primary w-100" onClick={fetchHistory}>
+            <button
+              className="btn btn-primary w-100"
+              onClick={fetchHistory}
+              disabled={loading}
+            >
               Aplicar filtros
             </button>
           </div>
         </div>
       </div>
+
+      {fetchError && (
+        <div className="alert alert-danger" role="alert">
+          {fetchError}
+        </div>
+      )}
 
       {loading ? (
         <p>Cargando...</p>
@@ -178,7 +174,8 @@ const History = () => {
                 <strong>{h.task_title || "Tarea no especificada"}</strong> – {h.action}
                 <br />
                 <small className="text-muted">
-                  {new Date(h.timestamp).toLocaleString()} por {members.find((m) => m.value === h.user_id)?.label || h.user_id}
+                  {new Date(h.timestamp).toLocaleString()} por{" "}
+                  {members.find((m) => m.value === h.user_id)?.label || h.user_id}
                 </small>
               </div>
             </li>
@@ -190,4 +187,3 @@ const History = () => {
 };
 
 export default History;
-

@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1",
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1",
 });
 
 // Añadir token a cada petición
@@ -40,12 +40,19 @@ api.interceptors.response.use(
         const refreshResponse = await api.post("/auth/refresh");
         const newToken = refreshResponse.data.access_token;
 
+        // FE-003: Validar que el token refresheado no sea falsy antes de persistirlo
+        if (!newToken) {
+          throw new Error("El servidor no devolvió un access_token válido en el refresh.");
+        }
+
         localStorage.setItem("token", newToken);
         originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         localStorage.removeItem("token");
         window.location.href = "/login";
+        // FE-003: Propagar el error para que los catch de los llamadores lo reciban
+        return Promise.reject(refreshError);
       }
     }
 

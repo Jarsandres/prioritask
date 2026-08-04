@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import api from "../api";
+import ConfirmModal from "../components/ConfirmModal";
+import type { Tag } from "../types/task";
 
-interface Tag {
-  id: string;
-  nombre: string;
-}
+// FE-010: Tag importado del módulo de tipos compartidos
 
 const Tags = () => {
   const [tags, setTags] = useState<Tag[]>([]);
@@ -12,11 +11,16 @@ const Tags = () => {
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingNombre, setEditingNombre] = useState("");
-  
+  // Loading states por acción
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // FE-017: Modal de confirmación para eliminar etiquetas
+  const [tagToDelete, setTagToDelete] = useState<Tag | null>(null);
 
   const fetchTags = async () => {
     try {
-      const res = await api.get("/tags");
+      const res = await api.get<Tag[]>("/tags");
       setTags(res.data);
     } catch (err) {
       console.error(err);
@@ -34,22 +38,46 @@ const Tags = () => {
       setError("Etiqueta duplicada");
       return;
     }
+    setIsCreating(true);
     try {
       await api.post("/tags", { nombre });
       setNombre("");
-      fetchTags();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Error al crear etiqueta");
+      await fetchTags();
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        "response" in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      ) {
+        setError(
+          (err as { response: { data: { detail: string } } }).response.data.detail
+        );
+      } else {
+        setError("Error al crear etiqueta");
+      }
+    } finally {
+      setIsCreating(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar etiqueta?")) return;
+  const promptDeleteTag = (tag: Tag) => {
+    setError("");
+    setTagToDelete(tag);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!tagToDelete) return;
+    const id = tagToDelete.id;
+    setDeletingId(id);
     try {
       await api.delete(`/tags/${id}`);
-      setTags(tags.filter((t) => t.id !== id));
+      setTags((prev) => prev.filter((t) => t.id !== id));
+      setTagToDelete(null);
     } catch (err) {
       console.error(err);
+      setError("Error al eliminar la etiqueta");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -63,16 +91,29 @@ const Tags = () => {
     e.preventDefault();
     if (!editingId) return;
     setError("");
+    setIsUpdating(true);
     try {
       await api.patch(`/tags/${editingId}`, { nombre: editingNombre });
       setEditingId(null);
       setEditingNombre("");
-      fetchTags();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Error al actualizar etiqueta");
+      await fetchTags();
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        "response" in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      ) {
+        setError(
+          (err as { response: { data: { detail: string } } }).response.data.detail
+        );
+      } else {
+        setError("Error al actualizar etiqueta");
+      }
+    } finally {
+      setIsUpdating(false);
     }
   };
-  
+
   return (
     <div className="container mt-4">
       <h2>Etiquetas</h2>
@@ -84,9 +125,14 @@ const Tags = () => {
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           placeholder="Nueva etiqueta"
+          disabled={isCreating}
         />
-        <button className="btn btn-primary" type="submit">
-          Crear
+        <button
+          className="btn btn-primary"
+          type="submit"
+          disabled={isCreating || !nombre}
+        >
+          {isCreating ? "Creando..." : "Crear"}
         </button>
       </form>
       {error && <div className="alert alert-danger">{error}</div>}
@@ -105,14 +151,20 @@ const Tags = () => {
                   value={editingNombre}
                   onChange={(e) => setEditingNombre(e.target.value)}
                   autoFocus
+                  disabled={isUpdating}
                 />
-                <button className="btn btn-sm btn-primary" type="submit">
-                  Guardar
+                <button
+                  className="btn btn-sm btn-primary"
+                  type="submit"
+                  disabled={isUpdating || !editingNombre}
+                >
+                  {isUpdating ? "Guardando..." : "Guardar"}
                 </button>
                 <button
                   type="button"
                   className="btn btn-sm btn-secondary"
                   onClick={() => setEditingId(null)}
+                  disabled={isUpdating}
                 >
                   Cancelar
                 </button>
@@ -124,14 +176,16 @@ const Tags = () => {
                   <button
                     className="btn btn-sm btn-outline-primary me-2"
                     onClick={() => startEdit(tag)}
+                    disabled={deletingId === tag.id}
                   >
                     Editar
                   </button>
                   <button
                     className="btn btn-sm btn-outline-danger"
-                    onClick={() => handleDelete(tag.id)}
+                    onClick={() => promptDeleteTag(tag)}
+                    disabled={deletingId === tag.id}
                   >
-                    Eliminar
+                    {deletingId === tag.id ? "Eliminando..." : "Eliminar"}
                   </button>
                 </div>
               </>
@@ -139,6 +193,18 @@ const Tags = () => {
           </li>
         ))}
       </ul>
+
+      {/* FE-017: Modal de confirmación para eliminar etiquetas */}
+      <ConfirmModal
+        isOpen={!!tagToDelete}
+        title="Eliminar etiqueta"
+        message={`¿Estás seguro de que deseas eliminar la etiqueta "${tagToDelete?.nombre}"?`}
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={!!deletingId}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setTagToDelete(null)}
+      />
     </div>
   );
 };
