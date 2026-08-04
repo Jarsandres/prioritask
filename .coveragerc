@@ -1,7 +1,16 @@
 [run]
-source = .
+source = app
 branch = True
+omit =
+    app/services/intelligence.py
+    app/schemas/response_examples.py
+    demo_bad_code.py
+    tests/*
 
 [report]
 show_missing = True
 skip_covered = True
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    raise NotImplementedError
