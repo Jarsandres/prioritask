@@ -6,20 +6,35 @@ import { RoomContext } from "../context/RoomContext";
 const CreateRoom = () => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { setRoomId } = useContext(RoomContext);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    setError("");
     try {
-      const res = await api.post("/rooms", { nombre: name });
+      const res = await api.post<{ id: string }>("/rooms", { nombre: name });
       const { id } = res.data;
       localStorage.setItem("roomId", id);
       setRoomId(id);
       navigate("/dashboard");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.response?.data?.detail || "Error al crear el hogar");
+      if (
+        err instanceof Error &&
+        "response" in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      ) {
+        setError(
+          (err as { response: { data: { detail: string } } }).response.data.detail
+        );
+      } else {
+        setError("Error al crear el hogar");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -29,18 +44,24 @@ const CreateRoom = () => {
       {error && <div className="alert alert-danger">{error}</div>}
       <form onSubmit={handleSubmit}>
         <div className="mb-3">
-          <label>Nombre del hogar</label>
+          <label htmlFor="room-name" className="form-label">Nombre del hogar</label>
           <input
+            id="room-name"
             type="text"
             className="form-control"
             placeholder="Mi Casa"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            disabled={isSubmitting}
           />
         </div>
-        <button type="submit" className="btn btn-primary" disabled={!name}>
-          Crear
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={!name || isSubmitting}
+        >
+          {isSubmitting ? "Creando..." : "Crear"}
         </button>
       </form>
     </div>

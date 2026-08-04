@@ -47,11 +47,6 @@ const Sidebar = () => {
           </NavLink>
         </li>
         <li>
-          <NavLink to="/history" className={({ isActive }) => isActive ? "active" : ""}>
-            <span role="img" aria-label="History">📜</span> Historial
-          </NavLink>
-        </li>
-        <li>
           <NavLink to="/tags" className={({ isActive }) => isActive ? "active" : ""}>
             <span role="img" aria-label="Tags">🏷️</span> Etiquetas
           </NavLink>

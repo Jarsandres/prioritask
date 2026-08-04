@@ -15,6 +15,7 @@ import RoomTasks from "./pages/RoomTasks";
 import { TaskUpdateProvider } from "./context/TaskUpdateContext";
 import { RoomProvider } from "./context/RoomContext";
 import CreateRoom from "./pages/CreateRoom";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const AppContent = () => {
   const location = useLocation();
@@ -51,7 +52,9 @@ function App() {
     <BrowserRouter>
       <TaskUpdateProvider>
         <RoomProvider>
-          <AppContent />
+          <ErrorBoundary>
+            <AppContent />
+          </ErrorBoundary>
         </RoomProvider>
       </TaskUpdateProvider>
     </BrowserRouter>

@@ -5,24 +5,30 @@ import { FaTasks, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
 import styles from "./Dashboard.module.css";
 import { TaskUpdateContext } from "../context/TaskUpdateContext";
 import { RoomContext } from "../context/RoomContext";
+import type { Task, Room } from "../types/task";
+
+// FE-010: Tipado estricto con interfaces del módulo compartido
 
 const Dashboard = () => {
-  const [tareas, setTareas] = useState([]);
-  const [rooms, setRooms] = useState<any[]>([]);
+  const [tareas, setTareas] = useState<Task[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const { version } = useContext(TaskUpdateContext);
   const { roomId, setRoomId } = useContext(RoomContext);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const controller = new AbortController(); // Definir el AbortController
+    const controller = new AbortController();
+    // FE-004: Variable isMounted para proteger setState tras desmontaje
+    let isMounted = true;
 
     const fetchTareas = async () => {
       try {
-        const res = await api.get("/tasks", { signal: controller.signal }); // Pasar la señal
-        setTareas(res.data);
-      } catch (err: any) {
-        if (err.name === "CanceledError") {
+        const res = await api.get<Task[]>("/tasks", { signal: controller.signal });
+        // FE-004: Guardia antes de cada setState
+        if (isMounted) setTareas(res.data);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "CanceledError") {
           console.log("Request canceled: fetchTareas");
         } else {
           console.error(err);
@@ -32,22 +38,25 @@ const Dashboard = () => {
 
     const fetchRooms = async () => {
       try {
-        const r = await api.get("/rooms", { signal: controller.signal }); // Pasar la señal
+        const r = await api.get<Room[]>("/rooms", { signal: controller.signal });
+
+        if (!isMounted) return;
+
         if (r.data.length === 0) {
           navigate("/rooms/create");
           return;
         }
 
         const list = await Promise.all(
-          r.data.map(async (room: any) => {
+          r.data.map(async (room) => {
             try {
-              const tasksRes = await api.get(`/rooms/${room.id}/tasks`, {
+              const tasksRes = await api.get<Task[]>(`/rooms/${room.id}/tasks`, {
                 params: { limit: 100 },
-                signal: controller.signal, // Pasar la señal
+                signal: controller.signal,
               });
               return { ...room, count: tasksRes.data.length };
-            } catch (err: any) {
-              if (err.name === "CanceledError") {
+            } catch (err: unknown) {
+              if (err instanceof Error && err.name === "CanceledError") {
                 console.log("Request canceled: fetchRooms tasks");
               } else {
                 console.error(err);
@@ -56,13 +65,17 @@ const Dashboard = () => {
             }
           })
         );
+
+        // FE-004: Guardia tras la Promise.all (puede tardar)
+        if (!isMounted) return;
+
         setRooms(list);
 
         if (!roomId) {
           setRoomId(list[0].id);
         }
-      } catch (err: any) {
-        if (err.name === "CanceledError") {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "CanceledError") {
           console.log("Request canceled: fetchRooms");
         } else {
           console.error(err);
@@ -71,20 +84,25 @@ const Dashboard = () => {
     };
 
     const loadData = async () => {
-      setLoading(true);
+      if (isMounted) setLoading(true);
       try {
         await Promise.all([fetchTareas(), fetchRooms()]);
       } finally {
-        setLoading(false);
+        // FE-004: Guardia en el finally para no actualizar tras desmontaje
+        if (isMounted) setLoading(false);
       }
     };
 
     loadData();
 
     return () => {
-      controller.abort(); // Usar el AbortController para cancelar solicitudes
+      // FE-004: Marcar como desmontado ANTES de abortar para que los catches
+      // no intenten hacer setState en el componente ya desmontado
+      isMounted = false;
+      controller.abort();
     };
-  }, [version]);
+  }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
+  // navigate, roomId, setRoomId son estables; no los incluimos para evitar loops
 
   return (
     <>
@@ -114,8 +132,9 @@ const Dashboard = () => {
               <div className={`card-body ${styles.cardBody}`}>
                 <FaCheckCircle className={`text-success ${styles.icon}`} />
                 <h5 className={`card-title ${styles.cardTitle}`}>Completadas</h5>
+                {/* FE-010: eliminado (t: any) gracias al tipo Task */}
                 <p className={styles.display6}>
-                  {tareas.filter((t: any) => t.estado === "DONE").length}
+                  {tareas.filter((t) => t.estado === "DONE").length}
                 </p>
               </div>
             </div>
@@ -126,34 +145,36 @@ const Dashboard = () => {
               <div className={`card-body ${styles.cardBody}`}>
                 <FaExclamationTriangle className={`text-warning ${styles.icon}`} />
                 <h5 className={`card-title ${styles.cardTitle}`}>Pendientes</h5>
+                {/* FE-010: eliminado (t: any) gracias al tipo Task */}
                 <p className={styles.display6}>
-                  {tareas.filter((t: any) => t.estado !== "DONE").length}
+                  {tareas.filter((t) => t.estado !== "DONE").length}
                 </p>
               </div>
             </div>
           </div>
         </div>
+
         <div className="mt-4">
           <h4>Hogares</h4>
           <ul>
-          {rooms.map((room: any) => (
-            <li key={room.id}>
-              <Link
-                to={`/rooms/${room.id}/tasks`}
-                onClick={() => setRoomId(room.id)}
-              >
-                {room.nombre} ({room.count})
+            {rooms.map((room) => (
+              <li key={room.id}>
+                <Link
+                  to={`/rooms/${room.id}/tasks`}
+                  onClick={() => setRoomId(room.id)}
+                >
+                  {room.nombre} ({room.count ?? 0})
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {!loading && (
+            <div className="mt-3">
+              <Link to="/history" className="btn btn-secondary">
+                Historial
               </Link>
-            </li>
-          ))}
-        </ul>
-        { !loading && (
-          <div className="mt-3">
-            <Link to="/history" className="btn btn-secondary">
-              Historial
-            </Link>
-          </div>
-        ) }
+            </div>
+          )}
         </div>
       </div>
     </>

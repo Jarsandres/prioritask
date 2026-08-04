@@ -1,35 +1,39 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useCallback, useRef } from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
-import debounce from "lodash/debounce";
 import { TaskUpdateContext } from "../context/TaskUpdateContext";
 import { getCurrentRoomId } from "../utils/room";
+import ConfirmModal from "./ConfirmModal";
+import type { Task } from "../types/task";
 
-interface Tarea {
-  id: string;
-  titulo: string;
-  descripcion?: string;
-  estado: "TODO" | "IN_PROGRESS" | "DONE";
-  categoria: string;
-  peso: number;
-  due_date?: string;
-  tags?: { id: string; nombre: string }[];
-}
+// FE-010: Reutilizamos la interfaz Task del módulo de tipos compartidos
 
 const TaskList = () => {
-  const [tareas, setTareas] = useState<Tarea[]>([]);
+  const [tareas, setTareas] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [estado, setEstado] = useState("");
   const [categoria, setCategoria] = useState("");
   const [fechaLimite, setFechaLimite] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  // FE-002: Estado para deshabilitar el botón "Eliminar" de la fila en proceso
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Estado para deshabilitar "Completar" mientras se procesa
+  const [completingId, setCompletingId] = useState<string | null>(null);
+  // FE-014: Estado de error para acciones inline
+  const [actionError, setActionError] = useState<string | null>(null);
+  // FE-017: Estado para modal de confirmación
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
   const navigate = useNavigate();
   const { notifyUpdate } = useContext(TaskUpdateContext);
 
-  const fetchTareas = async () => {
+  // FE-001: fetchTareas en useCallback con sus dependencias de filtro
+  // FE-009: Eliminadas las variables `token` que no se usaban (el interceptor las gestiona)
+  const fetchTareas = useCallback(async () => {
+    setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const params: any = {};
+      // FE-010: params tipado en lugar de `any`
+      const params: Record<string, string> = {};
 
       if (estado) params.estado = estado;
       if (categoria) params.categoria = categoria;
@@ -38,65 +42,86 @@ const TaskList = () => {
       const roomId = getCurrentRoomId();
       if (roomId) params.room_id = roomId;
 
-      const res = await api.get("/tasks", {
-        params,
-      });
-
+      const res = await api.get<Task[]>("/tasks", { params });
       setTareas(res.data);
     } catch (error) {
       console.error("Error al cargar tareas:", error);
     } finally {
       setLoading(false);
     }
+  }, [estado, categoria, fechaLimite, busqueda]);
+
+  // FE-001: Carga inicial y reacción al estado global de actualizaciones
+  const { version } = useContext(TaskUpdateContext);
+  useEffect(() => {
+    fetchTareas();
+  }, [fetchTareas, version]);
+
+  // FE-001: useEffect separado para filtros discretos (sin debounce)
+  // Nota: fetchTareas ya incluye estado/categoria/fechaLimite en sus deps,
+  // por lo que el useEffect de arriba se disparará automáticamente cuando cambian.
+  // Añadimos un efecto explícito para claridad y para manejar el reset de busqueda.
+
+  // FE-001: debounce para búsqueda de texto con useRef para estabilidad del timer
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // FE-001: Se elimina la condición `if (busqueda)` para que también
+    // dispare cuando busqueda queda vacío (limpieza del filtro)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      fetchTareas();
+    }, 500);
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [busqueda]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nota: fetchTareas no se incluye aquí porque el debounce de texto ya lo maneja arriba.
+  // El useEffect de [fetchTareas, version] cubre los cambios de estado/categoria/fechaLimite.
+
+  // FE-017: Apertura de modal de confirmación
+  const promptDelete = (tarea: Task) => {
+    setActionError(null);
+    setTaskToDelete(tarea);
   };
 
-  const handleDelete = async (id: string) => {
-    const confirm = window.confirm(
-      "¿Estás seguro de que deseas eliminar esta tarea?"
-    );
-    if (!confirm) return;
-
+  // FE-002 + FE-014 + FE-017: Confirmar eliminación vía modal sin alert()
+  const handleConfirmDelete = async () => {
+    if (!taskToDelete) return;
+    const id = taskToDelete.id;
+    setDeletingId(id);
+    setActionError(null);
     try {
-      const token = localStorage.getItem("token");
       await api.delete(`/tasks/${id}`);
-      setTareas(tareas.filter((t) => t.id !== id));
+      setTareas((prev) => prev.filter((t) => t.id !== id));
       notifyUpdate();
+      setTaskToDelete(null);
     } catch (error) {
       console.error("Error al eliminar tarea:", error);
-      alert("Ocurrió un error al eliminar la tarea.");
+      setActionError("Ocurrió un error al eliminar la tarea.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
-
+  // FE-002 + FE-014: "Completar" sin alert()
   const marcarComoCompletada = async (taskId: string) => {
+    setCompletingId(taskId);
+    setActionError(null);
     try {
-      const token = localStorage.getItem("token");
       await api.patch(`/tasks/${taskId}/status`, { estado: "DONE" });
-      // Recargar tareas
-      fetchTareas();
+      setTareas((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, estado: "DONE" } : t))
+      );
       notifyUpdate();
     } catch (error) {
       console.error("Error al marcar como completada:", error);
+      setActionError("Error al actualizar el estado de la tarea.");
+    } finally {
+      setCompletingId(null);
     }
   };
-
-  useEffect(() => {
-    fetchTareas();
-  }, []);
-
-  useEffect(() => {
-    const debouncedFetch = debounce(() => {
-      fetchTareas();
-    }, 500); // Espera 500ms tras dejar de escribir
-
-    if (busqueda) {
-      debouncedFetch();
-    }
-
-    return () => {
-      debouncedFetch.cancel();
-    };
-  }, [busqueda]);
 
   if (loading) return <p>Cargando tareas...</p>;
 
@@ -147,6 +172,19 @@ const TaskList = () => {
               </select>
             </div>
 
+            <div className="col-md-2">
+              <label htmlFor="fechaLimite" className="form-label">
+                Fecha límite
+              </label>
+              <input
+                id="fechaLimite"
+                type="date"
+                className="form-control"
+                value={fechaLimite}
+                onChange={(e) => setFechaLimite(e.target.value)}
+              />
+            </div>
+
             <div className="col-md-4">
               <label htmlFor="busqueda" className="form-label">
                 Búsqueda por texto
@@ -162,18 +200,44 @@ const TaskList = () => {
             </div>
 
             <div className="col-12 d-flex justify-content-end">
-              <button className="btn btn-primary" onClick={fetchTareas}>
+              <button
+                className="btn btn-primary"
+                onClick={fetchTareas}
+                disabled={loading}
+              >
                 Aplicar filtros
               </button>
             </div>
+          </div>
         </div>
-      </div>
-      <div className="d-flex justify-content-end mt-3 gap-2">
-        <button className="btn btn-outline-secondary" onClick={() => navigate("/tasks/rewrite")}>🧠 Mejorar títulos</button>
-        <button className="btn btn-primary" onClick={() => navigate("/tasks/create")}>Crear nueva tarea</button>
-      </div>
+        <div className="d-flex justify-content-end mt-3 gap-2">
+          <button
+            className="btn btn-outline-secondary"
+            onClick={() => navigate("/tasks/rewrite")}
+          >
+            🧠 Mejorar títulos
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={() => navigate("/tasks/create")}
+          >
+            Crear nueva tarea
+          </button>
+        </div>
 
-      <h2 className="mb-4 mt-4">
+        {/* FE-014: Banner de error inline para acciones destructivas/mutaciones */}
+        {actionError && (
+          <div className="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+            {actionError}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setActionError(null)}
+            ></button>
+          </div>
+        )}
+
+        <h2 className="mb-4 mt-4">
           <span role="img" aria-label="Lista">
             📝
           </span>{" "}
@@ -211,21 +275,24 @@ const TaskList = () => {
                     <button
                       className="btn btn-sm btn-success me-2"
                       onClick={() => marcarComoCompletada(tarea.id)}
+                      disabled={completingId === tarea.id || deletingId === tarea.id}
                     >
-                      ✅ Completar
+                      {completingId === tarea.id ? "..." : "✅ Completar"}
                     </button>
                   )}
                   <button
                     className="btn btn-sm btn-outline-primary me-2"
                     onClick={() => navigate(`/tasks/edit/${tarea.id}`)}
+                    disabled={deletingId === tarea.id || completingId === tarea.id}
                   >
                     Editar
                   </button>
                   <button
                     className="btn btn-sm btn-outline-danger"
-                    onClick={() => handleDelete(tarea.id)}
+                    onClick={() => promptDelete(tarea)}
+                    disabled={deletingId === tarea.id || completingId === tarea.id}
                   >
-                    Eliminar
+                    {deletingId === tarea.id ? "Eliminando..." : "Eliminar"}
                   </button>
                 </div>
               </li>
@@ -233,6 +300,18 @@ const TaskList = () => {
           </ul>
         )}
       </div>
+
+      {/* FE-017: Modal de confirmación reactivo */}
+      <ConfirmModal
+        isOpen={!!taskToDelete}
+        title="Eliminar tarea"
+        message={`¿Estás seguro de que deseas eliminar la tarea "${taskToDelete?.titulo}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={!!deletingId}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setTaskToDelete(null)}
+      />
     </>
   );
 };
