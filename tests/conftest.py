@@ -50,7 +50,7 @@ TEST_DB = "sqlite+aiosqlite:///./prioritask.db"
 test_engine = create_async_engine(TEST_DB, echo=False)
 async_session = async_sessionmaker(test_engine, expire_on_commit=False)
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(scope="function", autouse=True)
 def reset_test_db():
     db_path = "prioritask.db"
     if os.path.exists(db_path):
