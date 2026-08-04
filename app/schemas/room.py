@@ -1,5 +1,6 @@
-from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RoomBase(BaseModel):

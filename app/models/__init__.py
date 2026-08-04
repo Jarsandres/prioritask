@@ -1,12 +1,9 @@
-from .user import Usuario
 from .room import Room
-from .task import Task
-from .task import TaskHistory, CategoriaTarea, EstadoTarea
 from .tag import Tag
-from .task_tag import TaskTag
+from .task import CategoriaTarea, EstadoTarea, Task, TaskHistory
 from .task_assignment import TaskAssignment
+from .task_tag import TaskTag
+from .user import Usuario
 
-
-
-__all__ = ['Usuario', 'Room', 'Task','TaskHistory', 'CategoriaTarea',  'EstadoTarea', 'Tag', 'TaskTag', 'TaskAssignment']
+__all__ = ['CategoriaTarea', 'EstadoTarea', 'Room', 'Tag', 'Task', 'TaskAssignment', 'TaskHistory', 'TaskTag', 'Usuario']
 

@@ -1,6 +1,8 @@
-from pydantic_settings import BaseSettings
-from pydantic import ConfigDict, field_validator
 import json
+
+from pydantic import ConfigDict, field_validator
+from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
     DATABASE_URL: str

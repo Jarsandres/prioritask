@@ -1,5 +1,6 @@
 from app.core.config import Settings
 
+
 def test_cors_origins_parses_json_list(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
     monkeypatch.setenv("JWT_SECRET_KEY", "secret")

@@ -1,5 +1,8 @@
-from datetime import datetime, timezone
-from app.services.auth import hash_password, verify_password, create_access_token
+from datetime import UTC, datetime
+
+from jose import jwt
+
+from app.services.auth import create_access_token, hash_password, verify_password
 
 SECRET = "test-secret"
 
@@ -13,9 +16,8 @@ def test_hash_and_verify_password():
 def test_create_access_token_contains_sub_and_exp():
     sub = "user-id-123"
     token = create_access_token(sub, SECRET, expires_minutes=1)
-    from jose import jwt
     payload = jwt.decode(token, SECRET, algorithms=["HS256"])
     assert payload["sub"] == sub
-    # exp debe ser un timestamp futuro
-    exp = datetime.fromtimestamp(payload["exp"], timezone.utc)
-    assert exp > datetime.now(timezone.utc)
+    assert payload["type"] == "access"
+    exp = datetime.fromtimestamp(payload["exp"], UTC)
+    assert exp > datetime.now(UTC)

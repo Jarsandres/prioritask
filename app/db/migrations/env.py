@@ -1,15 +1,17 @@
 import asyncio
 from logging.config import fileConfig
+
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
-from alembic import context
-from app.core.config import settings     # tu DATABASE_URL
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import SQLModel
-from app.models.room import Room # noqa: F401
-from app.models.user import Usuario  # noqa: F401
+
+from app.core.config import settings  # tu DATABASE_URL
+from app.models.room import Room  # noqa: F401
 from app.models.task import Task  # noqa: F401
 from app.models.task_assignment import TaskAssignment  # noqa: F401
+from app.models.user import Usuario  # noqa: F401
 
 target_metadata = SQLModel.metadata
 

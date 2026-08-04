@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
-from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
 from app.models.user import Usuario

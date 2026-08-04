@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UsuarioBase(BaseModel):
@@ -18,4 +19,12 @@ class UsuarioRead(UsuarioBase):
 class UsuarioLogin(BaseModel):
     email: EmailStr = Field(description="Correo electrónico del usuario.", json_schema_extra={"example": "usuario@ejemplo.com"})
     password: str = Field(description="Contraseña del usuario.", json_schema_extra={"example": "contraseñaSegura123"})
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(description="Token de refresco de sesión.")
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
