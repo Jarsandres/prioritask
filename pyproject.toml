@@ -45,11 +45,12 @@ addopts = "-q"
 
 [tool.coverage.report]
 fail_under = 65
-omit =
-    app/services/intelligence.py
-    app/schemas/response_examples.py
-    demo_bad_code.py
-    tests/*
+omit = [
+    "app/services/intelligence.py",
+    "app/schemas/response_examples.py",
+    "demo_bad_code.py",
+    "tests/*"
+]
 
 [tool.poetry]
 package-mode = false
