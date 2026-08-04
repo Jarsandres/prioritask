@@ -1,33 +1,36 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Optional, List, Dict
-from uuid import UUID
-from datetime import datetime
-from app.models.enums import CategoriaTarea, EstadoTarea
-from .tag import TagRead
 import os
+from datetime import UTC, datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.models.enums import CategoriaTarea, EstadoTarea
+
+from .tag import TagRead
+
 
 class TaskCreate(BaseModel):
     titulo: str = Field(min_length=3, max_length=100, description="Título de la tarea.", json_schema_extra={"example": "Comprar comida"})
-    descripcion: Optional[str] = Field(default=None, max_length=500, description="Descripción detallada de la tarea.", json_schema_extra={"example": "Comprar alimentos para la semana"})
+    descripcion: str | None = Field(default=None, max_length=500, description="Descripción detallada de la tarea.", json_schema_extra={"example": "Comprar alimentos para la semana"})
     categoria: CategoriaTarea = Field(description="Categoría de la tarea.", json_schema_extra={"example": "OTRO"})
     estado: EstadoTarea = Field(default=EstadoTarea.TODO, description="Estado inicial de la tarea.", json_schema_extra={"example": "TODO"})
     peso: float = Field(default=1.0, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
-    due_date: Optional[datetime] = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
+    due_date: datetime | None = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
 
 class TaskRead(BaseModel):
     id: UUID = Field(description="Identificador único de la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
     titulo: str = Field(description="Título de la tarea.", json_schema_extra={"example": "Comprar comida"})
-    descripcion: Optional[str] = Field(default=None, description="Descripción detallada de la tarea.", json_schema_extra={"example": "Comprar alimentos para la semana"})
+    descripcion: str | None = Field(default=None, description="Descripción detallada de la tarea.", json_schema_extra={"example": "Comprar alimentos para la semana"})
     categoria: CategoriaTarea = Field(description="Categoría de la tarea.", json_schema_extra={"example": "OTRO"})
     estado: EstadoTarea = Field(description="Estado actual de la tarea.", json_schema_extra={"example": "TODO"})
     peso: float = Field(gt=0, lt=100, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
-    due_date: Optional[datetime] = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
+    due_date: datetime | None = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
     created_at: datetime = Field(description="Fecha de creación de la tarea.", json_schema_extra={"example": "2025-05-27T12:00:00"})
     user_id: UUID = Field(description="Identificador del usuario asociado a la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
-    deleted_at: Optional[datetime] = Field(default=None, description="Fecha de eliminación de la tarea, si aplica.", json_schema_extra={"example": None})
-    tags: List[TagRead] = Field(default_factory=list, description="Etiquetas asociadas a la tarea")
+    deleted_at: datetime | None = Field(default=None, description="Fecha de eliminación de la tarea, si aplica.", json_schema_extra={"example": None})
+    tags: list[TagRead] = Field(default_factory=list, description="Etiquetas asociadas a la tarea")
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):
@@ -37,20 +40,22 @@ class TaskRead(BaseModel):
             except ValueError:
                 raise ValueError("Formato de fecha inválido")
             # Permitir fechas pasadas en un entorno de pruebas
-            if value < datetime.now() and not os.getenv("ALLOW_PAST_DUE_DATES"):
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=UTC)
+            if value < datetime.now(UTC) and not os.getenv("ALLOW_PAST_DUE_DATES"):
                 raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
         return value
 
     model_config = ConfigDict(from_attributes=True)
 
 class TaskUpdate(BaseModel):
-    titulo: Optional[str] = Field(None, min_length=3, max_length=100, description="Título de la tarea.", json_schema_extra={"example": "Comprar comida"})
-    descripcion: Optional[str] = Field(None, max_length=500, description="Descripción detallada de la tarea.", json_schema_extra={"example": "Comprar alimentos para la semana"})
-    categoria: Optional[CategoriaTarea] = Field(None, description="Categoría de la tarea.", json_schema_extra={"example": "OTRO"})
-    estado: Optional[EstadoTarea] = Field(None, description="Estado actual de la tarea.", json_schema_extra={"example": "TODO"})
-    peso: Optional[float] = Field(None, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
-    due_date: Optional[datetime] = Field(None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
-    room_id: Optional[UUID] = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
+    titulo: str | None = Field(None, min_length=3, max_length=100, description="Título de la tarea.", json_schema_extra={"example": "Comprar comida"})
+    descripcion: str | None = Field(None, max_length=500, description="Descripción detallada de la tarea.", json_schema_extra={"example": "Comprar alimentos para la semana"})
+    categoria: CategoriaTarea | None = Field(None, description="Categoría de la tarea.", json_schema_extra={"example": "OTRO"})
+    estado: EstadoTarea | None = Field(None, description="Estado actual de la tarea.", json_schema_extra={"example": "TODO"})
+    peso: float | None = Field(None, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
+    due_date: datetime | None = Field(None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
+    room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):
@@ -60,7 +65,9 @@ class TaskUpdate(BaseModel):
             except ValueError:
                 raise ValueError("Formato de fecha inválido")
             # Permitir fechas pasadas en un entorno de pruebas
-            if value < datetime.now() and not os.getenv("ALLOW_PAST_DUE_DATES"):
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=UTC)
+            if value < datetime.now(UTC) and not os.getenv("ALLOW_PAST_DUE_DATES"):
                 raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
         return value
 
@@ -80,7 +87,7 @@ class TaskAssignmentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class TaskPrioritizeRequest(BaseModel):
-    task_ids: Optional[List[UUID]] = None
+    task_ids: list[UUID] | None = None
 
 class PrioritizedTask(BaseModel):
     id : UUID
@@ -90,17 +97,17 @@ class PrioritizedTask(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class TaskGroupRequest(BaseModel):
-    task_ids: Optional[List[UUID]] = None
+    task_ids: list[UUID] | None = None
 
 class GroupedTasks (BaseModel):
     id : UUID
     titulo: str
 
 class GroupedTasksResponse(BaseModel):
-    grupos: Dict[str, List[GroupedTasks]]
+    grupos: dict[str, list[GroupedTasks]]
 
 class TaskRewriteRequest(BaseModel):
-    task_ids: Optional[List[UUID]] = None
+    task_ids: list[UUID] | None = None
 
 class RewrittenTask(BaseModel):
     id : UUID
@@ -110,8 +117,8 @@ class RewrittenTask(BaseModel):
 
 class PrioritySuggestRequest(BaseModel):
     titulo: str
-    descripcion: Optional[str] = None
-    due_date: Optional[datetime] = None
+    descripcion: str | None = None
+    due_date: datetime | None = None
 
 class PrioritySuggestion(BaseModel):
     prioridad: str

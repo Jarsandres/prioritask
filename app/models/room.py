@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
+from uuid import UUID, uuid4
+
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
-from uuid import uuid4, UUID
 
 if TYPE_CHECKING:
     from .user import Usuario

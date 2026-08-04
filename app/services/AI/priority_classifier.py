@@ -1,6 +1,7 @@
-from setfit import SetFitModel, Trainer
-from datasets import Dataset
 from pathlib import Path
+
+from datasets import Dataset
+from setfit import SetFitModel, Trainer
 
 # Ruta para guardar/cargar modelo
 MODELO_PATH = Path("app/services/AI/modelos/prioridad")

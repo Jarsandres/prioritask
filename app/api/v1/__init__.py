@@ -1,5 +1,6 @@
 from fastapi import APIRouter
-from .endpoints import auth, rooms, tasks, tags, tasks_ai, users
+
+from .endpoints import auth, rooms, tags, tasks, tasks_ai, users
 
 api_router = APIRouter()
 api_router.include_router(auth.router)

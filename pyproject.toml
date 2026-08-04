@@ -53,3 +53,6 @@ package-mode = false
 
 [tool.setuptools]
 packages = ["app"]
+
+[tool.ruff.lint]
+ignore = ["B008", "BLE001"]

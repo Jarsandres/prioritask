@@ -1,27 +1,32 @@
+import re
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
-from typing import List
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app.db.session import get_session
-from app.schemas.task import GroupedTasks
 from app.models.task import Task
 from app.models.user import Usuario
+from app.schemas.responses import (
+    GROUPED_TASKS_EXAMPLE,
+    PRIORITIZED_TASK_EXAMPLE,
+    REWRITTEN_TASK_EXAMPLE,
+)
 from app.schemas.task import (
-    PrioritizedTask,
+    GroupedTasks,
     GroupedTasksResponse,
+    PrioritizedTask,
+    PrioritySuggestion,
+    PrioritySuggestRequest,
+    RewrittenTask,
     TaskGroupRequest,
     TaskRewriteRequest,
-    RewrittenTask,
-    PrioritySuggestRequest,
-    PrioritySuggestion,
 )
-from app.services.auth import get_current_user
-from app.schemas.responses import PRIORITIZED_TASK_EXAMPLE, GROUPED_TASKS_EXAMPLE, REWRITTEN_TASK_EXAMPLE
 from app.services.AI.priority_classifier import clasificar_prioridad
 from app.services.AI.reformulator import reformular_titulo_con_traduccion
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
-from datetime import datetime, timezone, timedelta
-import re
+from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
 
@@ -32,7 +37,7 @@ def contiene_palabra_clave(titulo: str) -> bool:
     titulo_lower = titulo.lower()
     return any(re.search(rf"\b{palabra}\b", titulo_lower) for palabra in PALABRAS_URGENCIA)
 
-def clasificar_prioridad_batch(tasks: List[Task]) -> List[PrioritizedTask]:
+def clasificar_prioridad_batch(tasks: list[Task]) -> list[PrioritizedTask]:
     resultado = []
     for task in tasks:
         if contiene_palabra_clave(task.titulo):
@@ -54,7 +59,7 @@ def clasificar_prioridad_batch(tasks: List[Task]) -> List[PrioritizedTask]:
 
 
 
-@router.post("/prioritize", response_model=List[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.",
+@router.post("/prioritize", response_model=list[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.",
               responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": PRIORITIZED_TASK_EXAMPLE}}}})
 async def prioritize(
         session: AsyncSession = Depends(get_session),
@@ -99,7 +104,7 @@ async def group_tasks(
     return {"grupos": response}
 
 
-@router.post("/rewrite", response_model=List[RewrittenTask], summary="Reescribir tareas", description="Reescribe las tareas del usuario autenticado para mejorar su claridad y enfoque.",
+@router.post("/rewrite", response_model=list[RewrittenTask], summary="Reescribir tareas", description="Reescribe las tareas del usuario autenticado para mejorar su claridad y enfoque.",
               responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": REWRITTEN_TASK_EXAMPLE}}}})
 async def rewrite_tasks(
         payload: TaskRewriteRequest,
@@ -142,9 +147,9 @@ async def suggest_priority(payload: PrioritySuggestRequest) -> PrioritySuggestio
         motivo = "Palabra clave de urgencia detectada."
     elif payload.due_date:
         limite = payload.due_date
-        ahora = datetime.now(timezone.utc)
+        ahora = datetime.now(UTC)
         if limite.tzinfo is None:
-            limite = limite.replace(tzinfo=timezone.utc)
+            limite = limite.replace(tzinfo=UTC)
         if limite - ahora <= timedelta(days=1):
             prioridad = "alta"
             motivo = "La fecha límite está muy próxima."

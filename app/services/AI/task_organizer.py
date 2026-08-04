@@ -1,11 +1,12 @@
 from collections import defaultdict
-from typing import List, Dict
+
 from sentence_transformers import SentenceTransformer, util
+
 from app.models.task import Task
 
 model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
 
-def agrupar_tareas_por_similitud(tareas: List[Task], umbral: float = 0.4) -> Dict[str, List[Task]]:
+def agrupar_tareas_por_similitud(tareas: list[Task], umbral: float = 0.4) -> dict[str, list[Task]]:
     if not tareas:
         return {}
 
@@ -40,7 +41,7 @@ def agrupar_tareas_por_similitud(tareas: List[Task], umbral: float = 0.4) -> Dic
 
 
 
-def agrupar_por_categoria(tareas: List[Task]) -> Dict[str, List[Task]]:
+def agrupar_por_categoria(tareas: list[Task]) -> dict[str, list[Task]]:
 
     grupos = defaultdict(list)
     for tarea in tareas:

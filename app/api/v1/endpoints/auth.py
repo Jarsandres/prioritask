@@ -1,16 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 from starlette import status
 from starlette.status import HTTP_401_UNAUTHORIZED
-from sqlalchemy import select
-from uuid import UUID
-import os
 
-from app.schemas.user import UsuarioCreate, UsuarioRead, UsuarioLogin, RefreshTokenRequest, TokenResponse
-from app.services import auth as auth_srv
 from app.db.session import get_session
-from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.user import Usuario
-from app.services.auth import get_current_user, SECRET_KEY
+from app.schemas.user import (
+    RefreshTokenRequest,
+    TokenResponse,
+    UsuarioCreate,
+    UsuarioLogin,
+    UsuarioRead,
+)
+from app.services import auth as auth_srv
+from app.services.auth import SECRET_KEY, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 

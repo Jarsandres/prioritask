@@ -1,10 +1,14 @@
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import select
-from app.models.task_assignment import TaskAssignment
-from app.models.task import Task
-from app.models.user import Usuario
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
+
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.models.task import Task
+from app.models.task_assignment import TaskAssignment
+from app.models.user import Usuario
+
+
 class TaskAssignmentService:
 
     @staticmethod
@@ -44,7 +48,7 @@ class TaskAssignmentService:
             task_id=task_id,
             user_id=user_id,
             asignado_por=assigned_by,
-            fecha=datetime.now(timezone.utc)
+            fecha=datetime.now(UTC)
         )
         session.add(assignment)
         await session.commit()

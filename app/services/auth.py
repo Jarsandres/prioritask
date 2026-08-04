@@ -1,19 +1,15 @@
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
-
-from jose import jwt, JWTError
-from passlib.context import CryptContext
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from sqlmodel.ext.asyncio.session import AsyncSession  # usamos el de SQLModel
 
-from sqlmodel.ext.asyncio.session import AsyncSession   # usamos el de SQLModel
-
+from app.db.session import get_session
 from app.models.user import Usuario
-from app.db.session import async_session, get_session
-
-import os
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuración global
@@ -40,7 +36,7 @@ def create_access_token(
         expires_minutes: int = 60,
 ) -> str:
     """Genera un token JWT de acceso para el usuario."""
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    expire = datetime.now(UTC) + timedelta(minutes=expires_minutes)
     return jwt.encode({"sub": str(sub), "type": "access", "exp": expire}, secret, algorithm=ALGORITHM)
 
 def create_refresh_token(
@@ -50,7 +46,7 @@ def create_refresh_token(
         expires_minutes: int = 10080,  # 7 días
 ) -> str:
     """Genera un token JWT de refresco para la sesión del usuario."""
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    expire = datetime.now(UTC) + timedelta(minutes=expires_minutes)
     return jwt.encode({"sub": str(sub), "type": "refresh", "exp": expire}, secret, algorithm=ALGORITHM)
 
 def decode_token(token: str, secret: str, verify_exp: bool = True) -> dict:

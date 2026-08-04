@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class CategoriaTarea(str, Enum):
     LIMPIEZA = "LIMPIEZA"
     COMPRA = "COMPRA"
