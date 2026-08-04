@@ -1,19 +1,15 @@
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
-
-from jose import jwt, JWTError
-from passlib.context import CryptContext
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from sqlmodel.ext.asyncio.session import AsyncSession  # usamos el de SQLModel
 
-from sqlmodel.ext.asyncio.session import AsyncSession   # usamos el de SQLModel
-
+from app.db.session import get_session
 from app.models.user import Usuario
-from app.db.session import async_session, get_session
-
-import os
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuración global
@@ -37,36 +33,40 @@ def create_access_token(
         sub: UUID | str,
         secret: str,
         *,
-        expires_minutes: int = 1440,  # Cambiado a 1440 minutos (24 horas) para pruebas
+        expires_minutes: int = 60,
 ) -> str:
-    """
-    Genera un token JWT para el usuario.
-    Parameter
-    ----------
-    sub : UUID | str identificador del usuario
-    secret : str clave secreta para firmar el token
-    expires_minutes : int tiempo de expiración en minutos
-    Returns
-    -------
-    str token JWT generado
-    """
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    return jwt.encode({"sub": str(sub), "exp": expire}, secret, algorithm=ALGORITHM)
+    """Genera un token JWT de acceso para el usuario."""
+    expire = datetime.now(UTC) + timedelta(minutes=expires_minutes)
+    return jwt.encode({"sub": str(sub), "type": "access", "exp": expire}, secret, algorithm=ALGORITHM)
+
+def create_refresh_token(
+        sub: UUID | str,
+        secret: str,
+        *,
+        expires_minutes: int = 10080,  # 7 días
+) -> str:
+    """Genera un token JWT de refresco para la sesión del usuario."""
+    expire = datetime.now(UTC) + timedelta(minutes=expires_minutes)
+    return jwt.encode({"sub": str(sub), "type": "refresh", "exp": expire}, secret, algorithm=ALGORITHM)
+
+def decode_token(token: str, secret: str, verify_exp: bool = True) -> dict:
+    """Decodifica un token JWT con opción de ignorar expiración para inspección."""
+    options = {"verify_signature": True, "verify_exp": verify_exp}
+    return jwt.decode(token, secret, algorithms=[ALGORITHM], options=options)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Operaciones de usuario (registro interno)
 # ─────────────────────────────────────────────────────────────────────────────
-async def create_user(data, secret_key: str):
-    async with async_session() as session:
-        user = Usuario(
-            email=data.email,
-            nombre=data.nombre,
-            hashed_password=hash_password(data.password),
-        )
-        session.add(user)
-        await session.commit()
-        await session.refresh(user)
-        return user
+async def create_user(payload, session: AsyncSession):
+    user = Usuario(
+        email=payload.email,
+        nombre=payload.nombre,
+        hashed_password=hash_password(payload.password),
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return user
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Middleware / dependencia para rutas protegidas
@@ -82,13 +82,13 @@ async def get_current_user(
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        exp = payload.get("exp")
-        if exp is None or datetime.now(timezone.utc) > datetime.fromtimestamp(exp, timezone.utc):
-            raise cred_exc  # Token expirado
+        payload = decode_token(token, SECRET_KEY, verify_exp=True)
+        token_type = payload.get("type")
+        if token_type and token_type != "access":
+            raise cred_exc
 
         user_id_raw: str | None = payload.get("sub")
-        user_id = UUID(user_id_raw)  # Conversión segura de str a UUID
+        user_id = UUID(user_id_raw)
     except (JWTError, ValueError):
         raise cred_exc
 

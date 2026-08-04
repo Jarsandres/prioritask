@@ -1,39 +1,43 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "../api";
 import Select from "react-select";
 import { getCurrentRoomId } from "../utils/room";
+import type { Assignment, SelectOption, Task } from "../types/task";
 
-interface Assignment {
-  id: number;
-  task_id: string;
-  user_id: string;
-  asignado_por: string;
-  fecha: string;
-}
+// FE-010: Tipos importados del módulo compartido
 
 const AssignTaskForm = () => {
   const [userId, setUserId] = useState("");
   const [taskId, setTaskId] = useState("");
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [error, setError] = useState("");
-  const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
-  const [tasks, setTasks] = useState<{ value: string; label: string }[]>([]);
+  const [users, setUsers] = useState<SelectOption[]>([]);
+  const [tasks, setTasks] = useState<SelectOption[]>([]);
+  // FE-005: Estado de carga para el botón "Asignar"
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Estado de carga para el botón "Quitar" (por fila)
+  const [removingTaskId, setRemovingTaskId] = useState<string | null>(null);
 
+  // Carga inicial de usuarios y tareas
   useEffect(() => {
     const load = async () => {
       try {
-        const usersRes = await api.get("/users");
+        const [usersRes, tasksRes] = await Promise.all([
+          api.get<{ id: string; nombre?: string; email: string }[]>("/users"),
+          api.get<Task[]>("/tasks", {
+            params: { room_id: getCurrentRoomId() || undefined },
+          }),
+        ]);
+
         setUsers(
-          usersRes.data.map((u: any) => ({
+          usersRes.data.map((u) => ({
             value: u.id,
             label: u.nombre || u.email,
           }))
         );
-        const tasksRes = await api.get("/tasks", {
-          params: { room_id: getCurrentRoomId() || undefined },
-        });
+
         setTasks(
-          tasksRes.data.map((t: any) => ({ value: t.id, label: t.titulo }))
+          tasksRes.data.map((t) => ({ value: t.id, label: t.titulo }))
         );
       } catch (err) {
         console.error(err);
@@ -42,40 +46,97 @@ const AssignTaskForm = () => {
     load();
   }, []);
 
-  const fetchAssignments = async () => {
+  // FE-007: fetchAssignments con useCallback para poder usar en useEffect
+  const fetchAssignments = useCallback(async () => {
     if (!userId) return;
+    setError("");
     try {
-      const res = await api.get(`/tasks/assigned/${userId}`);
+      const res = await api.get<Assignment[]>(`/tasks/assigned/${userId}`);
       setAssignments(res.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.response?.data?.detail || "Error al obtener asignaciones");
+      if (
+        err instanceof Error &&
+        "response" in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      ) {
+        setError(
+          (err as { response: { data: { detail: string } } }).response.data.detail
+        );
+      } else {
+        setError("Error al obtener asignaciones");
+      }
     }
-  };
+  }, [userId]);
 
+  // FE-007: Reemplazar onBlur por useEffect reactivo a userId
+  useEffect(() => {
+    if (userId) {
+      fetchAssignments();
+    } else {
+      setAssignments([]);
+    }
+  }, [userId, fetchAssignments]);
+
+  // FE-005 + FE-007: handleAssign con validación previa y estado isSubmitting
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // FE-007: Validar que ambos campos estén seleccionados antes de llamar a la API
+    if (!userId || !taskId) {
+      setError("Debes seleccionar un usuario y una tarea.");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       await api.post("/tasks/assign", {
         task_id: taskId,
         user_id: userId,
       });
       setTaskId("");
-      fetchAssignments();
-    } catch (err: any) {
+      await fetchAssignments();
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.response?.data?.detail || "Error al asignar tarea");
+      if (
+        err instanceof Error &&
+        "response" in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      ) {
+        setError(
+          (err as { response: { data: { detail: string } } }).response.data.detail
+        );
+      } else {
+        setError("Error al asignar tarea");
+      }
+    } finally {
+      // FE-005: Restaurar siempre en el finally
+      setIsSubmitting(false);
     }
   };
 
   const removeAssignment = async (task: string) => {
+    setRemovingTaskId(task);
+    setError("");
     try {
       await api.delete(`/tasks/${task}/assignees/${userId}`);
-      fetchAssignments();
-    } catch (err: any) {
+      await fetchAssignments();
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.response?.data?.detail || "Error al eliminar asignación");
+      if (
+        err instanceof Error &&
+        "response" in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      ) {
+        setError(
+          (err as { response: { data: { detail: string } } }).response.data.detail
+        );
+      } else {
+        setError("Error al eliminar asignación");
+      }
+    } finally {
+      setRemovingTaskId(null);
     }
   };
 
@@ -86,15 +147,16 @@ const AssignTaskForm = () => {
       <form onSubmit={handleAssign} className="mb-4">
         <div className="mb-3">
           <label className="form-label">Usuario</label>
+          {/* FE-007: Eliminado onBlur={fetchAssignments}; ahora lo gestiona el useEffect */}
           <Select
             options={users}
             value={users.find((u) => u.value === userId) || null}
             onChange={(opt) => {
-              setUserId(opt ? (opt as any).value : "");
+              setUserId(opt ? (opt as SelectOption).value : "");
               setAssignments([]);
             }}
-            onBlur={fetchAssignments}
             placeholder="Seleccione un usuario"
+            isDisabled={isSubmitting}
           />
         </div>
         <div className="mb-3">
@@ -102,12 +164,18 @@ const AssignTaskForm = () => {
           <Select
             options={tasks}
             value={tasks.find((t) => t.value === taskId) || null}
-            onChange={(opt) => setTaskId(opt ? (opt as any).value : "")}
+            onChange={(opt) => setTaskId(opt ? (opt as SelectOption).value : "")}
             placeholder="Seleccione una tarea"
+            isDisabled={isSubmitting}
           />
         </div>
-        <button type="submit" className="btn btn-primary">
-          Asignar
+        {/* FE-005: Botón deshabilitado durante submit */}
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Asignando..." : "Asignar"}
         </button>
       </form>
 
@@ -116,13 +184,19 @@ const AssignTaskForm = () => {
           <h5>Tareas asignadas al usuario</h5>
           <ul className="list-group">
             {assignments.map((a) => (
-              <li key={a.id} className="list-group-item d-flex justify-content-between align-items-center">
-                <span>{tasks.find((t) => t.value === a.task_id)?.label || a.task_id}</span>
+              <li
+                key={a.id}
+                className="list-group-item d-flex justify-content-between align-items-center"
+              >
+                <span>
+                  {tasks.find((t) => t.value === a.task_id)?.label || a.task_id}
+                </span>
                 <button
                   className="btn btn-sm btn-outline-danger"
                   onClick={() => removeAssignment(a.task_id)}
+                  disabled={removingTaskId === a.task_id}
                 >
-                  Quitar
+                  {removingTaskId === a.task_id ? "Quitando..." : "Quitar"}
                 </button>
               </li>
             ))}
@@ -134,4 +208,3 @@ const AssignTaskForm = () => {
 };
 
 export default AssignTaskForm;
-

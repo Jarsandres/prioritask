@@ -1,11 +1,11 @@
-from sqlmodel import SQLModel, Field, Relationship
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
-from typing import Optional , TYPE_CHECKING
 
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from  app.models.task import Task
-    from  app.models.tag import Tag
+    from app.models.tag import Tag
+    from app.models.task import Task
 
 class TaskTag(SQLModel, table=True):
     task_id: UUID = Field(foreign_key="task.id", primary_key=True)

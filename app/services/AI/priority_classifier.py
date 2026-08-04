@@ -1,38 +1,32 @@
-from setfit import SetFitModel, Trainer
-from datasets import Dataset
-from pathlib import Path
+import re
 
-# Ruta para guardar/cargar modelo
-MODELO_PATH = Path("app/services/AI/modelos/prioridad")
+from app.services.AI.ollama_client import generate_json
 
-def cargar_o_entrenar_modelo():
-    if MODELO_PATH.exists():
-        return SetFitModel.from_pretrained(str(MODELO_PATH))
+PALABRAS_URGENCIA = ["urgente", "hoy", "mañana", "examen", "prioritario", "inmediato", "rápido", "entregar", "última hora"]
 
-    # Dataset de ejemplo inicial
-    ejemplos = [
-        {"text": "Enviar informe urgente", "label": "alta"},
-        {"text": "Comprar pan", "label": "baja"},
-        {"text": "Estudiar para el examen de mañana", "label": "alta"},
-        {"text": "Llamar a mamá", "label": "media"},
-        {"text": "Revisar correo electrónico", "label": "media"},
-        {"text": "Pagar el alquiler hoy", "label": "alta"},
-        {"text": "Sacar la basura", "label": "baja"},
-    ]
-    texts = [e["text"] for e in ejemplos]
-    labels = [e["label"] for e in ejemplos]
-    dataset = Dataset.from_dict({"text": texts, "label": labels})
 
-    # Entrenamiento
-    model = SetFitModel.from_pretrained("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-    trainer = Trainer(model=model, train_dataset=dataset, eval_dataset=dataset, metric="accuracy")
-    trainer.train()
+def _fallback_prioridad(titulo: str) -> str:
+    titulo_lower = titulo.lower()
+    if any(re.search(rf"\b{palabra}\b", titulo_lower) for palabra in PALABRAS_URGENCIA):
+        return "alta"
+    return "media"
 
-    model.save_pretrained(str(MODELO_PATH))
-    return model
 
-# Cargar modelo una vez al importar
-_modelo = cargar_o_entrenar_modelo()
+async def clasificar_prioridad(titulo: str) -> str:
+    """Clasifica la prioridad de una tarea en 'alta', 'media' o 'baja'.
 
-def clasificar_prioridad(titulo: str) -> str:
-    return _modelo.predict([titulo])[0]
+    Utiliza Ollama con el modelo qwen2.5:7b. En caso de fallo o timeout,
+    utiliza una regla de fallback basada en palabras clave.
+    """
+    prompt = (
+        f"Analiza el título de la tarea: '{titulo}'. "
+        "Clasifica su prioridad estrictamente en una de las siguientes opciones: alta, media, baja. "
+        "Responde en JSON con la clave 'prioridad'."
+    )
+    result = await generate_json(prompt)
+    if result and isinstance(result, dict):
+        prioridad = str(result.get("prioridad", "")).lower().strip()
+        if prioridad in ("alta", "media", "baja"):
+            return prioridad
+
+    return _fallback_prioridad(titulo)

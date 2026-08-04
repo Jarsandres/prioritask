@@ -1,87 +1,81 @@
-import os
-import asyncio
-import sys
-from types import ModuleType
-import pytest_asyncio
-from sqlmodel import SQLModel
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from httpx import AsyncClient, ASGITransport
-
-# ---------------------------------------------------------------------------
-# Mock heavy AI modules so tests do not require network access or large models
-# ---------------------------------------------------------------------------
-
-priority_mock = ModuleType("app.services.AI.priority_classifier")
-
-def _fake_priority(title: str) -> str:
-    return "alta" if "urgente" in title.lower() else "media"
-
-priority_mock.clasificar_prioridad = _fake_priority
-sys.modules.setdefault("app.services.AI.priority_classifier", priority_mock)
-
-reform_mock = ModuleType("app.services.AI.reformulator")
-
-def _fake_reform(title: str) -> dict:
-    return {"reformulada": f"{title} (mock)", "cambio": True, "motivo": "mock"}
-
-reform_mock.reformular_titulo_con_traduccion = _fake_reform
-sys.modules.setdefault("app.services.AI.reformulator", reform_mock)
-
-organizer_mock = ModuleType("app.services.AI.task_organizer")
-
-def _fake_group(tasks, umbral: float = 0.4):
-    grupos = {}
-    for task in tasks:
-        grupo = getattr(task, "categoria", "General")
-        grupos.setdefault(grupo, []).append(task)
-    return grupos
-
-organizer_mock.agrupar_tareas_por_similitud = _fake_group
-organizer_mock.agrupar_por_categoria = _fake_group
-sys.modules.setdefault("app.services.AI.task_organizer", organizer_mock)
-
-from app.main import app
-from app.services.auth import create_access_token, hash_password
-from app.models.user import Usuario
-from app.core.config import settings
 from uuid import uuid4
 
-TEST_DB = "sqlite+aiosqlite:///./prioritask.db"
-test_engine = create_async_engine(TEST_DB, echo=False)
-async_session = async_sessionmaker(test_engine, expire_on_commit=False)
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
+from sqlmodel import SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.config import settings
+from app.db.session import get_session
+from app.main import app
+from app.models.user import Usuario
+from app.services.auth import create_access_token, hash_password
+
+# ---------------------------------------------------------------------------
+# Test engine: single in-memory SQLite shared across all connections
+# ---------------------------------------------------------------------------
+TEST_DB = "sqlite+aiosqlite:///:memory:"
+test_engine = create_async_engine(
+    TEST_DB,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+    echo=False,
+)
+TestSessionLocal = async_sessionmaker(
+    test_engine, class_=AsyncSession, expire_on_commit=False
+)
+
+
+# ---------------------------------------------------------------------------
+# Override get_session so the *app* uses the test engine too
+# ---------------------------------------------------------------------------
+async def override_get_session():
+    async with TestSessionLocal() as session:
+        yield session
+
+
+app.dependency_overrides[get_session] = override_get_session
+
+
+# ---------------------------------------------------------------------------
+# Create all tables before every test, drop after
+# ---------------------------------------------------------------------------
 @pytest_asyncio.fixture(scope="function", autouse=True)
-def reset_test_db():
-    db_path = "prioritask.db"
-    if os.path.exists(db_path):
-        try:
-            os.remove(db_path)
-        except OSError as e:
-            print(f"Error al eliminar la base de datos de prueba: {e}")
-
-    async def init_models():
-        async with test_engine.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.create_all)
-
-    asyncio.run(init_models())
+async def reset_test_db():
+    async with test_engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
     yield
-    asyncio.run(test_engine.dispose())
+    async with test_engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
 
+
+# ---------------------------------------------------------------------------
+# HTTP client wired to the ASGI app
+# ---------------------------------------------------------------------------
 @pytest_asyncio.fixture
 async def async_client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
 
+
+# ---------------------------------------------------------------------------
+# Raw SQLAlchemy session (for fixtures that write directly to the test DB)
+# ---------------------------------------------------------------------------
 @pytest_asyncio.fixture(scope="function")
 async def session():
-    async with async_session() as session:
+    async with TestSessionLocal() as session:
         yield session
-        await session.close()
 
+
+# ---------------------------------------------------------------------------
+# Pre-created authenticated user
+# ---------------------------------------------------------------------------
 @pytest_asyncio.fixture
-def auth_headers(session):
-    # Crear un usuario de prueba con un UUID válido y un email único
+async def auth_headers(session):
     unique_email = f"test-{uuid4()}@example.com"
     user = Usuario(
         id=uuid4(),
@@ -90,8 +84,7 @@ def auth_headers(session):
         is_active=True,
     )
     session.add(user)
-    asyncio.run(session.commit())
+    await session.commit()
 
-    # Generar un token válido usando el JWT_SECRET_KEY de la configuración
     token = create_access_token(sub=str(user.id), secret=settings.JWT_SECRET_KEY)
     return {"Authorization": f"Bearer {token}"}

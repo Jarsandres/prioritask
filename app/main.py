@@ -1,6 +1,7 @@
 from fastapi import FastAPI
-from app.api.v1 import api_router
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.v1 import api_router
 
 app = FastAPI(
     title="Prioritask API",

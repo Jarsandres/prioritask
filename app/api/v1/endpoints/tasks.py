@@ -1,26 +1,32 @@
 import json
 import uuid
-from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import select
-from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy import desc, asc
-from sqlalchemy.sql.expression import func
-from app.db.session import get_session
-from app.models import CategoriaTarea, TaskTag, TaskAssignment, Tag, Room
-from app.services.auth import get_current_user
-from app.models.task import Task, TaskHistory, EstadoTarea
-from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskAssignmentCreate, TaskAssignmentRead
-from app.models.user import Usuario
-from app.services.task_assignment import TaskAssignmentService
-from app.schemas.responses import ERROR_BAD_REQUEST, ERROR_FORBIDDEN
-from app.schemas.history import TaskHistoryRead
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ValidationError
+from sqlalchemy import asc, desc
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.expression import func
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.db.session import get_session
+from app.models import CategoriaTarea, Room, Tag, TaskAssignment, TaskTag
+from app.models.task import EstadoTarea, Task, TaskHistory
+from app.models.user import Usuario
+from app.schemas.history import TaskHistoryRead
+from app.schemas.task import (
+    TaskAssignmentCreate,
+    TaskAssignmentRead,
+    TaskCreate,
+    TaskRead,
+    TaskUpdate,
+)
+from app.services.auth import get_current_user
+from app.services.task_assignment import TaskAssignmentService
 
 router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
 room_tasks_router = APIRouter(prefix="/rooms", tags=["Hogar"])
@@ -30,19 +36,19 @@ async def _fetch_tasks(
     *,
     session: AsyncSession,
     current_user: Usuario,
-    estado: Optional[EstadoTarea] = None,
-    categoria: Optional[CategoriaTarea] = None,
-    completadas: Optional[bool] = None,
-    desde: Optional[datetime] = None,
-    hasta: Optional[datetime] = None,
-    order_by: Optional[str] = None,
+    estado: EstadoTarea | None = None,
+    categoria: CategoriaTarea | None = None,
+    completadas: bool | None = None,
+    desde: datetime | None = None,
+    hasta: datetime | None = None,
+    order_by: str | None = None,
     is_descending: bool = False,
-    tag_id: Optional[UUID] = None,
-    room_id: Optional[UUID] = None,
-    search: Optional[str] = None,
+    tag_id: UUID | None = None,
+    room_id: UUID | None = None,
+    search: str | None = None,
     skip: int = 0,
     limit: int = 10,
-) -> List[Task]:
+) -> list[Task]:
     """Retrieve tasks applying common filters."""
     filters = [Task.user_id == current_user.id, Task.deleted_at.is_(None)]
 
@@ -89,16 +95,16 @@ async def _fetch_tasks(
 
 @router.get("", response_model=list[TaskRead], summary="Obtener tareas", description="Obtiene una lista de tareas del usuario actual con filtros opcionales.")
 async def get_tasks(
-        estado: Optional[EstadoTarea] = Query(None),
-        categoria: Optional[CategoriaTarea] = Query(None),
-        completadas: Optional[bool] = Query(None),
-        desde: Optional[datetime] = Query(None),
-        hasta: Optional[datetime] = Query(None),
-        search: Optional[str] = Query(None),
-        order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
-        is_descending: Optional[bool] = Query(False),
-        tag_id: Optional[UUID] = Query(None),
-        room_id: Optional[UUID] = Query(None),
+        estado: EstadoTarea | None = Query(None),
+        categoria: CategoriaTarea | None = Query(None),
+        completadas: bool | None = Query(None),
+        desde: datetime | None = Query(None),
+        hasta: datetime | None = Query(None),
+        search: str | None = Query(None),
+        order_by: str | None = Query(None, description="due_date, peso o created_at"),
+        is_descending: bool | None = Query(False),
+        tag_id: UUID | None = Query(None),
+        room_id: UUID | None = Query(None),
         skip: int = Query(0, ge=0),
         limit: int = Query(10, gt=0),
         session: AsyncSession = Depends(get_session),
@@ -126,14 +132,14 @@ async def get_tasks(
 @room_tasks_router.get("/{room_id}/tasks", response_model=list[TaskRead], summary="Obtener tareas de un hogar")
 async def get_tasks_by_room(
     room_id: UUID,
-    estado: Optional[EstadoTarea] = Query(None),
-    categoria: Optional[CategoriaTarea] = Query(None),
-    completadas: Optional[bool] = Query(None),
-    desde: Optional[datetime] = Query(None),
-    hasta: Optional[datetime] = Query(None),
-    search: Optional[str] = Query(None),
-    order_by: Optional[str] = Query(None, description="due_date, peso o created_at"),
-    is_descending: Optional[bool] = Query(False),
+    estado: EstadoTarea | None = Query(None),
+    categoria: CategoriaTarea | None = Query(None),
+    completadas: bool | None = Query(None),
+    desde: datetime | None = Query(None),
+    hasta: datetime | None = Query(None),
+    search: str | None = Query(None),
+    order_by: str | None = Query(None, description="due_date, peso o created_at"),
+    is_descending: bool | None = Query(False),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, gt=0),
     session: AsyncSession = Depends(get_session),
@@ -239,7 +245,7 @@ async def assign_task(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/assigned/{user_id}", response_model=List[TaskAssignmentRead], summary="Tareas asignadas", description="Obtiene las tareas asignadas a un usuario específico.")
+@router.get("/assigned/{user_id}", response_model=list[TaskAssignmentRead], summary="Tareas asignadas", description="Obtiene las tareas asignadas a un usuario específico.")
 async def get_assigned_tasks(
         user_id: UUID,
         session: AsyncSession = Depends(get_session),
@@ -250,14 +256,14 @@ async def get_assigned_tasks(
 
 @router.get("/history", response_model=list[TaskHistoryRead], summary="Historial de tareas")
 async def list_task_history(
-    desde: Optional[datetime] = Query(None),
-    hasta: Optional[datetime] = Query(None),
-    room_id: Optional[UUID] = Query(None),
-    user_id: Optional[UUID] = Query(None),
+    desde: datetime | None = Query(None),
+    hasta: datetime | None = Query(None),
+    room_id: UUID | None = Query(None),
+    user_id: UUID | None = Query(None),
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user),
 ):
-    filters = [Task.user_id == current_user.id]
+    filters = [Task.user_id == current_user.id, Task.deleted_at.is_(None)]
     if desde:
         filters.append(TaskHistory.timestamp >= desde)
     if hasta:
@@ -313,16 +319,26 @@ async def get_task_history(
     try:
         task_uuid = uuid.UUID(task_id)
     except ValueError:
-        return ERROR_BAD_REQUEST
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID de tarea inválido")
+
+    # Validar propiedad del usuario y que la tarea no esté eliminada
+    task_result = await session.exec(
+        select(Task).where(
+            Task.id == task_uuid,
+            Task.user_id == current_user.id,
+            Task.deleted_at.is_(None)
+        )
+    )
+    task = task_result.one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Historial no encontrado")
 
     result = await session.exec(
         select(TaskHistory).filter(
             TaskHistory.task_id == task_uuid
         ).order_by(asc(TaskHistory.timestamp))
-    )  # Ajuste para usar Select correctamente
+    )
     history = result.all()
-    if not history:
-        raise HTTPException(status_code=404, detail="Historial no encontrado")
     return history
 
 @router.get("/{task_id}", response_model=TaskRead, summary="Obtener tarea específica", description="Obtiene una tarea específica del usuario actual.")
@@ -369,7 +385,7 @@ async def update_task(
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
-    changes: Dict[str, Any] = {}
+    changes: dict[str, Any] = {}
     for field, new_value in task_in.model_dump(exclude_unset=True).items():
         old_value = getattr(task, field)
         if new_value != old_value:
@@ -379,14 +395,14 @@ async def update_task(
     if not changes:
         return task
 
-    task.updated_at = datetime.now(timezone.utc)
+    task.updated_at = datetime.now(UTC)
     session.add(task)
 
     history = TaskHistory(
         task_id=task.id,
         user_id=current_user.id,
         action="UPDATED",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         changes=json.dumps(changes, default=str),
     )
     session.add(history)
@@ -396,7 +412,7 @@ async def update_task(
 
     return task
 
-@router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual. Devuelve un error 403 si el usuario no tiene permisos para eliminar la tarea.")
+@router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual marcándola como eliminada (Soft Delete).")
 async def delete_task(
         task_id: UUID,
         current_user: Usuario = Depends(get_current_user),
@@ -413,14 +429,11 @@ async def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
-    if task.user_id != current_user.id:
-        return ERROR_FORBIDDEN
-
-    task_id_to_delete = task.id
-    await session.delete(task)
+    task.deleted_at = datetime.now(UTC)
+    session.add(task)
 
     history = TaskHistory(
-        task_id=task_id_to_delete,
+        task_id=task.id,
         user_id=current_user.id,
         action="DELETED",
     )
@@ -456,7 +469,7 @@ async def patch_task(
         for key, value in update_data.items():
             setattr(task, key, value)
 
-        task.updated_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(UTC)
 
         session.add(task)
         await session.commit()
@@ -498,7 +511,7 @@ async def patch_task_status(
             raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
         task.estado = payload.estado
-        task.updated_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(UTC)
 
         session.add(task)
         await session.commit()

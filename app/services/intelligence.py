@@ -1,9 +1,9 @@
-from app.schemas.task import PrioritizedTask, RewrittenTask
+
 from app.models.task import Task
-from typing import List, Dict
+from app.schemas.task import PrioritizedTask, RewrittenTask
 
 
-async def prioritize_tasks_mock(tasks: List[Task]) -> List[PrioritizedTask]:
+async def prioritize_tasks_mock(tasks: list[Task]) -> list[PrioritizedTask]:
     def simple_priority_logic(task: Task) -> str:
         if "urgente" in task.titulo.lower():
             return "alta"
@@ -28,7 +28,7 @@ def detect_group(task_title: str) -> str:
         return "Trabajo/Estudios"
     return "Otros"
 
-async def group_tasks_mock(tasks: List[Task]) -> Dict[str, List[dict]]:
+async def group_tasks_mock(tasks: list[Task]) -> dict[str, list[dict]]:
     grupos = {}
     for task in tasks:
         grupo = detect_group(task.titulo)
@@ -41,7 +41,7 @@ async def group_tasks_mock(tasks: List[Task]) -> Dict[str, List[dict]]:
 def rewrite_task_title(title: str) -> str:
     return f"{title}. Por favor, realiza esta tarea lo antes posible y con atención."
 
-async def rewrite_tasks_mock(tasks: List[Task]) -> List[RewrittenTask]:
+async def rewrite_tasks_mock(tasks: list[Task]) -> list[RewrittenTask]:
     return [
         RewrittenTask(
             id=task.id,

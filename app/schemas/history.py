@@ -1,6 +1,8 @@
-from pydantic import BaseModel, ConfigDict, Field
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class TaskHistoryRead(BaseModel):
     id: UUID = Field(description="Identificador del registro de historial.")

@@ -1,18 +1,16 @@
-from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Path, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import  delete
-from sqlmodel import select
+from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
-from app.models import TaskTag, Task
+from app.models import Task, TaskTag
 from app.models.tag import Tag
-from app.schemas.tag import TagCreate, TagRead, TagAssignRequest, TagUpdate
-from app.services.auth import get_current_user
 from app.models.user import Usuario
+from app.schemas.tag import TagAssignRequest, TagCreate, TagRead, TagUpdate
+from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/tags", tags=["Etiquetas"])
 
@@ -38,7 +36,7 @@ async def create_tag(
             detail="Duplicado: ya existe una etiqueta con ese nombre para este usuario."
         )
 
-@router.get("", response_model=List[TagRead], summary="Obtener etiquetas", description="Devuelve todas las etiquetas asociadas al usuario autenticado.")
+@router.get("", response_model=list[TagRead], summary="Obtener etiquetas", description="Devuelve todas las etiquetas asociadas al usuario autenticado.")
 async def get_my_tags(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user)
@@ -59,8 +57,15 @@ async def assign_tags_to_task(
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user)
 ):
-    task = await session.get(Task, task_id)
-    if not task or task.user_id != current_user.id:
+    result_task = await session.exec(
+        select(Task).where(
+            Task.id == task_id,
+            Task.user_id == current_user.id,
+            Task.deleted_at.is_(None)
+        )
+    )
+    task = result_task.one_or_none()
+    if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
     for tag_id in payload.tag_ids:
@@ -115,9 +120,16 @@ async def remove_tag_from_task(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user)
 ):
-    # 1) Verificar que la tarea exista y pertenezca al usuario
-    task = await session.get(Task, task_id)
-    if not task or task.user_id != current_user.id:
+    # 1) Verificar que la tarea exista, pertenezca al usuario y no esté eliminada
+    result_task = await session.exec(
+        select(Task).where(
+            Task.id == task_id,
+            Task.user_id == current_user.id,
+            Task.deleted_at.is_(None)
+        )
+    )
+    task = result_task.one_or_none()
+    if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
     # 2) Verificar que la etiqueta exista y pertenezca al usuario

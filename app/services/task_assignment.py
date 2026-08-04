@@ -1,18 +1,29 @@
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import select
-from app.models.task_assignment import TaskAssignment
-from app.models.task import Task
-from app.models.user import Usuario
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
+
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.models.task import Task
+from app.models.task_assignment import TaskAssignment
+from app.models.user import Usuario
+
+
 class TaskAssignmentService:
 
     @staticmethod
     async def assign_task(session: AsyncSession, task_id: UUID, user_id: UUID, assigned_by: UUID) -> TaskAssignment:
-        # Valida existencia de la tarea
-        task = await session.get(Task, task_id)
+        # Valida existencia, propiedad de la tarea y que no esté eliminada
+        result_task = await session.exec(
+            select(Task).where(
+                Task.id == task_id,
+                Task.user_id == assigned_by,
+                Task.deleted_at.is_(None)
+            )
+        )
+        task = result_task.one_or_none()
         if not task:
-            raise ValueError("Task not found")
+            raise ValueError("Task not found or access denied")
 
         # Valida existencia del usuario
         user = await session.get(Usuario, user_id)
@@ -37,7 +48,7 @@ class TaskAssignmentService:
             task_id=task_id,
             user_id=user_id,
             asignado_por=assigned_by,
-            fecha=datetime.now(timezone.utc)
+            fecha=datetime.now(UTC)
         )
         session.add(assignment)
         await session.commit()
@@ -47,7 +58,12 @@ class TaskAssignmentService:
     @staticmethod
     async def get_assigned_tasks(session: AsyncSession, user_id: UUID):
         result = await session.exec(
-            select(TaskAssignment).where(TaskAssignment.user_id == user_id)
+            select(TaskAssignment)
+            .join(Task, Task.id == TaskAssignment.task_id)
+            .where(
+                TaskAssignment.user_id == user_id,
+                Task.deleted_at.is_(None)
+            )
         )
         return result.all()
 

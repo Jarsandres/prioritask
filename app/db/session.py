@@ -1,8 +1,8 @@
+import os
+from collections.abc import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
-
-from typing import AsyncGenerator
-import os
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./prioritask.db")
 
