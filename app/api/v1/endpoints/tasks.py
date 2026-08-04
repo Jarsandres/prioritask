@@ -257,7 +257,7 @@ async def list_task_history(
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user),
 ):
-    filters = [Task.user_id == current_user.id]
+    filters = [Task.user_id == current_user.id, Task.deleted_at.is_(None)]
     if desde:
         filters.append(TaskHistory.timestamp >= desde)
     if hasta:
@@ -313,16 +313,26 @@ async def get_task_history(
     try:
         task_uuid = uuid.UUID(task_id)
     except ValueError:
-        return ERROR_BAD_REQUEST
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID de tarea inválido")
+
+    # Validar propiedad del usuario y que la tarea no esté eliminada
+    task_result = await session.exec(
+        select(Task).where(
+            Task.id == task_uuid,
+            Task.user_id == current_user.id,
+            Task.deleted_at.is_(None)
+        )
+    )
+    task = task_result.one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada o acceso no autorizado")
 
     result = await session.exec(
         select(TaskHistory).filter(
             TaskHistory.task_id == task_uuid
         ).order_by(asc(TaskHistory.timestamp))
-    )  # Ajuste para usar Select correctamente
+    )
     history = result.all()
-    if not history:
-        raise HTTPException(status_code=404, detail="Historial no encontrado")
     return history
 
 @router.get("/{task_id}", response_model=TaskRead, summary="Obtener tarea específica", description="Obtiene una tarea específica del usuario actual.")
@@ -396,7 +406,7 @@ async def update_task(
 
     return task
 
-@router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual. Devuelve un error 403 si el usuario no tiene permisos para eliminar la tarea.")
+@router.delete("/{task_id}", status_code=204, summary="Eliminar tarea", description="Elimina una tarea específica del usuario actual marcándola como eliminada (Soft Delete).")
 async def delete_task(
         task_id: UUID,
         current_user: Usuario = Depends(get_current_user),
@@ -413,14 +423,11 @@ async def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
-    if task.user_id != current_user.id:
-        return ERROR_FORBIDDEN
-
-    task_id_to_delete = task.id
-    await session.delete(task)
+    task.deleted_at = datetime.now(timezone.utc)
+    session.add(task)
 
     history = TaskHistory(
-        task_id=task_id_to_delete,
+        task_id=task.id,
         user_id=current_user.id,
         action="DELETED",
     )

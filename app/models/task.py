@@ -15,7 +15,14 @@ if TYPE_CHECKING:
 
 class Task(SQLModel, table=True):
     __table_args__ = (
-        sa.UniqueConstraint("user_id", "titulo", name="unique_user_task_title"),
+        sa.Index(
+            "unique_user_active_task_title",
+            "user_id",
+            "titulo",
+            unique=True,
+            postgresql_where=sa.text("deleted_at IS NULL"),
+            sqlite_where=sa.text("deleted_at IS NULL"),
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

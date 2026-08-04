@@ -60,7 +60,12 @@ async def prioritize(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
-    result = await session.exec(select(Task).where(Task.user_id == current_user.id))
+    result = await session.exec(
+        select(Task).where(
+            Task.user_id == current_user.id,
+            Task.deleted_at.is_(None)
+        )
+    )
     tasks_list = result.all()
     prioritized_tasks = clasificar_prioridad_batch(tasks_list)
     return prioritized_tasks
@@ -72,7 +77,10 @@ async def group_tasks(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
-    stmt = select(Task).where(Task.user_id == current_user.id)
+    stmt = select(Task).where(
+        Task.user_id == current_user.id,
+        Task.deleted_at.is_(None)
+    )
     if payload.task_ids:
         stmt = stmt.where(Task.id.in_(payload.task_ids))
 
@@ -98,7 +106,10 @@ async def rewrite_tasks(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
-    stmt = select(Task).where(Task.user_id == current_user.id)
+    stmt = select(Task).where(
+        Task.user_id == current_user.id,
+        Task.deleted_at.is_(None)
+    )
     if payload.task_ids:
         stmt = stmt.where(Task.id.in_(payload.task_ids))
 

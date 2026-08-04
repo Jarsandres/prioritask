@@ -59,8 +59,15 @@ async def assign_tags_to_task(
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user)
 ):
-    task = await session.get(Task, task_id)
-    if not task or task.user_id != current_user.id:
+    result_task = await session.exec(
+        select(Task).where(
+            Task.id == task_id,
+            Task.user_id == current_user.id,
+            Task.deleted_at.is_(None)
+        )
+    )
+    task = result_task.one_or_none()
+    if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
     for tag_id in payload.tag_ids:
@@ -115,9 +122,16 @@ async def remove_tag_from_task(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user)
 ):
-    # 1) Verificar que la tarea exista y pertenezca al usuario
-    task = await session.get(Task, task_id)
-    if not task or task.user_id != current_user.id:
+    # 1) Verificar que la tarea exista, pertenezca al usuario y no esté eliminada
+    result_task = await session.exec(
+        select(Task).where(
+            Task.id == task_id,
+            Task.user_id == current_user.id,
+            Task.deleted_at.is_(None)
+        )
+    )
+    task = result_task.one_or_none()
+    if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
     # 2) Verificar que la etiqueta exista y pertenezca al usuario
