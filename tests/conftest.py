@@ -20,7 +20,7 @@ test_engine = create_async_engine(
 )
 async_session = async_sessionmaker(test_engine, expire_on_commit=False)
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(scope="function", autouse=True)
 async def reset_test_db():
     async with test_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
