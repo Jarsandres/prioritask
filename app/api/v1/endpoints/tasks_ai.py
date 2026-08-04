@@ -37,14 +37,14 @@ def contiene_palabra_clave(titulo: str) -> bool:
     titulo_lower = titulo.lower()
     return any(re.search(rf"\b{palabra}\b", titulo_lower) for palabra in PALABRAS_URGENCIA)
 
-def clasificar_prioridad_batch(tasks: list[Task]) -> list[PrioritizedTask]:
+async def clasificar_prioridad_batch(tasks: list[Task]) -> list[PrioritizedTask]:
     resultado = []
     for task in tasks:
         if contiene_palabra_clave(task.titulo):
             prioridad = "alta"
             motivo = "Palabra clave de urgencia detectada en el título."
         else:
-            prioridad = clasificar_prioridad(task.titulo)
+            prioridad = await clasificar_prioridad(task.titulo)
             motivo = "IA personalizada basada en entrenamiento en tareas reales."
 
         resultado.append(PrioritizedTask(
@@ -55,8 +55,6 @@ def clasificar_prioridad_batch(tasks: list[Task]) -> list[PrioritizedTask]:
         ))
         print(f"[PRIORITY-IA+H] '{task.titulo}' → {prioridad} ({motivo})")
     return resultado
-
-
 
 
 @router.post("/prioritize", response_model=list[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.",
@@ -72,7 +70,7 @@ async def prioritize(
         )
     )
     tasks_list = result.all()
-    prioritized_tasks = clasificar_prioridad_batch(tasks_list)
+    prioritized_tasks = await clasificar_prioridad_batch(tasks_list)
     return prioritized_tasks
 
 @router.post("/group", response_model=GroupedTasksResponse, summary="Agrupar tareas", description="Agrupa las tareas del usuario autenticado en categorías específicas.",
@@ -93,7 +91,7 @@ async def group_tasks(
     if not tasks:
         raise HTTPException(status_code=404, detail="No se encontraron tareas.")
 
-    group = agrupar_tareas_por_similitud(tasks)
+    group = await agrupar_tareas_por_similitud(tasks)
     response = {
         nombre_grupo: [
             GroupedTasks(id=task.id, titulo=task.titulo)
@@ -124,12 +122,12 @@ async def rewrite_tasks(
 
     result = []
     for task in tasks:
-        resultado =  reformular_titulo_con_traduccion(task.titulo)
+        resultado = await reformular_titulo_con_traduccion(task.titulo)
         result.append(RewrittenTask(
             id=task.id,
             original=task.titulo,
-            reformulada=resultado["reformulada"],
-            motivo=resultado["motivo"]
+            reformulada=str(resultado["reformulada"]),
+            motivo=str(resultado["motivo"])
         ))
     return result
 
@@ -154,10 +152,10 @@ async def suggest_priority(payload: PrioritySuggestRequest) -> PrioritySuggestio
             prioridad = "alta"
             motivo = "La fecha límite está muy próxima."
         else:
-            prioridad = clasificar_prioridad(payload.titulo)
+            prioridad = await clasificar_prioridad(payload.titulo)
             motivo = "IA personalizada basada en entrenamiento en tareas reales."
     else:
-        prioridad = clasificar_prioridad(payload.titulo)
+        prioridad = await clasificar_prioridad(payload.titulo)
         motivo = "IA personalizada basada en entrenamiento en tareas reales."
     return PrioritySuggestion(prioridad=prioridad, motivo=motivo)
 

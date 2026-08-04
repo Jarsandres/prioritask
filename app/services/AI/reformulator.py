@@ -1,39 +1,29 @@
-from transformers import pipeline
+from app.services.AI.ollama_client import generate_json
 
-# Cargar modelos
-traductor_es_en = pipeline("translation", model="Helsinki-NLP/opus-mt-es-en")
-traductor_en_es = pipeline("translation", model="Helsinki-NLP/opus-mt-en-es")
-parafraseador_en = pipeline("text2text-generation", model="humarin/chatgpt_paraphraser_on_T5_base")
 
-def reformular_titulo_con_traduccion(titulo: str) -> dict:
-    try:
-        # ES → EN
-        traducido_en = traductor_es_en(titulo, max_length=100)[0]["translation_text"]
+async def reformular_titulo_con_traduccion(titulo: str) -> dict[str, str | bool]:
+    """Reescribe el título de una tarea para que sea más claro, conciso y profesional en español.
 
-        # Parafrasear en inglés
-        prompt = f"paraphrase: {traducido_en}"
-        parafraseado_en = parafraseador_en(prompt, max_length=100, do_sample=True)[0]["generated_text"].strip()
+    Utiliza Ollama con qwen2.5:7b. En caso de fallo, retorna el título original.
+    """
+    prompt = (
+        f"Reescribe este título de tarea para que sea más claro, conciso y profesional en español: '{titulo}'. "
+        "Responde en JSON con la clave 'reformulada'."
+    )
+    result = await generate_json(prompt)
 
-        # EN → ES
-        reformulado_es = traductor_en_es(parafraseado_en, max_length=100)[0]["translation_text"].strip()
-
-        # Validación mínima
-        if reformulado_es.lower() == titulo.strip().lower():
+    if result and isinstance(result, dict) and "reformulada" in result:
+        reformulada = str(result["reformulada"]).strip()
+        if reformulada:
+            cambio = reformulada.lower() != titulo.strip().lower()
             return {
-                "reformulada": reformulado_es,
-                "cambio": False,
-                "motivo": "No se sugirieron cambios por la IA (traducción y reformulación)."
-            }
-        else:
-            return {
-                "reformulada": reformulado_es,
-                "cambio": True,
-                "motivo": "Reformulación generada mediante traducción y IA."
+                "reformulada": reformulada,
+                "cambio": cambio,
+                "motivo": "Reformulación generada mediante Ollama (qwen2.5:7b)." if cambio else "Sin cambios sugeridos.",
             }
 
-    except Exception as e:
-        return {
-            "reformulada": titulo,
-            "cambio": False,
-            "motivo": f"Error durante la reformulación: {e}"
-        }
+    return {
+        "reformulada": titulo,
+        "cambio": False,
+        "motivo": "Ollama no disponible o sin cambios sugeridos.",
+    }

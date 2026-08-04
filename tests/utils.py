@@ -1,7 +1,9 @@
 from uuid import uuid4
+
 from httpx import AsyncClient
 
-async def create_user_and_token(client: AsyncClient, email: str = None):
+
+async def create_user_and_token(client: AsyncClient, email: str | None = None):
     unique_email = email if email else f"tests{uuid4().hex}@example.com"
     password = "secret123"
 

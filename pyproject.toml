@@ -19,11 +19,8 @@ dependencies = [
   "passlib[bcrypt]==1.7.*",           # hashing de contraseñas
 
   # ─── IA / Background Jobs ────────────────────────────────────────────
-  "sentence-transformers>=2.7.0",
+  "httpx>=0.27.0",
   "celery[redis]~=5.4",
-  "setfit",
-  "sentencepiece>=0.2.0",
-  "sacremoses==0.1.1",
 
 
   # ─── Miscelánea ────────────────────────────────clear──────────────────────
