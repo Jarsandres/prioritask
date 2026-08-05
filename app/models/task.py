@@ -32,14 +32,14 @@ class Task(SQLModel, table=True):
     categoria: CategoriaTarea
     estado: EstadoTarea = EstadoTarea.TODO
     peso : float = 1.0
-    completed : bool = False
+    completed : bool = Field(default=False, index=True)
     due_date: datetime | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    deleted_at: datetime | None = None
+    deleted_at: datetime | None = Field(default=None, index=True)
 
-    user_id: UUID = Field(foreign_key="usuario.id")
-    room_id: UUID = Field(foreign_key="room.id", nullable=False)
+    user_id: UUID = Field(foreign_key="usuario.id", index=True)
+    room_id: UUID = Field(foreign_key="room.id", nullable=False, index=True)
     usuario: Optional["Usuario"] = Relationship(back_populates="tasks")
     history: list["TaskHistory"] = Relationship(back_populates="task", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     colaboradores: list["TaskAssignment"] = Relationship(back_populates="task")
@@ -62,10 +62,11 @@ class Task(SQLModel, table=True):
 
 class TaskHistory(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    task_id: UUID = Field(foreign_key="task.id")
-    user_id: UUID = Field(foreign_key="usuario.id")
+    task_id: UUID = Field(foreign_key="task.id", index=True)
+    user_id: UUID = Field(foreign_key="usuario.id", index=True)
     action: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
     changes: str | None = None
 
     task: Optional["Task"] = Relationship(back_populates="history")
+

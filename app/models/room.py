@@ -17,10 +17,12 @@ class Room(SQLModel, table=True):
     nombre: str = Field(max_length=100, nullable=False, description="Nombre del Hogar")
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
-    owner_id: UUID = Field(foreign_key="usuario.id")
+    owner_id: UUID = Field(foreign_key="usuario.id", index=True)
     owner: Optional["Usuario"] = Relationship(back_populates="rooms")
     parent_id: UUID | None = Field(
         default=None,
         foreign_key="room.id",
         nullable=True,
+        index=True,
     )
+
