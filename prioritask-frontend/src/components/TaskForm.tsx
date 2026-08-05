@@ -129,19 +129,31 @@ const TaskForm = () => {
     }
   };
 
-  // FE-005 + FE-006: handleSubmit con isSubmitting y corrección de tags
+  // FE-005 + FE-006: handleSubmit con isSubmitting y validación client-side
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    const cleanTitle = titulo.trim();
+    if (!cleanTitle) {
+      setError("El título de la tarea es obligatorio y no puede contener solo espacios.");
+      return;
+    }
+
+    if (peso < 1 || peso > 5) {
+      setError("El peso de la tarea debe estar comprendido entre 1 y 5.");
+      return;
+    }
+
     // FE-005: Bloquear doble envío
     setIsSubmitting(true);
 
     const taskData = {
-      titulo,
-      descripcion,
+      titulo: cleanTitle,
+      descripcion: descripcion.trim() || undefined,
       categoria,
       peso,
-      due_date: formatearFecha(dueDate),
+      due_date: dueDate ? formatearFecha(dueDate) : undefined,
       estado,
       room_id: getCurrentRoomId() || undefined,
     };
@@ -155,9 +167,7 @@ const TaskForm = () => {
         id = res.data.id;
       }
 
-      // FE-006: Llamar SIEMPRE al endpoint de tags si tenemos un id válido,
-      // incluso con array vacío, para que el backend haga el reemplazo correcto.
-      // Antes: `if (selectedTags.length > 0 && id)` → ignoraba eliminación de todas las etiquetas.
+      // FE-006: Llamar SIEMPRE al endpoint de tags si tenemos un id válido
       if (id) {
         await api.post(`/tags/tasks/${id}/tags`, {
           tag_ids: selectedTags.map((t) => t.value),
@@ -184,6 +194,7 @@ const TaskForm = () => {
       setIsSubmitting(false);
     }
   };
+
 
   return (
     <div className="container mt-4">

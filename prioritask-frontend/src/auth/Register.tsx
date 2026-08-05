@@ -15,11 +15,30 @@ export default function Register() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    const cleanUsername = username.trim();
+    const cleanEmail = email.trim();
+
+    if (!cleanUsername) {
+      setError("El nombre de usuario es obligatorio.");
+      return;
+    }
+
+    if (!cleanEmail.includes("@") || !cleanEmail.includes(".")) {
+      setError("Por favor, introduce un correo electrónico válido.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres por seguridad.");
+      return;
+    }
+
     setIsLoading(true);
     try {
       await api.post("/auth/register", {
-        nombre: username,
-        email,
+        nombre: cleanUsername,
+        email: cleanEmail,
         password,
       });
       navigate("/login");
@@ -39,6 +58,7 @@ export default function Register() {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className={styles.container}>
