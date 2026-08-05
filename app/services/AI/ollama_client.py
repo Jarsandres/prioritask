@@ -1,15 +1,14 @@
 import json
 import logging
-import os
+from app.core.config import settings
 from typing import Any
-
 import httpx
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
-OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "1.0"))
+OLLAMA_HOST = settings.OLLAMA_HOST
+OLLAMA_MODEL = settings.OLLAMA_MODEL
+OLLAMA_TIMEOUT = settings.OLLAMA_TIMEOUT
 
 
 async def generate_json(prompt: str, model: str = OLLAMA_MODEL) -> dict[str, Any] | None:
