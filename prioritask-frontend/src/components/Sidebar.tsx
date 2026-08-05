@@ -1,7 +1,12 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import "./Sidebar.css";
 
-const Sidebar = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+const Sidebar = ({ isOpen = false, onClose }: SidebarProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
@@ -14,55 +19,72 @@ const Sidebar = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    if (onClose) onClose();
     navigate("/login");
   };
 
-  return (
-    <div className="sidebar">
-      <h3 className="logo">Prioritask</h3>
-      <ul className="nav">
-        <li>
-          <NavLink to="/dashboard" className={({ isActive }) => isActive ? "active" : ""}>
-            <span role="img" aria-label="Dashboard">📊</span> Dashboard
-          </NavLink>
-        </li>
-        <li>
-          <NavLink to="/tasks" className={({ isActive }) => isActive ? "active" : ""}>
-            <span role="img" aria-label="Tasks">📝</span> Tareas
-          </NavLink>
-        </li>
-        <li>
-          <NavLink to="/tasks/grouped" className={({ isActive }) => isActive ? "active" : ""}>
-            <span role="img" aria-label="Grouped">🧠</span> Agrupadas
-          </NavLink>
-        </li>
-        <li>
-          <NavLink to="/history" className={({ isActive }) => isActive ? "active" : ""}>
-            <span role="img" aria-label="History">📜</span> Historial
-          </NavLink>
-        </li>
-        <li>
-          <NavLink to="/tasks/assign" className={({ isActive }) => isActive ? "active" : ""}>
-            <span role="img" aria-label="Assign">🤝</span> Asignar
-          </NavLink>
-        </li>
-        <li>
-          <NavLink to="/tags" className={({ isActive }) => isActive ? "active" : ""}>
-            <span role="img" aria-label="Tags">🏷️</span> Etiquetas
-          </NavLink>
-        </li>
+  const handleNavClick = () => {
+    if (onClose) onClose();
+  };
 
-        <li className="nav-bottom">
-          <NavLink to="/profile" className={({ isActive }) => isActive ? "active" : ""}>
-            <span role="img" aria-label="Profile">👤</span> Perfil
-          </NavLink>
-          <button onClick={handleLogout} className="logout-btn">
-            🔓 Cerrar sesión
+  return (
+    <>
+      {/* Backdrop para cerrar el Drawer en móvil al hacer clic fuera */}
+      {isOpen && <div className="sidebar-backdrop" onClick={onClose} />}
+
+      <aside className={`sidebar ${isOpen ? "mobile-open" : ""}`}>
+        <div className="sidebar-header-row">
+          <h3 className="logo">Prioritask</h3>
+          <button className="close-drawer-btn" onClick={onClose} aria-label="Cerrar menú">
+            ✕
           </button>
-        </li>
-      </ul>
-    </div>
+        </div>
+
+        <ul className="nav">
+          <li>
+            <NavLink to="/dashboard" onClick={handleNavClick} className={({ isActive }) => isActive ? "active" : ""}>
+              <span role="img" aria-label="Dashboard">📊</span> Dashboard
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/tasks" onClick={handleNavClick} className={({ isActive }) => isActive ? "active" : ""}>
+              <span role="img" aria-label="Tasks">📝</span> Tareas
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/tasks/grouped" onClick={handleNavClick} className={({ isActive }) => isActive ? "active" : ""}>
+              <span role="img" aria-label="Grouped">🧠</span> Agrupadas
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/history" onClick={handleNavClick} className={({ isActive }) => isActive ? "active" : ""}>
+              <span role="img" aria-label="History">📜</span> Historial
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/tasks/assign" onClick={handleNavClick} className={({ isActive }) => isActive ? "active" : ""}>
+              <span role="img" aria-label="Assign">🤝</span> Asignar
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/tags" onClick={handleNavClick} className={({ isActive }) => isActive ? "active" : ""}>
+              <span role="img" aria-label="Tags">🏷️</span> Etiquetas
+            </NavLink>
+          </li>
+
+          <li className="nav-bottom">
+            <NavLink to="/profile" onClick={handleNavClick} className={({ isActive }) => isActive ? "active" : ""}>
+              <span role="img" aria-label="Profile">👤</span> Perfil
+            </NavLink>
+            <button onClick={handleLogout} className="logout-btn">
+              🔓 Cerrar sesión
+            </button>
+          </li>
+        </ul>
+      </aside>
+    </>
   );
 };
 
 export default Sidebar;
+
