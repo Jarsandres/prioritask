@@ -13,19 +13,22 @@ class TaskAssignmentService:
 
     @staticmethod
     async def assign_task(session: AsyncSession, task_id: UUID, user_id: UUID, assigned_by: UUID) -> TaskAssignment:
-        # Valida existencia, propiedad de la tarea y que no esté eliminada
+        # Valida existencia y que no esté eliminada
         result_task = await session.exec(
             select(Task).where(
                 Task.id == task_id,
-                Task.user_id == assigned_by,
                 Task.deleted_at.is_(None)
             )
         )
         task = result_task.one_or_none()
         if not task:
-            raise ValueError("Task not found or access denied")
+            raise ValueError("Task not found")
 
-        # Valida existencia del usuario
+        # Valida propiedad de la tarea (solo el propietario puede asignar)
+        if task.user_id != assigned_by:
+            raise PermissionError("Solo el propietario puede asignar la tarea")
+
+        # Valida existencia del usuario destino
         user = await session.get(Usuario, user_id)
         if not user:
             raise ValueError("User not found")
@@ -38,7 +41,7 @@ class TaskAssignmentService:
             select(TaskAssignment).where(
                 TaskAssignment.task_id == task_id,
                 TaskAssignment.user_id == user_id,
-                )
+            )
         )
         if result.first():
             raise ValueError("Assignment already exists")
@@ -56,14 +59,19 @@ class TaskAssignmentService:
         return assignment
 
     @staticmethod
-    async def get_assigned_tasks(session: AsyncSession, user_id: UUID):
+    async def get_assigned_tasks(session: AsyncSession, user_id: UUID, filter_owner_id: UUID | None = None):
+        filters = [
+            TaskAssignment.user_id == user_id,
+            Task.deleted_at.is_(None),
+        ]
+        if filter_owner_id is not None:
+            filters.append(
+                (Task.user_id == filter_owner_id) | (TaskAssignment.asignado_por == filter_owner_id)
+            )
         result = await session.exec(
             select(TaskAssignment)
             .join(Task, Task.id == TaskAssignment.task_id)
-            .where(
-                TaskAssignment.user_id == user_id,
-                Task.deleted_at.is_(None)
-            )
+            .where(*filters)
         )
         return result.all()
 

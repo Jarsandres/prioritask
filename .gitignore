@@ -67,3 +67,12 @@ app/services/AI/modelos/
 checkpoints/
 node_modules/
 
+# Ephemeral multi-agent scratch runs (keep skills)
+.agents/*
+!.agents/skills/
+ORIGINAL_REQUEST.md
+PROJECT.md
+TEST_INFRA.md
+TEST_READY.md
+.claude/
+

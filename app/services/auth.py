@@ -34,10 +34,19 @@ def create_access_token(
         secret: str,
         *,
         expires_minutes: int = 60,
+        is_superuser: bool = False,
+        role: str = "USER",
 ) -> str:
     """Genera un token JWT de acceso para el usuario."""
     expire = datetime.now(UTC) + timedelta(minutes=expires_minutes)
-    return jwt.encode({"sub": str(sub), "type": "access", "exp": expire}, secret, algorithm=ALGORITHM)
+    payload = {
+        "sub": str(sub),
+        "type": "access",
+        "exp": expire,
+        "is_superuser": is_superuser,
+        "role": role,
+    }
+    return jwt.encode(payload, secret, algorithm=ALGORITHM)
 
 def create_refresh_token(
         sub: UUID | str,
@@ -62,6 +71,7 @@ async def create_user(payload, session: AsyncSession):
         email=payload.email,
         nombre=payload.nombre,
         hashed_password=hash_password(payload.password),
+        is_superuser=False,
     )
     session.add(user)
     await session.commit()
@@ -96,3 +106,37 @@ async def get_current_user(
     if not user or not user.is_active:
         raise cred_exc
     return user
+
+
+async def get_current_admin_user(
+        current_user: Usuario = Depends(get_current_user),
+) -> Usuario:
+    """
+    Dependencia que verifica que el usuario autenticado tenga privilegios de administrador.
+    Lanza HTTP 403 Forbidden si el usuario no es superuser / admin.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permisos de administrador para realizar esta acción.",
+        )
+    return current_user
+
+
+def require_role(*allowed_roles: str):
+    """
+    Dependencia parametrizable para exigir roles específicos.
+    Permite acceso si el usuario es superuser o si su rol está en allowed_roles.
+    """
+    async def role_checker(
+            current_user: Usuario = Depends(get_current_user),
+    ) -> Usuario:
+        user_role_str = "ADMIN" if current_user.is_superuser else "USER"
+        if current_user.is_superuser or user_role_str in allowed_roles:
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene los permisos requeridos para acceder a este recurso.",
+        )
+    return role_checker
+

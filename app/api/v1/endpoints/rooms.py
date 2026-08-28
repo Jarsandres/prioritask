@@ -1,17 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
 from app.models.room import Room
 from app.models.user import Usuario
-from app.schemas.responses import (
-    ERROR_INTERNAL_SERVER_ERROR,
-    ERROR_ROOM_DUPLICATE,
-    ERROR_ROOM_NOT_FOUND,
-)
 from app.schemas.room import RoomCreate, RoomRead, RoomUpdate
 from app.services.auth import get_current_user
 
@@ -31,6 +26,14 @@ async def create_room(
     session: AsyncSession = Depends(get_session),
 ):
     try:
+        if payload.parent_id is not None:
+            parent_room = await session.get(Room, payload.parent_id)
+            if not parent_room or parent_room.owner_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Hogar padre no encontrado"
+                )
+
         result = await session.exec(
             select(Room).where(
                 Room.nombre == payload.nombre,
@@ -39,7 +42,10 @@ async def create_room(
         )
         existing_room = result.one_or_none()
         if existing_room:
-            return ERROR_ROOM_DUPLICATE
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Ya existe una sala con este nombre para el usuario."
+            )
 
         room = Room(
             nombre=payload.nombre,
@@ -56,8 +62,14 @@ async def create_room(
             owner=current_user.email,
             parent_id=room.parent_id,
         )
+    except HTTPException:
+        raise
     except Exception:
-        return ERROR_INTERNAL_SERVER_ERROR
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor. Por favor, inténtelo más tarde."
+        )
 
 
 @router.get(
@@ -108,7 +120,10 @@ async def update_room(
 ):
     room = await session.get(Room, room_id)
     if not room or room.owner_id != current_user.id:
-        return ERROR_ROOM_NOT_FOUND
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sala no encontrada."
+        )
 
     result = await session.exec(
         select(Room).where(
@@ -118,7 +133,10 @@ async def update_room(
         )
     )
     if result.one_or_none():
-        return ERROR_ROOM_DUPLICATE
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Ya existe una sala con este nombre para el usuario."
+        )
 
     room.nombre = payload.nombre
     session.add(room)
@@ -131,3 +149,25 @@ async def update_room(
         owner=current_user.email,
         parent_id=room.parent_id,
     )
+
+
+@router.delete(
+    "/{room_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar Hogar",
+    description="Elimina un hogar del usuario.",
+)
+async def delete_room(
+    room_id: UUID,
+    current_user: Usuario = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    room = await session.get(Room, room_id)
+    if not room or room.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sala no encontrada."
+        )
+
+    await session.delete(room)
+    await session.commit()

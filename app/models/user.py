@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship, SQLModel
 
+from .enums import UserRole
+
 if TYPE_CHECKING:
     from .room import Room
     from .tag import Tag
@@ -25,3 +27,8 @@ class Usuario(SQLModel, table=True):
     tasks:   list["Task"]  = Relationship(back_populates="usuario")
     tasks_asignadas: list["TaskAssignment"] = Relationship(back_populates="user", sa_relationship_kwargs={"foreign_keys": "TaskAssignment.user_id"})
     etiquetas: list["Tag"] = Relationship(back_populates="usuario", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+
+    @property
+    def role(self) -> UserRole:
+        return UserRole.ADMIN if self.is_superuser else UserRole.USER
+
