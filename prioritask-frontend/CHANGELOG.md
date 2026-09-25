@@ -1,4 +1,6 @@
-# 📋 CHANGELOG & QA AUDIT RELEASE NOTES — Prioritask Frontend
+# Changelog
+
+All notable frontend changes are documented in this file.
 
 ## 🚀 Versión 1.2.0 (Modernización UI/UX Retro 90's, Modo Oscuro/Claro y Refactorización Arquitectónica) — [2026-09-25]
 
@@ -16,23 +18,30 @@
 
 ## 🚀 Versión 1.1.0-rc (Parches de Estabilidad, Estado y UX) — [2026-08-04]
 
-### 🔴 Correcciones Críticas (Critical & High Bugs)
-- **[FE-001] Debounce de Búsqueda y Filtros Stale (`TaskList.tsx`)**: Se corrigió el `useEffect` de búsqueda para que recargue al limpiar el input. Se agruparon dependencias de filtro mediante `useCallback`.
-- **[FE-002] Closure Stale y Doble Submit (`TaskList.tsx`)**: Eliminación de tareas actualizada a la forma setter funcional `setTareas(prev => ...)` y estado `deletingId`/`completingId` para deshabilitar botones por fila.
-- **[FE-003] Interceptor de Refresh Token (`api.ts`)**: Validación explícita de `newToken` antes de persistir en `localStorage` y propagación del error con `Promise.reject(refreshError)`.
-- **[FE-004] Memory Leaks por Unmounted `setState` (`Dashboard.tsx`)**: Implementación del patrón `isMounted` combinado con `AbortController` en peticiones concurrentes.
-- **[FE-012] Enlace Duplicado en Navegación (`Sidebar.tsx`)**: Eliminación del ítem duplicado "Historial".
+### Added
+- **FE-015** (`ErrorBoundary.tsx`): Implemented a global `<ErrorBoundary>` to prevent blank screens on runtime render errors.
+- **FE-016** (`src/hooks/useAsync.ts`): Introduced a reusable async hook with `AbortController` support.
 
-### 🟡 Mejoras de Robustez y UX (Medium Bugs)
-- **[FE-005] Estado `isSubmitting` en Formularios (`TaskForm.tsx`, `AssignTaskForm.tsx`, `Login.tsx`, `Register.tsx`)**: Bloqueo de entradas y botones durante peticiones en vuelo.
-- **[FE-006] Reemplazo Completo de Etiquetas (`TaskForm.tsx`)**: Ajustada la edición para permitir eliminar todas las etiquetas enviando array vacío al backend.
-- **[FE-007] Carga Reactiva de Asignaciones (`AssignTaskForm.tsx`)**: Eliminado `onBlur` en favor de `useEffect([userId])` reactivo con validación previa.
-- **[FE-008] SPA Router vs Full Reload (`Login.tsx`, `Register.tsx`)**: Reemplazados elementos `<a href>` por `<Link to>` de React Router.
-- **[FE-013] Refactor de Títulos Sugeridos (`RewriteTitles.tsx`)**: Eliminados `alert()` nativos y agregado `AbortController` + `acceptingId`.
-- **[FE-014] Eliminación de `alert()` Nativos (`TaskList.tsx`, `TaskForm.tsx`)**: Feedback de errores inline y validación de fechas mediante campos `.is-invalid` de Bootstrap.
-- **[FE-015] `<ErrorBoundary>` Global (`ErrorBoundary.tsx`)**: Captura de errores de renderizado en runtime para evitar pantalla en blanco.
-- **[FE-017] Modal de Confirmación Estilizado (`ConfirmModal.tsx`)**: Sustitución total de `window.confirm()` por modales reactivos.
+### Changed
+- **FE-005** (`TaskForm.tsx`, `AssignTaskForm.tsx`, `Login.tsx`, `Register.tsx`): Added `isSubmitting` state to block form interaction during in-flight requests.
+- **FE-006** (`TaskForm.tsx`): Updated edit behavior to support full tag replacement by allowing empty tag arrays.
+- **FE-007** (`AssignTaskForm.tsx`): Replaced `onBlur` with reactive `useEffect([userId])` plus validation.
+- **FE-008** (`Login.tsx`, `Register.tsx`): Replaced `<a href>` with React Router `<Link to>` for SPA-safe navigation.
+- **FE-010** (`src/types/task.ts`): Created shared task types module and reduced `any` usage across requests and mappings.
+- **FE-012** (`Sidebar.tsx`): Removed duplicated "Historial" navigation link.
+- **FE-013** (`RewriteTitles.tsx`): Replaced `alert()` with improved async UX using `AbortController` and `acceptingId`.
+- **FE-014** (`TaskList.tsx`, `TaskForm.tsx`): Removed native `alert()` usage and added inline error/date validation with Bootstrap `.is-invalid`.
+- **FE-017** (`ConfirmModal.tsx`): Replaced `window.confirm()` with a styled reactive confirmation modal.
 
-### 🔵 Arquitectura y Calidad de Código (Low / Maintenance)
-- **[FE-010] Módulo de Tipos Compartidos (`src/types/task.ts`)**: Eliminación de tipos `any` injustificados en peticiones y mapeos de API.
-- **[FE-016] Custom Hook `useAsync` (`src/hooks/useAsync.ts`)**: Abstracción reutilizable para llamadas asíncronas con gestión de `AbortController`.
+### Fixed
+- **FE-001** (`TaskList.tsx`): Fixed search `useEffect` reload behavior when clearing input and grouped filter dependencies with `useMemo`.
+- **FE-002** (`TaskList.tsx`): Migrated task deletion to functional state updates (`setTareas(prev => ...)`) and improved submit-state control with `deletingId`/`completingId`.
+- **FE-003** (`api.ts`): Added explicit `newToken` validation before persisting to `localStorage` and propagated refresh errors correctly with `Promise.reject(refreshError)`.
+- **FE-004** (`Dashboard.tsx`): Added `isMounted` + `AbortController` pattern to avoid memory leaks from `setState` on unmounted components.
+
+## QA Audit Notes
+
+### Severity Summary
+- **Critical & High**: FE-001, FE-002, FE-003, FE-004, FE-012
+- **Medium**: FE-005, FE-006, FE-007, FE-008, FE-013, FE-014, FE-015, FE-017
+- **Low / Maintenance**: FE-010, FE-016

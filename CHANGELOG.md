@@ -19,16 +19,16 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
-## 🚀 Versión 0.2.0-alpha (Refactorización de Seguridad, Base de Datos, IA Local con Ollama y Pruebas) — [2026-08-04]
+## 🚀 Versión 0.2.0-alpha / [1.1.0-rc] (Refactorización de Seguridad, Base de Datos, IA Local con Ollama y Pruebas) — [2026-08-04]
 
 ### 🔴 Correcciones Críticas y Seguridad (Security & Critical Fixes)
-- **[BE-SEC-001] Endpoint `/auth/refresh` Vulnerable a Sesiones Infinitas (`app/api/v1/endpoints/auth.py`)**:
+- **[BE-SEC-001 / BE-002 / BE-003] Endpoint `/auth/refresh` Vulnerable a Sesiones Infinitas (`app/api/v1/endpoints/auth.py`, `app/services/security.py`)**:
   - **Problema**: El endpoint `/refresh` utilizaba `verify_exp=False` por defecto y solo verificaba expiración si `token_type == "refresh"`, permitiendo renovar sesiones indefinidamente mediante tokens de acceso caducados.
   - **Solución**: Refactorizado el flujo de autenticación para exigir un `refresh_token` válido, verificando el tipo de token (`type == "refresh"`) e inspeccionando siempre la expiración (`verify_exp=True`).
-- **[BE-SEC-002] Vulnerabilidad IDOR y Validación de Propiedad en Historial (`app/api/v1/endpoints/tasks.py`)**:
+- **[BE-SEC-002 / BE-009] Vulnerabilidad IDOR y Validación de Propiedad en Historial (`app/api/v1/endpoints/tasks.py`)**:
   - **Problema**: `GET /api/v1/tasks/{task_id}/history` permitía consultar el historial de cualquier tarea sin verificar la pertenencia al usuario autenticado (`user_id == current_user.id`).
   - **Solución**: Agregada validación estricta de propiedad de la tarea (retornando `403 Forbidden` o `404 Not Found` en caso de discrepancia) y filtrado de tareas eliminadas.
-- **[BE-SEC-003] Fuga de Datos en Consultas Globales por Falta de Filtro Soft Delete (`app/api/v1/endpoints/tasks.py`, `tags.py`, `tasks_ai.py`, `task_assignment.py`)**:
+- **[BE-SEC-003 / BE-006] Fuga de Datos en Consultas Globales por Falta de Filtro Soft Delete (`app/api/v1/endpoints/tasks.py`, `tags.py`, `tasks_ai.py`, `task_assignment.py`)**:
   - **Problema**: `GET /api/v1/tasks/history`, `get_assigned_tasks` y los endpoints de IA consultaban registros de tareas eliminadas por falta de la condición `Task.deleted_at.is_(None)`.
   - **Solución**: Refactorizadas todas las consultas SQLModel/SQLAlchemy aplicando `.where(Task.deleted_at.is_(None))` de forma consistente.
 - **[BE-SEC-004] Reemplazo de Retornos de Tupla por `raise HTTPException` (`app/api/v1/endpoints/auth.py`)**:
@@ -39,7 +39,7 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 - **[BE-DB-001] Implementación de Soft Delete en Eliminación de Tareas (`app/api/v1/endpoints/tasks.py`)**:
   - **Problema**: `DELETE /api/v1/tasks/{task_id}` realizaba borrado físico (`session.delete(task)`), rompiendo las restricciones de clave foránea en la tabla de historial `TaskHistory`.
   - **Solución**: Implementado Soft Delete estableciendo `task.deleted_at = datetime.now(timezone.utc)` y creando un registro de historial del tipo `DELETED`.
-- **[BE-DB-002] Índice Único Parcial para Títulos Reutilizables (`app/models/task.py`)**:
+- **[BE-DB-002 / BE-004] Índice Único Parcial para Títulos Reutilizables (`app/models/task.py`)**:
   - **Problema**: La restricción `UniqueConstraint("user_id", "titulo")` impedía a los usuarios crear nuevas tareas con el mismo título que una tarea previamente eliminada mediante Soft Delete.
   - **Solución**: Sustituido `UniqueConstraint` por un índice único parcial en PostgreSQL/SQLite: `Index("unique_user_active_task_title", "user_id", "titulo", unique=True, postgresql_where=text("deleted_at IS NULL"), sqlite_where=text("deleted_at IS NULL"))`.
 - **[BE-DB-003] Aislamiento de Base de Datos de Pruebas (`tests/conftest.py`)**:
@@ -63,17 +63,17 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   - Removidos `sentence-transformers`, `setfit`, `sentencepiece`, `sacremoses`, `torch` y `datasets`, aligerando el footprint del proyecto.
 
 ### 🟢 Refactorización y Estandarización de Suite de Pruebas (Pytest & AsyncClient)
-- **[BE-TEST-001] Reorganización Estructurada (`tests/unit/` y `tests/integration/`)**:
-  - Reorganizados 26 archivos desordenados de la raíz de `tests/` en carpetas especializadas `unit/` e `integration/`.
+- **[BE-TEST-001 / BE-010] Reorganización Estructurada y Cobertura Expandida (`tests/unit/` y `tests/integration/`)**:
+  - Reorganizados 26 archivos de tests en carpetas especializadas `unit/` e `integration/`.
 - **[BE-TEST-002] Descubrimiento de Tests Huérfanos**:
-  - Renombrado e integrado `tests_delete_task.py` para asegurar que pytest ejecute las pruebas de borrado lómico e historial.
+  - Renombrado e integrado `tests_delete_task.py` para asegurar que pytest ejecute las pruebas de borrado lógico e historial.
 - **[BE-TEST-003] Migración Integral a `httpx.AsyncClient`**:
   - Eliminado `TestClient` sincrónico en módulos de `rooms` y `auth`, estandarizando todas las pruebas de integración con `AsyncClient` y `asyncio: mode=AUTO`.
 - **[BE-TEST-004] Limpieza de Tests Obsoletos**:
   - Eliminados `test_sample.py` y `test_get_task_history.py`. Eliminadas funciones duplicadas como `test_room_create_with_parent_id`.
 - **[BE-TEST-005] Sobreescritura Dinámica de Dependencias de DB en Pruebas**:
   - Añadido `app.dependency_overrides[get_session] = override_get_session` y fixture `reset_test_db` en scope `function` con `create_all`/`drop_all` para garantizar independencia total entre tests.
-- **[BE-TEST-006] Pinning de Compatibilidad en `pyproject.toml`**:
+- **[BE-TEST-006 / BE-012] Pinning de Compatibilidad en `pyproject.toml`**:
   - Fijada la versión `bcrypt==4.0.1` para resolver conflictos de hashing con `passlib`.
 
 ---
