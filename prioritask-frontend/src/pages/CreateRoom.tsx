@@ -1,14 +1,15 @@
-import { useState, useContext } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import api from "../api";
-import { RoomContext } from "../context/RoomContext";
+import { useRoom } from "../context/RoomContext";
+import RetroWindow from "../components/common/RetroWindow";
 
 const CreateRoom = () => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { setRoomId } = useContext(RoomContext);
+  const { setRoomId } = useRoom();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,31 +40,62 @@ const CreateRoom = () => {
   };
 
   return (
-    <div className="container mt-4">
-      <h2>Crea tu hogar para comenzar</h2>
-      {error && <div className="alert alert-danger">{error}</div>}
-      <form onSubmit={handleSubmit}>
-        <div className="mb-3">
-          <label htmlFor="room-name" className="form-label">Nombre del hogar</label>
-          <input
-            id="room-name"
-            type="text"
-            className="form-control"
-            placeholder="Mi Casa"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            disabled={isSubmitting}
-          />
+    <div className="container-fluid py-2" style={{ maxWidth: "680px" }}>
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+          <h2 className="retro-page-title">
+            <span>🏠</span> CONFIGURACIÓN DE HOGAR / CREATE_ROOM.EXE
+          </h2>
+          <p className="retro-page-subtitle">
+            Crea tu espacio colaborativo para sincronizar las tareas del grupo
+          </p>
         </div>
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={!name || isSubmitting}
+        <Link
+          to="/dashboard"
+          className="btn-retro btn-retro-outline"
+          style={{ minHeight: "40px" }}
         >
-          {isSubmitting ? "Creando..." : "Crear"}
-        </button>
-      </form>
+          <span>⬅</span> <span>Volver</span>
+        </Link>
+      </div>
+
+      <RetroWindow
+        title="CREATE_ROOM.EXE - ASISTENTE DE CREACIÓN"
+        icon="🏠"
+      >
+        {error && <div className="alert alert-danger mb-4">{error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label htmlFor="room-name" className="form-label fw-bold small text-muted">
+              NOMBRE DEL HOGAR O ESPACIO OPERATIVO *
+            </label>
+            <input
+              id="room-name"
+              type="text"
+              className="form-control retro-input"
+              placeholder="Ej. Casa Principal, Oficina Compartida, Loft..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              disabled={isSubmitting}
+            />
+            <small className="text-muted mt-1 d-block">
+              Este nombre identificará el espacio para ti y los miembros colaboradores.
+            </small>
+          </div>
+
+          <button
+            type="submit"
+            className="btn-retro btn-retro-primary w-100"
+            style={{ minHeight: "48px" }}
+            disabled={!name.trim() || isSubmitting}
+          >
+            <span>{isSubmitting ? "⏳" : "💾"}</span>
+            <span>{isSubmitting ? "Inicializando Hogar..." : "Crear Hogar"}</span>
+          </button>
+        </form>
+      </RetroWindow>
     </div>
   );
 };

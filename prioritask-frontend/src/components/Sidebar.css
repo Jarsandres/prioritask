@@ -1,7 +1,7 @@
 .sidebar {
   width: 220px;
-  background-color: #337ab7; /* Azul principal */
-  color: white;
+  background-color: var(--sidebar-bg, #2563eb);
+  color: var(--sidebar-text, white);
   height: 100vh;
   position: fixed;
   left: 0;
@@ -10,9 +10,10 @@
   flex-direction: column;
   padding: 20px 15px;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  border-right: 2px solid var(--window-border, #1e293b);
   font-family: 'Inter', sans-serif;
   z-index: 1000;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease;
   box-sizing: border-box;
 }
 
@@ -20,12 +21,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 25px;
 }
 
 .logo {
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 800;
   margin: 0;
   color: #ffffff;
   letter-spacing: -0.5px;
@@ -160,4 +161,3 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-

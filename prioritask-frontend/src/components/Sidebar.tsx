@@ -1,4 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useTheme } from "../context/ThemeContext";
 import "./Sidebar.css";
 
 interface SidebarProps {
@@ -9,6 +10,7 @@ interface SidebarProps {
 const Sidebar = ({ isOpen = false, onClose }: SidebarProps) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const token = localStorage.getItem("token");
 
   // Ocultar Sidebar si no hay token o si está en login o register
@@ -73,6 +75,16 @@ const Sidebar = ({ isOpen = false, onClose }: SidebarProps) => {
           </li>
 
           <li className="nav-bottom">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="theme-toggle-sidebar-btn"
+              aria-label="Alternar tema"
+              title="Alternar entre modo claro y oscuro"
+            >
+              <span>{theme === "dark" ? "☀️" : "🌙"}</span>
+              <span>{theme === "dark" ? "Modo Claro" : "Modo Oscuro"}</span>
+            </button>
             <NavLink to="/profile" onClick={handleNavClick} className={({ isActive }) => isActive ? "active" : ""}>
               <span role="img" aria-label="Profile">👤</span> Perfil
             </NavLink>
@@ -87,4 +99,3 @@ const Sidebar = ({ isOpen = false, onClose }: SidebarProps) => {
 };
 
 export default Sidebar;
-

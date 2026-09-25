@@ -1,10 +1,13 @@
-import { useEffect, useState, useContext, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
-import { TaskUpdateContext } from "../context/TaskUpdateContext";
+import { useTaskUpdate } from "../context/TaskUpdateContext";
 import { getCurrentRoomId } from "../utils/room";
 import ConfirmModal from "./ConfirmModal";
 import type { Task } from "../types/task";
+import RetroWindow from "./common/RetroWindow";
+import TaskCard from "./common/TaskCard";
+import EmptyState from "./common/EmptyState";
 
 // FE-010: Reutilizamos la interfaz Task del módulo de tipos compartidos
 
@@ -25,7 +28,7 @@ const TaskList = () => {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   const navigate = useNavigate();
-  const { notifyUpdate } = useContext(TaskUpdateContext);
+  const { version, notifyUpdate } = useTaskUpdate();
 
   // FE-001: fetchTareas en useCallback con sus dependencias de filtro
   // FE-009: Eliminadas las variables `token` que no se usaban (el interceptor las gestiona)
@@ -52,22 +55,14 @@ const TaskList = () => {
   }, [estado, categoria, fechaLimite, busqueda]);
 
   // FE-001: Carga inicial y reacción al estado global de actualizaciones
-  const { version } = useContext(TaskUpdateContext);
   useEffect(() => {
     fetchTareas();
   }, [fetchTareas, version]);
-
-  // FE-001: useEffect separado para filtros discretos (sin debounce)
-  // Nota: fetchTareas ya incluye estado/categoria/fechaLimite en sus deps,
-  // por lo que el useEffect de arriba se disparará automáticamente cuando cambian.
-  // Añadimos un efecto explícito para claridad y para manejar el reset de busqueda.
 
   // FE-001: debounce para búsqueda de texto con useRef para estabilidad del timer
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // FE-001: Se elimina la condición `if (busqueda)` para que también
-    // dispare cuando busqueda queda vacío (limpieza del filtro)
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       fetchTareas();
@@ -77,8 +72,6 @@ const TaskList = () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, [busqueda]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Nota: fetchTareas no se incluye aquí porque el debounce de texto ya lo maneja arriba.
-  // El useEffect de [fetchTareas, version] cubre los cambios de estado/categoria/fechaLimite.
 
   // FE-017: Apertura de modal de confirmación
   const promptDelete = (tarea: Task) => {
@@ -123,27 +116,50 @@ const TaskList = () => {
     }
   };
 
-  if (loading) return <p>Cargando tareas...</p>;
+  const handleClearFilters = () => {
+    setEstado("");
+    setCategoria("");
+    setFechaLimite("");
+    setBusqueda("");
+  };
+
+  if (loading) {
+    return (
+      <div className="container mt-4 d-flex justify-content-center">
+        <RetroWindow
+          title="SISTEMA PRIORITASK"
+          className="p-4 text-center my-5"
+          style={{ maxWidth: "420px", width: "100%" }}
+        >
+          <div className="py-4">
+            <div className="spinner-border text-primary mb-3" role="status">
+              <span className="visually-hidden">Cargando...</span>
+            </div>
+            <p className="fw-bold mb-1">Cargando tareas...</p>
+            <small className="text-muted">Leyendo registros del sistema...</small>
+          </div>
+        </RetroWindow>
+      </div>
+    );
+  }
 
   return (
     <>
       <div className="container mt-4">
-        <div className="card p-4 mb-4 shadow-sm">
-          <h5 className="mb-3">
-            <span role="img" aria-label="Filtro">
-              🔎
-            </span>{" "}
-            Filtrar tareas
-          </h5>
-
+        {/* Panel de Filtros Retro Window */}
+        <RetroWindow
+          title="FILTRAR TAREAS"
+          icon="🔎"
+          className="mb-4"
+        >
           <div className="row g-3 align-items-end">
-            <div className="col-md-3">
-              <label htmlFor="estado" className="form-label">
+            <div className="col-12 col-sm-6 col-md-3">
+              <label htmlFor="estado" className="form-label fw-bold small">
                 Estado
               </label>
               <select
                 id="estado"
-                className="form-select"
+                className="form-select retro-select"
                 value={estado}
                 onChange={(e) => setEstado(e.target.value)}
               >
@@ -154,13 +170,13 @@ const TaskList = () => {
               </select>
             </div>
 
-            <div className="col-md-3">
-              <label htmlFor="categoria" className="form-label">
+            <div className="col-12 col-sm-6 col-md-3">
+              <label htmlFor="categoria" className="form-label fw-bold small">
                 Categoría
               </label>
               <select
                 id="categoria"
-                className="form-select"
+                className="form-select retro-select"
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value)}
               >
@@ -172,57 +188,79 @@ const TaskList = () => {
               </select>
             </div>
 
-            <div className="col-md-2">
-              <label htmlFor="fechaLimite" className="form-label">
+            <div className="col-12 col-sm-6 col-md-2">
+              <label htmlFor="fechaLimite" className="form-label fw-bold small">
                 Fecha límite
               </label>
               <input
                 id="fechaLimite"
                 type="date"
-                className="form-control"
+                className="form-control retro-input"
                 value={fechaLimite}
                 onChange={(e) => setFechaLimite(e.target.value)}
               />
             </div>
 
-            <div className="col-md-4">
-              <label htmlFor="busqueda" className="form-label">
+            <div className="col-12 col-sm-6 col-md-4">
+              <label htmlFor="busqueda" className="form-label fw-bold small">
                 Búsqueda por texto
               </label>
               <input
                 id="busqueda"
                 type="text"
-                className="form-control"
+                className="form-control retro-input"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Buscar por título o descripción"
               />
             </div>
 
-            <div className="col-12 d-flex justify-content-end">
+            <div className="col-12 d-flex justify-content-end gap-2 flex-wrap">
               <button
-                className="btn btn-primary"
+                type="button"
+                className="btn-retro btn-retro-outline"
+                style={{ minHeight: "44px" }}
+                onClick={handleClearFilters}
+              >
+                <span>🔄</span> Limpiar filtros
+              </button>
+              <button
+                type="button"
+                className="btn-retro btn-retro-primary"
+                style={{ minHeight: "44px" }}
                 onClick={fetchTareas}
                 disabled={loading}
               >
-                Aplicar filtros
+                <span>🔎</span> Aplicar filtros
               </button>
             </div>
           </div>
-        </div>
-        <div className="d-flex justify-content-end mt-3 gap-2">
-          <button
-            className="btn btn-outline-secondary"
-            onClick={() => navigate("/tasks/rewrite")}
-          >
-            🧠 Mejorar títulos
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => navigate("/tasks/create")}
-          >
-            Crear nueva tarea
-          </button>
+        </RetroWindow>
+
+        {/* Acciones de la vista */}
+        <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+          <h2 className="mb-0 fw-bold d-flex align-items-center gap-2">
+            <span role="img" aria-label="Lista">📝</span>
+            <span>Tareas pendientes</span>
+          </h2>
+          <div className="d-flex gap-2 flex-wrap">
+            <button
+              type="button"
+              className="btn-retro btn-retro-magenta"
+              style={{ minHeight: "44px" }}
+              onClick={() => navigate("/tasks/rewrite")}
+            >
+              🧠 Mejorar títulos
+            </button>
+            <button
+              type="button"
+              className="btn-retro btn-retro-primary"
+              style={{ minHeight: "44px" }}
+              onClick={() => navigate("/tasks/create")}
+            >
+              ➕ Crear nueva tarea
+            </button>
+          </div>
         </div>
 
         {/* FE-014: Banner de error inline para acciones destructivas/mutaciones */}
@@ -237,67 +275,33 @@ const TaskList = () => {
           </div>
         )}
 
-        <h2 className="mb-4 mt-4">
-          <span role="img" aria-label="Lista">
-            📝
-          </span>{" "}
-          Tareas pendientes
-        </h2>
-
+        {/* Lista en cuadrícula de tarjetas Retro Window o Empty State */}
         {tareas.length === 0 ? (
-          <p>No tienes tareas aún.</p>
+          <div className="retro-window p-4 text-center my-4">
+            <EmptyState
+              icon="🖥️"
+              badge="[ OK · SISTEMA DESPEJADO ]"
+              title="¡Escritorio despejado!"
+              description="No hay tareas pendientes para los filtros seleccionados. Disfruta tu momento o crea una nueva tarea."
+              actionLabel="➕ Crear nueva tarea"
+              onAction={() => navigate("/tasks/create")}
+            />
+          </div>
         ) : (
-          <ul className="list-group">
+          <div className="row g-3">
             {tareas.map((tarea) => (
-              <li
-                key={tarea.id}
-                className={`list-group-item d-flex justify-content-between align-items-center ${
-                  tarea.estado === "DONE" ? "bg-light text-muted" : ""
-                }`}
-              >
-                <div>
-                  <strong>{tarea.titulo}</strong> <br />
-                  <small className="text-muted">
-                    {tarea.categoria} · {tarea.estado}
-                  </small>
-                  <div className="mt-1">
-                    {tarea.tags &&
-                      tarea.tags.map((tag) => (
-                        <span key={tag.id} className="badge text-bg-info tag-badge">
-                          #{tag.nombre}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-
-                <div>
-                  {tarea.estado !== "DONE" && (
-                    <button
-                      className="btn btn-sm btn-success me-2"
-                      onClick={() => marcarComoCompletada(tarea.id)}
-                      disabled={completingId === tarea.id || deletingId === tarea.id}
-                    >
-                      {completingId === tarea.id ? "..." : "✅ Completar"}
-                    </button>
-                  )}
-                  <button
-                    className="btn btn-sm btn-outline-primary me-2"
-                    onClick={() => navigate(`/tasks/edit/${tarea.id}`)}
-                    disabled={deletingId === tarea.id || completingId === tarea.id}
-                  >
-                    Editar
-                  </button>
-                  <button
-                    className="btn btn-sm btn-outline-danger"
-                    onClick={() => promptDelete(tarea)}
-                    disabled={deletingId === tarea.id || completingId === tarea.id}
-                  >
-                    {deletingId === tarea.id ? "Eliminando..." : "Eliminar"}
-                  </button>
-                </div>
-              </li>
+              <div key={tarea.id} className="col-12 col-md-6 col-lg-4">
+                <TaskCard
+                  task={tarea}
+                  onComplete={marcarComoCompletada}
+                  onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+                  onDelete={promptDelete}
+                  isCompleting={completingId === tarea.id}
+                  isDeleting={deletingId === tarea.id}
+                />
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 

@@ -1,9 +1,12 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect } from "react";
 import api from "../api";
 import { useNavigate, useParams } from "react-router-dom";
 import Select from "react-select";
-import { TaskUpdateContext } from "../context/TaskUpdateContext";
+import { useTaskUpdate } from "../context/TaskUpdateContext";
+import { useTheme } from "../context/ThemeContext";
 import { getCurrentRoomId } from "../utils/room";
+import RetroWindow from "./common/RetroWindow";
+import { getRetroSelectStyles } from "../utils/selectStyles";
 import type { Tag } from "../types/task";
 
 // FE-010: Tag importado desde tipos compartidos
@@ -30,7 +33,8 @@ const TaskForm = () => {
 
   const { taskId } = useParams();
   const navigate = useNavigate();
-  const { notifyUpdate } = useContext(TaskUpdateContext);
+  const { notifyUpdate } = useTaskUpdate();
+  const { theme } = useTheme();
 
   const today = new Date().toISOString().split("T")[0];
   const [dateError, setDateError] = useState("");
@@ -195,152 +199,198 @@ const TaskForm = () => {
     }
   };
 
+  const selectStyles = getRetroSelectStyles<{ value: string; label: string }, true>(theme);
 
   return (
-    <div className="container mt-4">
+    <div className="container mt-4 mb-5" style={{ maxWidth: "760px" }}>
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h2 className="mb-0">{taskId ? "Editar tarea" : "Crear nueva tarea"}</h2>
         <button
           type="button"
-          className="btn btn-secondary"
+          className="btn-retro btn-retro-outline"
+          style={{ minHeight: "40px" }}
           onClick={() => navigate("/tasks")}
           disabled={isSubmitting}
         >
-          Volver
+          ⬅ Volver a Tareas
         </button>
       </div>
-      {error && <div className="alert alert-danger">{error}</div>}
 
-      <form onSubmit={handleSubmit}>
-        <div className="mb-3">
-          <label htmlFor="titulo" className="form-label">Título</label>
-          <input
-            id="titulo"
-            type="text"
-            className="form-control"
-            value={titulo}
-            onChange={(e) => setTitulo(e.target.value)}
-            required
-            disabled={isSubmitting}
-          />
-        </div>
-
-        <div className="mb-3">
-          <label htmlFor="descripcion" className="form-label">Descripción</label>
-          <textarea
-            id="descripcion"
-            className="form-control"
-            value={descripcion}
-            onChange={(e) => setDescripcion(e.target.value)}
-            disabled={isSubmitting}
-          />
-        </div>
-
-        <div className="mb-3">
-          <label htmlFor="categoria" className="form-label">Categoría</label>
-          <select
-            id="categoria"
-            className="form-select"
-            value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
-            disabled={isSubmitting}
-          >
-            <option value="LIMPIEZA">Limpieza</option>
-            <option value="COMPRA">Compra</option>
-            <option value="MANTENIMIENTO">Mantenimiento</option>
-            <option value="OTRO">Otro</option>
-          </select>
-        </div>
-
-        <div className="mb-3">
-          <label htmlFor="peso" className="form-label">Peso</label>
-          <input
-            id="peso"
-            type="number"
-            className="form-control"
-            value={peso}
-            onChange={(e) => setPeso(Number(e.target.value))}
-            min="1"
-            max="5"
-            disabled={isSubmitting}
-          />
-        </div>
-
-        {/* FE-005: Botón AI deshabilitado mientras sugiere o se hace submit */}
-        <button
-          type="button"
-          className="btn btn-outline-secondary mb-2"
-          onClick={handleSuggest}
-          disabled={isSuggesting || isSubmitting}
-        >
-          {isSuggesting ? "Analizando..." : "🧠 Sugerir prioridad"}
-        </button>
-
-        {sugerencia && (
-          <div className="alert alert-info p-2" role="alert">
-            Prioridad sugerida: <strong>{sugerencia.prioridad}</strong> -{" "}
-            {sugerencia.motivo}
+      <RetroWindow
+        title={taskId ? "EDITAR TAREA" : "CREAR NUEVA TAREA"}
+        icon={taskId ? "✏️" : "📝"}
+      >
+        {error && (
+          <div className="alert alert-danger mb-4" role="alert">
+            {error}
           </div>
         )}
 
-        <div className="mb-3">
-          <label htmlFor="dueDate" className="form-label">Fecha de vencimiento</label>
-          <input
-            id="dueDate"
-            type="date"
-            className={`form-control ${dateError ? "is-invalid" : ""}`}
-            value={dueDate}
-            min={today}
-            onChange={handleDueDateChange}
-            disabled={isSubmitting}
-          />
-          {dateError && <div className="invalid-feedback">{dateError}</div>}
-        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="mb-3">
+            <label htmlFor="titulo" className="form-label fw-bold">
+              Título *
+            </label>
+            <input
+              id="titulo"
+              type="text"
+              className="form-control retro-input"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              placeholder="Ej. Limpiar la cocina a fondo"
+              required
+              disabled={isSubmitting}
+            />
+          </div>
 
-        <div className="mb-3">
-          <label htmlFor="estado-task" className="form-label">Estado</label>
-          <select
-            id="estado-task"
-            className="form-select"
-            value={estado}
-            onChange={(e) => setEstado(e.target.value)}
+          <div className="mb-3">
+            <label htmlFor="descripcion" className="form-label fw-bold">
+              Descripción
+            </label>
+            <textarea
+              id="descripcion"
+              className="form-control"
+              style={{
+                minHeight: "88px",
+                fontSize: "16px",
+                border: "2px solid #1e293b",
+                borderRadius: "8px",
+              }}
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              placeholder="Detalles sobre lo que se necesita hacer..."
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="row g-3 mb-3">
+            <div className="col-12 col-md-6">
+              <label htmlFor="categoria" className="form-label fw-bold">
+                Categoría
+              </label>
+              <select
+                id="categoria"
+                className="form-select retro-select"
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value)}
+                disabled={isSubmitting}
+              >
+                <option value="LIMPIEZA">Limpieza 🧹</option>
+                <option value="COMPRA">Compra 🛒</option>
+                <option value="MANTENIMIENTO">Mantenimiento 🔧</option>
+                <option value="OTRO">Otro 📁</option>
+              </select>
+            </div>
+
+            <div className="col-12 col-md-6">
+              <label htmlFor="peso" className="form-label fw-bold">
+                Peso (1 a 5)
+              </label>
+              <input
+                id="peso"
+                type="number"
+                className="form-control retro-input"
+                value={peso}
+                onChange={(e) => setPeso(Number(e.target.value))}
+                min="1"
+                max="5"
+                disabled={isSubmitting}
+              />
+            </div>
+          </div>
+
+          {/* FE-005: Botón AI destacado en magenta retro táctil */}
+          <div className="mb-3">
+            <button
+              type="button"
+              className="btn-retro btn-retro-magenta w-100 py-2 d-flex align-items-center justify-content-center gap-2"
+              style={{ minHeight: "44px" }}
+              onClick={handleSuggest}
+              disabled={isSuggesting || isSubmitting}
+            >
+              <span>🧠</span>
+              <span>{isSuggesting ? "Analizando con IA..." : "Sugerir prioridad con IA"}</span>
+            </button>
+          </div>
+
+          {sugerencia && (
+            <div className="retro-ai-alert p-3 mb-3" role="alert">
+              <div className="fw-bold mb-1 d-flex align-items-center gap-2">
+                <span>💡</span> Sugerencia de Prioridad: {sugerencia.prioridad.toUpperCase()}
+              </div>
+              <p className="mb-0 small">{sugerencia.motivo}</p>
+            </div>
+          )}
+
+          <div className="row g-3 mb-3">
+            <div className="col-12 col-md-6">
+              <label htmlFor="dueDate" className="form-label fw-bold">
+                Fecha de vencimiento
+              </label>
+              <input
+                id="dueDate"
+                type="date"
+                className={`form-control retro-input ${dateError ? "is-invalid" : ""}`}
+                value={dueDate}
+                min={today}
+                onChange={handleDueDateChange}
+                disabled={isSubmitting}
+              />
+              {dateError && <div className="invalid-feedback">{dateError}</div>}
+            </div>
+
+            <div className="col-12 col-md-6">
+              <label htmlFor="estado-task" className="form-label fw-bold">
+                Estado
+              </label>
+              <select
+                id="estado-task"
+                className="form-select retro-select"
+                value={estado}
+                onChange={(e) => setEstado(e.target.value)}
+                disabled={isSubmitting}
+              >
+                <option value="TODO">Pendiente</option>
+                <option value="IN_PROGRESS">En progreso</option>
+                <option value="DONE">Completada</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="form-label fw-bold">Etiquetas</label>
+            <Select
+              isMulti
+              options={tags.map((t) => ({ value: t.id, label: t.nombre }))}
+              value={selectedTags}
+              onChange={(opts) =>
+                setSelectedTags(opts as { value: string; label: string }[])
+              }
+              classNamePrefix="select"
+              isDisabled={isSubmitting}
+              styles={selectStyles}
+            />
+          </div>
+
+          {/* FE-005: Botón submit táctil con altura min 48px */}
+          <button
+            type="submit"
+            className="btn-retro btn-retro-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2"
+            style={{ minHeight: "48px" }}
             disabled={isSubmitting}
           >
-            <option value="TODO">Pendiente</option>
-            <option value="IN_PROGRESS">En progreso</option>
-            <option value="DONE">Completada</option>
-          </select>
-        </div>
-
-        <div className="mb-3">
-          <label className="form-label">Etiquetas</label>
-          <Select
-            isMulti
-            options={tags.map((t) => ({ value: t.id, label: t.nombre }))}
-            value={selectedTags}
-            onChange={(opts) =>
-              setSelectedTags(opts as { value: string; label: string }[])
-            }
-            classNamePrefix="select"
-            isDisabled={isSubmitting}
-          />
-        </div>
-
-        {/* FE-005: Botón submit deshabilitado durante el envío */}
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={isSubmitting}
-        >
-          {isSubmitting
-            ? taskId
-              ? "Actualizando..."
-              : "Creando..."
-            : taskId
-            ? "Actualizar"
-            : "Crear"}
-        </button>
-      </form>
+            <span>{isSubmitting ? "⏳" : taskId ? "💾" : "➕"}</span>
+            <span>
+              {isSubmitting
+                ? taskId
+                  ? "Actualizando..."
+                  : "Creando..."
+                : taskId
+                ? "Actualizar Tarea"
+                : "Guardar Tarea"}
+            </span>
+          </button>
+        </form>
+      </RetroWindow>
     </div>
   );
 };

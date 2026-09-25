@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../api";
+import RetroWindow from "../components/common/RetroWindow";
+import EmptyState from "../components/common/EmptyState";
 
 interface GroupedTask {
   id: string;
@@ -30,13 +33,12 @@ const GroupedTasks = () => {
         );
         setGroups(res.data.grupos);
       } catch (err: unknown) {
-        // No mostrar error si fue cancelado por desmontaje
         if (err instanceof Error && err.name === "CanceledError") {
           return;
         }
         console.error(err);
         // FE-011: Error en UI, no alert() bloqueante
-        setError("Error al agrupar tareas. Inténtalo de nuevo.");
+        setError("Error al agrupar tareas con IA. Inténtalo de nuevo.");
       } finally {
         setLoading(false);
       }
@@ -50,34 +52,91 @@ const GroupedTasks = () => {
     };
   }, []);
 
-  if (loading) return <p>Cargando grupos...</p>;
+  const groupEntries = Object.entries(groups);
 
   return (
-    <div className="container mt-4">
-      <h2>🧠 Tareas agrupadas</h2>
+    <div className="container-fluid py-2">
+      {/* Encabezado Retro */}
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+          <h2 className="retro-page-title">
+            <span>🧠</span> CLÚSTERES DE IA / AI_CLUSTERING.SYS
+          </h2>
+          <p className="retro-page-subtitle">
+            Agrupación semántica e inteligente de tus tareas pendientes
+          </p>
+        </div>
+        <div className="d-flex gap-2">
+          <Link to="/tasks" className="btn-retro btn-retro-outline" style={{ minHeight: "40px" }}>
+            <span>📝</span> <span>Ver Tareas</span>
+          </Link>
+          <Link to="/tasks/rewrite" className="btn-retro btn-retro-magenta" style={{ minHeight: "40px" }}>
+            <span>✨</span> <span>Mejorar Títulos</span>
+          </Link>
+        </div>
+      </div>
 
       {/* FE-011: Error renderizado en lugar de alert() */}
       {error && (
-        <div className="alert alert-danger" role="alert">
+        <div className="alert alert-danger mb-4" role="alert">
           {error}
         </div>
       )}
 
-      {!error && Object.keys(groups).length === 0 ? (
-        <p>No se encontraron grupos.</p>
+      {loading ? (
+        <RetroWindow
+          title="PROCESANDO CLÚSTERES DE IA..."
+          icon="🧠"
+          variant="magenta"
+        >
+          <EmptyState
+            icon="⏳"
+            title="Analizando patrones semánticos..."
+            description="El motor neuronal está agrupando tus tareas según afinidad operativa."
+          />
+        </RetroWindow>
+      ) : groupEntries.length === 0 ? (
+        <RetroWindow
+          title="AI_CLUSTERING.SYS / RESULTADO"
+          icon="🧠"
+          variant="magenta"
+        >
+          <EmptyState
+            icon="📁"
+            title="No se encontraron clústeres"
+            description="No hay suficientes tareas o ya están perfectamente ordenadas."
+            actionLabel="➕ Crear Tarea"
+            actionTo="/tasks/create"
+          />
+        </RetroWindow>
       ) : (
-        Object.entries(groups).map(([name, tasks]) => (
-          <div className="card mb-3" key={name}>
-            <div className="card-header fw-bold">{name}</div>
-            <ul className="list-group list-group-flush">
-              {tasks.map((t) => (
-                <li key={t.id} className="list-group-item">
-                  {t.titulo}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))
+        <div className="d-flex flex-column gap-3">
+          {groupEntries.map(([name, tasks]) => (
+            <RetroWindow
+              key={name}
+              title={`Cluster: ${name}`}
+              icon="🧠"
+              variant="magenta"
+              badge={
+                <span className="retro-badge retro-badge-high">
+                  {tasks.length} tareas
+                </span>
+              }
+            >
+              <div className="d-flex flex-column gap-2">
+                {tasks.map((t) => (
+                  <div key={t.id} className="retro-cluster-item">
+                    <span className="retro-cluster-bullet">💾</span>
+                    <span className="retro-cluster-task-title">{t.titulo}</span>
+                    <span className="retro-badge retro-badge-todo">
+                      #{t.id.slice(0, 6)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </RetroWindow>
+          ))}
+        </div>
       )}
     </div>
   );

@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import api from "../api";
 import Select from "react-select";
 import { getCurrentRoomId } from "../utils/room";
+import { useTheme } from "../context/ThemeContext";
+import RetroWindow from "./common/RetroWindow";
+import EmptyState from "./common/EmptyState";
+import { getRetroSelectStyles } from "../utils/selectStyles";
 import type { Assignment, SelectOption, Task } from "../types/task";
 
 // FE-010: Tipos importados del módulo compartido
@@ -17,6 +21,8 @@ const AssignTaskForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Estado de carga para el botón "Quitar" (por fila)
   const [removingTaskId, setRemovingTaskId] = useState<string | null>(null);
+
+  const { theme } = useTheme();
 
   // Carga inicial de usuarios y tareas
   useEffect(() => {
@@ -140,69 +146,119 @@ const AssignTaskForm = () => {
     }
   };
 
-  return (
-    <div className="container mt-4">
-      <h2>Asignar tareas</h2>
-      {error && <div className="alert alert-danger">{error}</div>}
-      <form onSubmit={handleAssign} className="mb-4">
-        <div className="mb-3">
-          <label className="form-label">Usuario</label>
-          {/* FE-007: Eliminado onBlur={fetchAssignments}; ahora lo gestiona el useEffect */}
-          <Select
-            options={users}
-            value={users.find((u) => u.value === userId) || null}
-            onChange={(opt) => {
-              setUserId(opt ? (opt as SelectOption).value : "");
-              setAssignments([]);
-            }}
-            placeholder="Seleccione un usuario"
-            isDisabled={isSubmitting}
-          />
-        </div>
-        <div className="mb-3">
-          <label className="form-label">Tarea</label>
-          <Select
-            options={tasks}
-            value={tasks.find((t) => t.value === taskId) || null}
-            onChange={(opt) => setTaskId(opt ? (opt as SelectOption).value : "")}
-            placeholder="Seleccione una tarea"
-            isDisabled={isSubmitting}
-          />
-        </div>
-        {/* FE-005: Botón deshabilitado durante submit */}
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Asignando..." : "Asignar"}
-        </button>
-      </form>
+  const selectStyles = getRetroSelectStyles<SelectOption>(theme);
 
-      {assignments.length > 0 && (
+  return (
+    <div className="container-fluid py-2">
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div>
-          <h5>Tareas asignadas al usuario</h5>
-          <ul className="list-group">
-            {assignments.map((a) => (
-              <li
-                key={a.id}
-                className="list-group-item d-flex justify-content-between align-items-center"
-              >
-                <span>
-                  {tasks.find((t) => t.value === a.task_id)?.label || a.task_id}
-                </span>
-                <button
-                  className="btn btn-sm btn-outline-danger"
-                  onClick={() => removeAssignment(a.task_id)}
-                  disabled={removingTaskId === a.task_id}
-                >
-                  {removingTaskId === a.task_id ? "Quitando..." : "Quitar"}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <h2 className="retro-page-title">
+            <span>🤝</span> ASIGNACIÓN DE TAREAS / TASK_ASSIGN.EXE
+          </h2>
+          <p className="retro-page-subtitle">
+            Vincula miembros del equipo a tareas activas y supervisa la carga de trabajo
+          </p>
         </div>
-      )}
+      </div>
+
+      <RetroWindow
+        title="TASK_ASSIGN.EXE - VINCULACIÓN OPERATIVA"
+        icon="🤝"
+      >
+        {error && <div className="alert alert-danger mb-4">{error}</div>}
+
+        <form onSubmit={handleAssign} className="mb-4">
+          <div className="row g-3">
+            <div className="col-12 col-md-6">
+              <label className="form-label fw-bold small text-muted">
+                USUARIO RESPONSABLE *
+              </label>
+              <Select
+                options={users}
+                value={users.find((u) => u.value === userId) || null}
+                onChange={(opt) => {
+                  setUserId(opt ? (opt as SelectOption).value : "");
+                  setAssignments([]);
+                }}
+                placeholder="Selecciona un usuario..."
+                isDisabled={isSubmitting}
+                styles={selectStyles}
+              />
+            </div>
+
+            <div className="col-12 col-md-6">
+              <label className="form-label fw-bold small text-muted">
+                TAREA A ASIGNAR *
+              </label>
+              <Select
+                options={tasks}
+                value={tasks.find((t) => t.value === taskId) || null}
+                onChange={(opt) => setTaskId(opt ? (opt as SelectOption).value : "")}
+                placeholder="Selecciona una tarea..."
+                isDisabled={isSubmitting}
+                styles={selectStyles}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <button
+              type="submit"
+              className="btn-retro btn-retro-primary w-100"
+              style={{ minHeight: "48px" }}
+              disabled={isSubmitting || !userId || !taskId}
+            >
+              <span>{isSubmitting ? "⏳" : "🤝"}</span>
+              <span>{isSubmitting ? "Asignando tarea..." : "Asignar Tarea"}</span>
+            </button>
+          </div>
+        </form>
+
+        {/* Listado de tareas asignadas al usuario seleccionado */}
+        {userId && (
+          <div className="pt-4 border-top border-2">
+            <h5 className="fw-bold mb-3 d-flex align-items-center gap-2">
+              <span>📋</span>
+              <span>Tareas asignadas ({assignments.length})</span>
+            </h5>
+
+            {assignments.length === 0 ? (
+              <EmptyState
+                icon="📂"
+                title="Sin tareas asignadas"
+                description="No hay tareas asignadas actualmente a este usuario."
+                className="py-3"
+              />
+            ) : (
+              <div className="d-flex flex-column gap-2">
+                {assignments.map((a) => (
+                  <div
+                    key={a.id}
+                    className="retro-log-entry p-3 d-flex justify-content-between align-items-center flex-wrap gap-2"
+                  >
+                    <div className="d-flex align-items-center gap-2">
+                      <span className="fs-5">📌</span>
+                      <span className="fw-bold retro-task-title">
+                        {tasks.find((t) => t.value === a.task_id)?.label || a.task_id}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-retro btn-retro-danger"
+                      style={{ minHeight: "40px", padding: "0.35rem 0.9rem" }}
+                      onClick={() => removeAssignment(a.task_id)}
+                      disabled={removingTaskId === a.task_id}
+                    >
+                      <span>🗑️</span>
+                      <span>{removingTaskId === a.task_id ? "Quitando..." : "Quitar Asignación"}</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </RetroWindow>
     </div>
   );
 };
