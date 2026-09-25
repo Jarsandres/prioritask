@@ -1,7 +1,8 @@
 # Dependencias principales del proyecto
-fastapi~=0.115
+fastapi>=0.115.0
 uvicorn[standard]~=0.30
-python-jose[cryptography]~=3.3
+python-jose[cryptography]>=3.4.0
+rsa>=4.9
 sqlmodel~=0.0.24
 aiosqlite~=0.21
 pydantic-settings~=2.1

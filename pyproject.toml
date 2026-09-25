@@ -1,13 +1,12 @@
 [project]
 name = "prioritask"
 version = "0.2.0-alpha"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 
 dependencies = [
   # ─── API ──────────────────────────────────────────────────────────────
-  "fastapi~=0.115",
+  "fastapi>=0.115.0",
   "uvicorn[standard]~=0.30",
-  "python-jose[cryptography]",
 
   # ─── ORM / BDs ────────────────────────────────────────────────────────
   "sqlmodel~=0.0.24",
@@ -15,7 +14,8 @@ dependencies = [
 
   # ─── Configuración & Seguridad ───────────────────────────────────────
   "pydantic-settings~=2.1",
-  "python-jose[cryptography]~=3.3",   # JWT
+  "python-jose[cryptography]>=3.4.0",   # JWT
+  "rsa>=4.9",
   "passlib[bcrypt]==1.7.*",           # hashing de contraseñas
   "bcrypt==4.0.1",
 
