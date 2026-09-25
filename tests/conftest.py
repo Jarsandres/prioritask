@@ -1,3 +1,8 @@
+import os
+
+# Guarantee test environment has a JWT_SECRET_KEY set before importing app modules
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-testing-only-32chars")
+
 from uuid import uuid4
 
 import pytest_asyncio

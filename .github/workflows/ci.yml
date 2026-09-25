@@ -11,6 +11,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      JWT_SECRET_KEY: ci-test-secret-key-for-testing-only-123456789
 
     steps:
       - uses: actions/checkout@v4
