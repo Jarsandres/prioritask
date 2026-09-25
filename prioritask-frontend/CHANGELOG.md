@@ -1,5 +1,19 @@
 # 📋 CHANGELOG & QA AUDIT RELEASE NOTES — Prioritask Frontend
 
+## 🚀 Versión 1.2.0 (Modernización UI/UX Retro 90's, Modo Oscuro/Claro y Refactorización Arquitectónica) — [2026-09-25]
+
+### 🎨 Sistema de Diseño y Experiencia de Usuario (UI/UX)
+- **[FE-UI-001] Sistema de Diseño Retro 90's Mobile-First**: Ventanas flotantes `.retro-window`, titlebars `─ □ ✕`, cyber-grid, botones físicos táctiles `.btn-retro`, badges de prioridad (`⚡ Alta`, `🔷 Media`, `🟢 Baja`).
+- **[FE-UI-002] Barra de Navegación Inferior Fija (`MobileBottomNav`)**: Dock ergonómico para una sola mano en pantallas móviles con botón central elevado para creación rápida de tareas.
+- **[FE-UI-003] Motor de Temas Claro y Oscuro (`ThemeContext.tsx`)**: Persistencia en `localStorage`, detección de preferencias del sistema, adaptabilidad completa en `index.css` y switches interactivos en header móvil, sidebar y perfil.
+- **[FE-UX-001] Paridad en Tareas del Hogar y Limpieza de Filtros**: Inclusión de `<TaskCard />` con completado directo en `RoomTasks.tsx` y botón "Limpiar Filtros" en `TaskList.tsx`.
+
+### 🏗️ Arquitectura y Mantenibilidad de Código (Architecture & Maintenance)
+- **[FE-ARCH-001] Capa Atómica de Componentes Reutilizables (`src/components/common/`)**: Creación de `<RetroWindow />`, `<TaskCard />`, `<Badges />`, `<EmptyState />` y utilitario `selectStyles.ts` para estilizado temático de `react-select`.
+- **[FE-MAINT-001] Custom Hooks y Eliminación de Código Muerto**: Exportación de hooks reutilizables `useRoom()` y `useTaskUpdate()`, resolución integral de advertencias de Fast Refresh de React y eliminación del archivo obsoleto `Dashboard.module.css`.
+
+---
+
 ## 🚀 Versión 1.1.0-rc (Parches de Estabilidad, Estado y UX) — [2026-08-04]
 
 ### 🔴 Correcciones Críticas (Critical & High Bugs)

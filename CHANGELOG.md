@@ -5,6 +5,20 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## 🚀 Versión 0.2.1-alpha (Mitigación CORS CWE-942 y Autenticación en Inferencia IA) — [2026-09-25]
+
+### 🔴 Correcciones Críticas y Seguridad (Security & Critical Fixes)
+- **[BE-SEC-005] Mitigación de Política CORS Permisiva (CWE-942) en `app/main.py` y `app/core/config.py`**:
+  - Eliminación del comodín `*` hardcodeado junto con `allow_credentials=True`.
+  - Normalización de URLs de origen (eliminación de espacios en blanco y barras finales/trailing slashes) en `Settings.CORS_ORIGINS`.
+  - Validación estricta que rechaza `*` cuando las credenciales están activas (`allow_credentials=True`), previniendo configuraciones inseguras de acuerdo al estándar W3C.
+- **[BE-SEC-006] Protección contra Abuso y DoS Anónimo en Inferencia IA (`app/api/v1/endpoints/tasks_ai.py`)**:
+  - Endpoint `POST /tasks/ai/suggest` protegido obligatoriamente con `current_user: Usuario = Depends(get_current_user)`.
+  - Mitigación de ataques de denegación de servicio (DoS) anónimo y agotamiento de recursos en el motor de inferencia local Ollama.
+  - Nuevas pruebas de integración y seguridad SDET en `tests/integration/test_ai_endpoints.py` y `tests/integration/test_sdet_security.py`.
+
+---
+
 ## 🚀 Versión 0.2.0-alpha (Refactorización de Seguridad, Base de Datos, IA Local con Ollama y Pruebas) — [2026-08-04]
 
 ### 🔴 Correcciones Críticas y Seguridad (Security & Critical Fixes)
