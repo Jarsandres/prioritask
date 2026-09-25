@@ -12,7 +12,7 @@ celery[redis]~=5.4
 python-dotenv~=1.0
 
 # Dependencias de desarrollo
-pytest~=8.2
+pytest>=9.0.3
 pytest-cov~=5.0
 coverage~=7.5
 alembic~=1.13
