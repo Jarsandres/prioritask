@@ -1,0 +1,114 @@
+/* Barra de Navegación Inferior Móvil (Mobile-First Retro 90's) */
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background-color: var(--retro-nav-bottom-bg, #ffffff);
+  border-top: 2px solid var(--retro-nav-border, #1e293b);
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 1040;
+  padding: 0 4px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+@media (min-width: 769px) {
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+}
+
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 100%;
+  color: var(--text-muted, #64748b);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.1s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-nav-item:active {
+  transform: scale(0.95);
+}
+
+.mobile-nav-icon {
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-nav-label {
+  font-size: 11px;
+  line-height: 1.1;
+  letter-spacing: 0.2px;
+}
+
+.mobile-nav-item.active {
+  color: #38bdf8;
+  font-weight: 700;
+}
+[data-theme="light"] .mobile-nav-item.active {
+  color: #2563eb;
+}
+
+.mobile-nav-item.active .mobile-nav-icon {
+  transform: translateY(-1px);
+}
+
+/* Botón central destacado (Thumb Action Principal) */
+.mobile-nav-create-wrapper {
+  position: relative;
+  top: -14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-decoration: none;
+}
+
+.mobile-nav-create-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border: 2.5px solid var(--window-border, #1e293b);
+  box-shadow: 3px 3px 0px var(--window-shadow, #1e293b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 24px;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  cursor: pointer;
+}
+
+.mobile-nav-create-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px var(--window-shadow, #1e293b);
+}
+
+.mobile-nav-create-wrapper .mobile-nav-label {
+  margin-top: 4px;
+  color: var(--text-main, #1e293b);
+  font-weight: 700;
+  font-size: 11px;
+}

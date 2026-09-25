@@ -1,9 +1,10 @@
 # 🔧 Prioritask – API inteligente de gestión de tareas
 
-Prioritask es una API REST desarrollada con FastAPI que permite gestionar tareas domésticas de forma inteligente. Integra modelos de procesamiento de lenguaje natural (IA) para:
+Prioritask es una API REST desarrollada con FastAPI que permite gestionar tareas domésticas de forma inteligente y segura. Integra modelos de procesamiento de lenguaje natural (IA) para:
 - Clasificar tareas por prioridad
 - Agrupar tareas por similitud semántica
 - Reformular títulos de tareas para mejorar su claridad
+- Sugerir tareas pendientes con inferencia local (Ollama) protegida por autenticación
 
 > Proyecto realizado como Trabajo de Fin de Grado en Desarrollo de Aplicaciones Multiplataforma 
 
@@ -12,23 +13,25 @@ Prioritask es una API REST desarrollada con FastAPI que permite gestionar tareas
 ## 🚀 Tecnologías utilizadas
 
 - **FastAPI** · Backend asíncrono y documentación interactiva
-- **SQLModel + SQLite** · ORM y persistencia ligera
-- **JWT** · Autenticación segura
-- **Hugging Face (Transformers)** · Procesamiento de lenguaje natural
-- **Pytest + HTTPX** · Tests automáticos
+- **SQLModel + SQLite / PostgreSQL** · ORM y persistencia con borrado lógico (Soft Delete)
+- **JWT & RBAC** · Autenticación segura y control de acceso basado en roles
+- **Ollama (`qwen2.5:7b`)** · Inferencia de IA local con fallback determinista resiliente
+- **Seguridad Rigurosa** · Mitigación CORS estricta (CWE-942), protección de endpoints de IA y validación Zero Trust
+- **Pytest + HTTPX** · Tests automáticos y suite SDET con cobertura superior al 65%
 - **Postman** · Pruebas manuales y exploración de la API
 
 ---
 
 ## 🧠 Funcionalidades
 
-| Endpoint                           | Descripción                                  |
-|------------------------------------|----------------------------------------------|
-| `POST /api/v1/tasks/ai/prioritize` | Clasifica tareas según su urgencia/prioridad |
-| `POST /api/v1/tasks/ai/group`      | Agrupa tareas por similitud semántica        |
-| `POST /api/v1/tasks/ai/rewrite`    | Reformula títulos poco claros usando IA      |
-| `POST /api/v1/auth/login`          | Autenticación mediante JWT                   |
-| `CRUD /api/v1/tasks`               | Gestión clásica de tareas                    |
+| Endpoint                           | Descripción                                                       |
+|------------------------------------|-------------------------------------------------------------------|
+| `POST /api/v1/tasks/ai/prioritize` | Clasifica tareas según su urgencia/prioridad                      |
+| `POST /api/v1/tasks/ai/group`      | Agrupa tareas por similitud semántica                             |
+| `POST /api/v1/tasks/ai/rewrite`    | Reformula títulos poco claros usando IA                           |
+| `POST /api/v1/tasks/ai/suggest`    | Sugiere tareas contextuales con IA (**Protegido con JWT**)        |
+| `POST /api/v1/auth/login`          | Autenticación mediante JWT con soporte para refresh tokens       |
+| `CRUD /api/v1/tasks`               | Gestión integral de tareas con soft delete e historial de eventos |
 
 ---
 
@@ -101,17 +104,20 @@ JWT_SECRET_KEY=tu_clave_secreta
 CORS_ORIGINS=["http://localhost:5173"]
 ```
 
-`CORS_ORIGINS` debe ser un array en formato JSON que se convertirá en una lista en Python. Por ejemplo:
+`CORS_ORIGINS` debe ser un array en formato JSON (o una lista separada por comas) que se convertirá en una lista en Python. Por ejemplo:
 
 ```env
 CORS_ORIGINS=["http://localhost:5173","https://miapp.com"]
 ```
 
+> 🛡️ **Seguridad CORS (CWE-942):** Por motivos de seguridad y estándar W3C, no se permite el uso del comodín `*` cuando las credenciales están habilitadas (`allow_credentials=True`). Los orígenes son automáticamente validados y normalizados (eliminando espacios y barras finales).
+
 ---
 
 ## 🖥️ Frontend
 
-La carpeta `prioritask-frontend` contiene la interfaz React que consume esta API.
+La carpeta `prioritask-frontend` contiene la interfaz SPA desarrollada con React, TypeScript y Vite.
+Incorpora un **sistema de diseño Retro 90's mobile-first**, barra de navegación dock ergonómica (`MobileBottomNav`), **soporte completo de modo Claro/Oscuro** persistente y arquitectura basada en componentes comunes (`TaskCard`, `RetroWindow`).
 
 ```bash
 cd prioritask-frontend

@@ -1,7 +1,3 @@
-body {
-  font-family: 'Inter', sans-serif; /* Tipografía secundaria más clara y moderna */
-}
-
 .container {
   min-height: 100vh;
   width: 100vw;
@@ -9,113 +5,194 @@ body {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background: linear-gradient(135deg, #e0f7fa, #cce3f6); /* Fondo degradado suave */
+  background-color: var(--bg-primary);
+  background-image:
+    linear-gradient(to right, var(--bg-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--bg-grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
   box-sizing: border-box;
 }
 
 .card {
-  background: #FFFFFF; /* Blanco */
-  padding: 3rem 2.5rem;
-  border-radius: 1.5rem;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15); /* Sombra más suave */
-  max-width: 400px;
+  background: var(--window-bg);
+  border: 2px solid var(--window-border);
+  box-shadow: 5px 5px 0px var(--window-shadow);
+  padding: 2.5rem 2rem;
+  border-radius: 12px;
+  max-width: 420px;
   width: 100%;
   box-sizing: border-box;
   text-align: center;
-  animation: fadeInCard 0.6s ease-out, fadeInZoom 0.4s ease-out; /* Agregada animación fadeInCard */
-  transition: transform 0.3s ease;
-}
-
-.card:hover {
-  transform: scale(1.01);
+  animation: fadeInCard 0.4s ease-out;
+  color: var(--text-main);
 }
 
 .logo {
-  width: 120px;
-  margin-bottom: 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s ease;
-}
-
-.logo:hover {
-  transform: scale(1.05);
+  width: 90px;
+  height: auto;
+  margin-bottom: 1.2rem;
+  border-radius: 10px;
+  border: 2px solid var(--window-border);
+  box-shadow: 2px 2px 0px var(--window-shadow);
 }
 
 .title {
-  font-size: 1.8rem;
-  color: #3F88C5; /* Azul medio */
-  margin-bottom: 1rem;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--text-heading);
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.5px;
 }
 
 .input {
   width: 100%;
-  padding: 0.8rem;
+  min-height: 44px;
+  padding: 0.65rem 0.9rem;
   margin-bottom: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  color: #1f2937;
+  border: 2px solid var(--input-border);
+  border-radius: 8px;
+  font-size: 16px;
+  color: var(--input-text);
+  background-color: var(--input-bg);
   box-sizing: border-box;
+  box-shadow: 2px 2px 0px var(--input-shadow);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.input:focus {
+  border-color: #2563eb;
+  box-shadow: 2px 2px 0px #2563eb;
+}
+
+.passwordContainer {
+  position: relative;
+  width: 100%;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+}
+
+.passwordInput {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.65rem 2.85rem 0.65rem 0.9rem;
+  margin-bottom: 0;
+  border: 2px solid var(--input-border);
+  border-radius: 8px;
+  font-size: 16px;
+  color: var(--input-text);
+  background-color: var(--input-bg);
+  box-sizing: border-box;
+  box-shadow: 2px 2px 0px var(--input-shadow);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.passwordInput:focus {
+  border-color: #2563eb;
+  box-shadow: 2px 2px 0px #2563eb;
+}
+
+.togglePasswordBtn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  font-size: 1.15rem;
+  border-radius: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  min-height: 32px;
+  min-width: 32px;
+  z-index: 1;
+}
+
+.togglePasswordBtn:hover:not(:disabled) {
+  color: var(--text-main);
+  background-color: rgba(125, 125, 125, 0.15);
+}
+
+.togglePasswordBtn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.togglePasswordBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .button {
   width: 100%;
-  background-color: #70C1B3; /* Verde menta suave */
-  color: white;
-  font-weight: 600;
-  padding: 0.85rem;
+  min-height: 48px;
+  background-color: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0.75rem 1rem;
   font-size: 1rem;
-  border-radius: 0.5rem;
-  border: none;
+  border-radius: 8px;
+  border: 2px solid var(--window-border);
+  box-shadow: 2px 2px 0px var(--window-shadow);
   cursor: pointer;
-  transition: transform 0.2s ease, background-color 0.3s ease; /* Transición mejorada */
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease;
 }
 
-.button:hover {
-  transform: translateY(-2px); /* Efecto de elevación sutil */
-  background-color: #34997b;
+.button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.button:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px var(--window-shadow);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .error {
   text-align: center;
   color: #ef4444;
-  margin-bottom: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
   font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .registerText {
   text-align: center;
-  margin-top: 1rem;
-  font-size: 0.9rem;
-  color: #4b5563; /* gris medio */
+  margin-top: 1.5rem;
+  font-size: 0.92rem;
+  color: var(--text-muted);
 }
 
 .registerLink {
-  color: #337ab7;
-  font-weight: bold;
+  color: #38bdf8;
+  font-weight: 700;
   text-decoration: none;
+}
+
+[data-theme="light"] .registerLink {
+  color: #2563eb;
 }
 
 .registerLink:hover {
   text-decoration: underline;
 }
 
-@keyframes fadeInZoom {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @keyframes fadeInCard {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;

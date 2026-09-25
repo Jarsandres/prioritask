@@ -1,10 +1,45 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+:root,
+[data-theme="light"] {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color: #213547;
-  background-color: #ffffff;
+  /* Variables Retro 90's - Modo Claro */
+  --bg-primary: #f0f4f8;
+  --bg-grid-line: rgba(37, 99, 235, 0.05);
+  --window-bg: #ffffff;
+  --window-border: #1e293b;
+  --window-shadow: rgba(30, 41, 59, 0.9);
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --text-heading: #0f172a;
+  --card-bg: #ffffff;
+  --input-bg: #ffffff;
+  --input-text: #1e293b;
+  --input-border: #1e293b;
+  --input-shadow: rgba(30, 41, 59, 0.1);
+  --retro-btn-outline-bg: #ffffff;
+  --retro-btn-outline-text: #1e293b;
+  --retro-btn-outline-hover: #f8fafc;
+  --retro-nav-bottom-bg: #ffffff;
+  --retro-nav-border: #1e293b;
+  --retro-badge-todo-bg: #e2e8f0;
+  --retro-badge-todo-text: #334155;
+  --sidebar-bg: #2563eb;
+  --sidebar-text: #ffffff;
+  --folder-bg: #ffffff;
+  --folder-border: #1e293b;
+  --compare-box-bg: #f8fafc;
+  --log-entry-bg: #ffffff;
+  --log-entry-border: #e2e8f0;
+  --tag-row-bg: #ffffff;
+  --task-done-bg: #f8fafc;
+  --ai-alert-bg: #fdf4ff;
+  --ai-alert-border: #c026d3;
+  --ai-alert-text: #701a75;
+
+  color: var(--text-main);
+  background-color: var(--bg-primary);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -12,63 +47,814 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+[data-theme="dark"] {
+  /* Variables Retro 90's - Modo Oscuro (Deep Slate / Cyber Vaporwave) */
+  --bg-primary: #0f172a;
+  --bg-grid-line: rgba(56, 189, 248, 0.07);
+  --window-bg: #1e293b;
+  --window-border: #334155;
+  --window-shadow: #000000;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-heading: #ffffff;
+  --card-bg: #1e293b;
+  --input-bg: #0b1120;
+  --input-text: #f8fafc;
+  --input-border: #475569;
+  --input-shadow: rgba(0, 0, 0, 0.4);
+  --retro-btn-outline-bg: #1e293b;
+  --retro-btn-outline-text: #f8fafc;
+  --retro-btn-outline-hover: #334155;
+  --retro-nav-bottom-bg: #1e293b;
+  --retro-nav-border: #334155;
+  --retro-badge-todo-bg: #334155;
+  --retro-badge-todo-text: #e2e8f0;
+  --sidebar-bg: #0b1120;
+  --sidebar-text: #f8fafc;
+  --folder-bg: #1e293b;
+  --folder-border: #334155;
+  --compare-box-bg: #0f172a;
+  --log-entry-bg: #1e293b;
+  --log-entry-border: #334155;
+  --tag-row-bg: #1e293b;
+  --task-done-bg: #151e2e;
+  --ai-alert-bg: rgba(192, 38, 211, 0.15);
+  --ai-alert-border: #a21caf;
+  --ai-alert-text: #f0abfc;
+
+  color: var(--text-main);
+  background-color: var(--bg-primary);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  /* Cyber-Grid sobre fondo adaptable */
+  background-color: var(--bg-primary);
+  background-image:
+    linear-gradient(to right, var(--bg-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--bg-grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--text-main);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
 a {
   font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+  color: #38bdf8;
+  text-decoration: none;
+}
+[data-theme="light"] a {
+  color: #2563eb;
 }
 a:hover {
-  color: #535bf2;
+  color: #60a5fa;
+}
+[data-theme="light"] a:hover {
+  color: #1d4ed8;
 }
 
-body {
+/* =========================================================
+   SISTEMA DE DISEÑO RETRO-MODERNO (90's Mobile-First)
+   ========================================================= */
+
+/* Ventana Retro (Card / Contenedor principal) */
+.retro-window {
+  background: var(--window-bg);
+  border: 2px solid var(--window-border);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0px var(--window-shadow);
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.2s ease, border-color 0.2s ease;
+  color: var(--text-main);
+}
+
+/* Barra de Título de Ventana Retro */
+.retro-window-header {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--window-border);
+  user-select: none;
+}
+
+.retro-window-header-magenta {
+  background: linear-gradient(135deg, #c026d3 0%, #9333ea 100%);
+}
+
+.retro-window-header-green {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.retro-window-header-amber {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+
+.retro-window-header-admin {
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+}
+
+.retro-window-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.retro-window-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  font-family: monospace, monospace;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
+  color: #ffffff;
+  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.2);
+}
+
+.retro-window-body {
+  padding: 18px;
+  background-color: var(--window-bg);
+  color: var(--text-main);
+}
+
+/* =========================================================
+   TÍTULOS Y SUBTÍTULOS RETRO
+   ========================================================= */
+
+.retro-page-title {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--text-heading);
   margin: 0;
-  font-family: 'Inter', sans-serif;
-  background-color: #f4f6f8;
-  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-html {
-  background-color: #f8f9fa; /* Asegura también el fondo del html */
+.retro-page-subtitle {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  margin-bottom: 0;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
+/* =========================================================
+   BOTONES RETRO (Físicos, Táctiles con relieve)
+   ========================================================= */
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
+.btn-retro {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
   font-family: inherit;
-  background-color: #1a1a1a;
+  border: 2px solid var(--window-border);
+  border-radius: 8px;
+  box-shadow: 2px 2px 0px var(--window-shadow);
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  text-decoration: none;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease, background-color 0.15s ease;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.tag-badge {
-  margin-right: 0.25rem;
+.btn-retro:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+.btn-retro:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px var(--window-shadow);
+}
+
+.btn-retro:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 2px 2px 0px var(--window-shadow);
+}
+
+/* Variantes de Color */
+.btn-retro-primary {
+  background-color: #2563eb;
+  color: #ffffff !important;
+}
+
+.btn-retro-success {
+  background-color: #10b981;
+  color: #ffffff !important;
+}
+
+.btn-retro-magenta {
+  background-color: #c026d3;
+  color: #ffffff !important;
+}
+
+.btn-retro-warning {
+  background-color: #f59e0b;
+  color: #1e293b !important;
+}
+
+.btn-retro-secondary {
+  background-color: #64748b;
+  color: #ffffff !important;
+}
+
+.btn-retro-danger {
+  background-color: #ef4444;
+  color: #ffffff !important;
+}
+
+.btn-retro-outline {
+  background-color: var(--retro-btn-outline-bg);
+  color: var(--retro-btn-outline-text) !important;
+  border-color: var(--window-border);
+}
+.btn-retro-outline:hover:not(:disabled) {
+  background-color: var(--retro-btn-outline-hover);
+}
+
+/* =========================================================
+   BADGES Y ETIQUETAS RETRO
+   ========================================================= */
+
+.retro-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1.5px solid var(--window-border);
+  box-shadow: 1.5px 1.5px 0px var(--window-shadow);
+  letter-spacing: 0.2px;
+}
+
+.retro-badge-high {
+  background-color: #fef08a; /* Ámbar retro */
+  color: #854d0e;
+}
+
+.retro-badge-medium {
+  background-color: #bae6fd; /* Cian retro */
+  color: #0369a1;
+}
+
+.retro-badge-low {
+  background-color: #bbf7d0; /* Menta / verde retro */
+  color: #15803d;
+}
+
+.retro-badge-todo {
+  background-color: var(--retro-badge-todo-bg);
+  color: var(--retro-badge-todo-text);
+}
+
+.retro-badge-progress {
+  background-color: #fed7aa;
+  color: #9a3412;
+}
+
+.retro-badge-done {
+  background-color: #cbd5e1;
+  color: #475569;
+}
+
+.retro-badge-danger {
+  background-color: #fecaca;
+  color: #991b1b;
+}
+
+/* Hashtag Tags */
+.retro-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.retro-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background-color: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #c4b5fd;
+}
+[data-theme="dark"] .retro-tag {
+  background-color: rgba(192, 38, 211, 0.15);
+  color: #f0abfc;
+  border: 1px solid #a21caf;
+}
+
+/* =========================================================
+   INPUTS Y CONTROLES TÁCTILES ERGONÓMICOS (Min 44px)
+   ========================================================= */
+
+.retro-input,
+.retro-select {
+  min-height: 44px;
+  font-size: 16px; /* Previene auto-zoom en Safari iOS */
+  background-color: var(--input-bg) !important;
+  color: var(--input-text) !important;
+  border: 2px solid var(--input-border) !important;
+  border-radius: 8px !important;
+  padding: 8px 12px;
+  box-shadow: 2px 2px 0px var(--input-shadow);
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+.retro-input:focus,
+.retro-select:focus {
+  border-color: #2563eb !important;
+  box-shadow: 2px 2px 0px #2563eb !important;
+  outline: none;
+}
+
+textarea.retro-input,
+textarea.form-control {
+  background-color: var(--input-bg) !important;
+  color: var(--input-text) !important;
+  border: 2px solid var(--input-border) !important;
+  border-radius: 8px !important;
+}
+
+/* Tarjeta de Tarea Individual */
+.retro-task-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-color: var(--window-border);
+  background: var(--window-bg);
+}
+
+.retro-task-card .retro-window-body {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.retro-task-title {
+  font-size: 1.08rem;
+  line-height: 1.35;
+  color: var(--text-heading);
+}
+
+.retro-task-actions {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+/* Tarjeta completada (DONE) */
+.retro-task-card.task-done {
+  opacity: 0.8;
+  background-color: var(--task-done-bg);
+}
+
+.retro-task-card.task-done .retro-task-title {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* Empty State Ilustrado */
+.retro-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.retro-empty-icon {
+  font-size: 3.5rem;
+  line-height: 1;
+  filter: drop-shadow(2px 2px 0px var(--window-shadow));
+}
+
+/* =========================================================
+   GADGETS RETRO (DASHBOARD METRICS)
+   ========================================================= */
+
+.retro-gadget-display {
+  font-family: 'Courier New', Courier, monospace, monospace;
+  font-size: 2.8rem;
+  font-weight: 900;
+  line-height: 1;
+  margin-top: 6px;
+  letter-spacing: -1px;
+}
+
+.retro-gadget-label {
+  font-size: 0.82rem;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* =========================================================
+   EXPLORADOR DE HOGARES (ROOMS.DIR)
+   ========================================================= */
+
+.retro-folder-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background-color: var(--folder-bg);
+  border: 2px solid var(--folder-border);
+  border-radius: 8px;
+  box-shadow: 2px 2px 0px var(--window-shadow);
+  text-decoration: none;
+  color: var(--text-main);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.15s ease;
+  min-height: 48px;
+}
+
+.retro-folder-card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px var(--window-shadow);
+  color: var(--text-main);
+  filter: brightness(1.03);
+}
+
+.retro-folder-card:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px var(--window-shadow);
+}
+
+.retro-folder-card.selected {
+  border-color: #2563eb;
+  background-color: rgba(37, 99, 235, 0.08);
+}
+
+.retro-folder-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.retro-folder-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.retro-folder-name {
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--text-heading);
+}
+
+/* Banner de Sugerencia IA */
+.retro-ai-alert {
+  background-color: var(--ai-alert-bg);
+  border: 2px solid var(--ai-alert-border);
+  border-radius: 8px;
+  color: var(--ai-alert-text);
+  box-shadow: 2px 2px 0px var(--window-shadow);
+}
+
+/* =========================================================
+   CLUSTERS Y AGRUPACIÓN IA (AI_CLUSTERING.SYS)
+   ========================================================= */
+
+.retro-cluster-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: var(--compare-box-bg);
+  border: 1.5px solid var(--window-border);
+  border-radius: 8px;
+  color: var(--text-main);
+}
+
+.retro-cluster-bullet {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.retro-cluster-task-title {
+  font-weight: 600;
+  color: var(--text-heading);
+  font-size: 0.98rem;
+  flex-grow: 1;
+}
+
+/* =========================================================
+   OPTIMIZADOR DE TÍTULOS (AI_REWRITE.EXE)
+   ========================================================= */
+
+.retro-compare-card {
+  background-color: var(--window-bg);
+  border: 2px solid var(--window-border);
+  border-radius: 8px;
+  box-shadow: 2px 2px 0px var(--window-shadow);
+}
+
+.retro-compare-box {
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1.5px solid var(--window-border);
+  background-color: var(--compare-box-bg);
+  height: 100%;
+}
+
+.retro-compare-label {
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.retro-compare-text {
+  font-size: 1rem;
+  color: var(--text-heading);
+}
+
+.retro-compare-arrow {
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: #2563eb;
+}
+
+.retro-compare-reason {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* =========================================================
+   REGISTRO DEL SISTEMA / HISTORIAL (TASK_AUDIT.LOG)
+   ========================================================= */
+
+.retro-log-entry {
+  background-color: var(--log-entry-bg);
+  border: 1.5px solid var(--log-entry-border);
+  border-radius: 8px;
+  box-shadow: 1.5px 1.5px 0px var(--window-shadow);
+  transition: transform 0.08s ease;
+}
+
+.retro-log-entry:hover {
+  transform: translateX(2px);
+}
+
+.retro-log-title {
+  color: var(--text-heading);
+  font-size: 0.98rem;
+}
+
+.retro-log-timestamp {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.retro-log-author {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* =========================================================
+   ADMINISTRADOR DE ETIQUETAS (TAG_MANAGER.SYS)
+   ========================================================= */
+
+.retro-tag-row {
+  background-color: var(--tag-row-bg);
+  border: 1.5px solid var(--window-border);
+  border-radius: 8px;
+  box-shadow: 1.5px 1.5px 0px var(--window-shadow);
+}
+
+/* =========================================================
+   PERFIL DE ADMINISTRADOR (USER_PROFILE.SYS)
+   ========================================================= */
+
+.retro-admin-card {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding: 18px;
+  background-color: var(--compare-box-bg);
+  border: 2px solid var(--window-border);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 576px) {
+  .retro-admin-card {
+    flex-direction: column;
+    text-align: center;
   }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+}
+
+.retro-admin-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2563eb, #c026d3);
+  border: 2.5px solid var(--window-border);
+  box-shadow: 2px 2px 0px var(--window-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  color: white;
+  flex-shrink: 0;
+}
+
+.retro-field-display {
+  padding: 10px 14px;
+  background-color: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 6px;
+  font-family: 'Courier New', Courier, monospace, monospace;
+  font-weight: 700;
+  color: var(--text-main);
+  font-size: 0.95rem;
+}
+
+.retro-stat-box {
+  padding: 14px;
+  background-color: var(--compare-box-bg);
+  border: 1.5px solid var(--window-border);
+  border-radius: 8px;
+  text-align: center;
+}
+
+/* =========================================================
+   BOTONES Y SWITCHES DE TEMA (LIGHT / DARK)
+   ========================================================= */
+
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  user-select: none;
+}
+
+.theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: scale(1.05);
+}
+
+.theme-toggle-sidebar-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.theme-toggle-sidebar-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  transform: translateX(2px);
+}
+
+/* Switcher interactivo de tema para el Perfil */
+.theme-switch-group {
+  display: flex;
+  gap: 10px;
+}
+
+.theme-switch-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 2px solid var(--window-border);
+  border-radius: 8px;
+  background-color: var(--window-bg);
+  color: var(--text-main);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 44px;
+}
+
+.theme-switch-btn.active {
+  background-color: #2563eb;
+  color: #ffffff;
+  border-color: var(--window-border);
+  box-shadow: 2px 2px 0px var(--window-shadow);
+}
+
+/* =========================================================
+   COMPATIBILIDAD CON REACT-SELECT & BOOTSTRAP EN MODO OSCURO
+   ========================================================= */
+
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+  background-color: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--input-text);
+}
+
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+  background-color: var(--input-bg);
+  border-color: #38bdf8;
+  color: var(--input-text);
+}
+
+[data-theme="dark"] .form-label {
+  color: var(--text-main);
+}
+
+[data-theme="dark"] .text-muted {
+  color: var(--text-muted) !important;
+}
+
+/* React Select Dark Mode Rules */
+[data-theme="dark"] div[class*="-control"] {
+  background-color: var(--input-bg) !important;
+  border-color: var(--input-border) !important;
+  color: var(--input-text) !important;
+}
+
+[data-theme="dark"] div[class*="-singleValue"] {
+  color: var(--input-text) !important;
+}
+
+[data-theme="dark"] div[class*="-Input"] input {
+  color: var(--input-text) !important;
+}
+
+[data-theme="dark"] div[class*="-placeholder"] {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] div[class*="-menu"] {
+  background-color: var(--window-bg) !important;
+  border: 2px solid var(--window-border) !important;
+  box-shadow: 4px 4px 0px var(--window-shadow) !important;
+}
+
+[data-theme="dark"] div[class*="-option"] {
+  background-color: var(--window-bg) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="dark"] div[class*="-option"]:hover,
+[data-theme="dark"] div[class*="-option"][class*="--is-focused"] {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] div[class*="-option"][class*="--is-selected"] {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] div[class*="-multiValue"] {
+  background-color: #334155 !important;
+  border: 1px solid #475569 !important;
+}
+
+[data-theme="dark"] div[class*="-multiValue"] div {
+  color: #f8fafc !important;
 }

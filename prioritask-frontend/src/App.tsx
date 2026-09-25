@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Login from "./auth/Login";
 import Register from "./auth/Register";
@@ -8,23 +9,59 @@ import GroupedTasks from "./pages/GroupedTasks";
 import RewriteTitles from "./pages/RewriteTitles";
 import History from "./pages/History";
 import Sidebar from "./components/Sidebar";
+import MobileBottomNav from "./components/MobileBottomNav";
 import TaskList from "./components/TaskList";
 import TaskForm from "./components/TaskForm";
 import AssignTaskForm from "./components/AssignTaskForm";
 import RoomTasks from "./pages/RoomTasks";
 import { TaskUpdateProvider } from "./context/TaskUpdateContext";
 import { RoomProvider } from "./context/RoomContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import CreateRoom from "./pages/CreateRoom";
 import ErrorBoundary from "./components/ErrorBoundary";
+import "./App.css";
 
 const AppContent = () => {
   const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
   const hideSidebar = location.pathname === "/login" || location.pathname === "/register";
 
   return (
-    <div style={{ display: "flex" }}>
-      {!hideSidebar && <Sidebar />}
-      <div style={{ marginLeft: !hideSidebar ? "220px" : "0px", flex: 1 }}>
+    <div className="app-layout">
+      {/* Cabecera superior solo visible en teléfonos y tablets pequeñas (<=768px) */}
+      {!hideSidebar && (
+        <header className="mobile-header">
+          <div className="mobile-header-left">
+            <button
+              className="hamburger-btn"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Abrir menú de navegación"
+            >
+              ☰
+            </button>
+            <span className="mobile-title">Prioritask</span>
+          </div>
+          <button
+            type="button"
+            className="theme-toggle-btn"
+            onClick={toggleTheme}
+            aria-label={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`}
+            title={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`}
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
+        </header>
+      )}
+
+      {!hideSidebar && (
+        <Sidebar
+          isOpen={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+        />
+      )}
+
+      <main className={`main-content ${hideSidebar ? "no-sidebar" : ""}`}>
         <Routes>
           <Route path="/" element={<Navigate to="/login" />} />
           <Route path="/login" element={<Login />} />
@@ -42,7 +79,12 @@ const AppContent = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/rooms/:roomId/tasks" element={<RoomTasks />} />
         </Routes>
-      </div>
+      </main>
+
+      {/* Navegación ergonómica inferior en móvil (Thumb Zone) */}
+      {!hideSidebar && (
+        <MobileBottomNav onOpenMenu={() => setMobileOpen(true)} />
+      )}
     </div>
   );
 };
@@ -50,13 +92,15 @@ const AppContent = () => {
 function App() {
   return (
     <BrowserRouter>
-      <TaskUpdateProvider>
-        <RoomProvider>
-          <ErrorBoundary>
-            <AppContent />
-          </ErrorBoundary>
-        </RoomProvider>
-      </TaskUpdateProvider>
+      <ThemeProvider>
+        <TaskUpdateProvider>
+          <RoomProvider>
+            <ErrorBoundary>
+              <AppContent />
+            </ErrorBoundary>
+          </RoomProvider>
+        </TaskUpdateProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

@@ -45,7 +45,12 @@ async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_sessi
     if not user or not auth_srv.verify_password(payload.password, user.hashed_password):
         raise HTTPException(HTTP_401_UNAUTHORIZED, detail="Credenciales inválidas")
 
-    access_token = auth_srv.create_access_token(user.id, SECRET_KEY)
+    access_token = auth_srv.create_access_token(
+        user.id,
+        SECRET_KEY,
+        is_superuser=user.is_superuser,
+        role="ADMIN" if user.is_superuser else "USER",
+    )
     refresh_token = auth_srv.create_refresh_token(user.id, SECRET_KEY)
     return TokenResponse(
         access_token=access_token,
@@ -105,7 +110,12 @@ async def refresh_token(
             detail="Usuario inactivo o no encontrado"
         )
 
-    new_access_token = auth_srv.create_access_token(user.id, SECRET_KEY)
+    new_access_token = auth_srv.create_access_token(
+        user.id,
+        SECRET_KEY,
+        is_superuser=user.is_superuser,
+        role="ADMIN" if user.is_superuser else "USER",
+    )
     new_refresh_token = auth_srv.create_refresh_token(user.id, SECRET_KEY)
 
     return TokenResponse(

@@ -10,10 +10,10 @@ if TYPE_CHECKING:
 
 class TaskAssignment(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    user_id: UUID = Field(foreign_key="usuario.id", nullable=False)
-    task_id: UUID = Field(foreign_key="task.id", nullable=False)
-    asignado_por: UUID = Field(foreign_key="usuario.id", nullable=False)
-    fecha: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    user_id: UUID = Field(foreign_key="usuario.id", nullable=False, index=True)
+    task_id: UUID = Field(foreign_key="task.id", nullable=False, index=True)
+    asignado_por: UUID = Field(foreign_key="usuario.id", nullable=False, index=True)
+    fecha: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
 
     task: Optional["Task"] = Relationship(back_populates="colaboradores")
     user: Optional["Usuario"] = Relationship(
@@ -24,3 +24,4 @@ class TaskAssignment(SQLModel, table=True):
     asignador: Optional["Usuario"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[TaskAssignment.asignado_por]"}
     )
+

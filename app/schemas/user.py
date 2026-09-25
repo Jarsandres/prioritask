@@ -2,6 +2,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.models.enums import UserRole
+
 
 class UsuarioBase(BaseModel):
     email: EmailStr = Field(description="Correo electrónico del usuario.", json_schema_extra={"example": "usuario@ejemplo.com"})
@@ -13,8 +15,11 @@ class UsuarioCreate(UsuarioBase):
 
 class UsuarioRead(UsuarioBase):
     id: UUID = Field(description="Identificador único del usuario.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
+    is_superuser: bool = Field(default=False, description="Indica si el usuario tiene privilegios de administrador.")
+    role: UserRole = Field(default=UserRole.USER, description="Rol del usuario en el sistema.")
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class UsuarioLogin(BaseModel):
     email: EmailStr = Field(description="Correo electrónico del usuario.", json_schema_extra={"example": "usuario@ejemplo.com"})

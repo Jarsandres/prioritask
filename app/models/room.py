@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
 
@@ -15,12 +15,17 @@ class Room(SQLModel, table=True):
 
     id : UUID = Field(default_factory=uuid4, primary_key=True, index=True)
     nombre: str = Field(max_length=100, nullable=False, description="Nombre del Hogar")
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        nullable=False,
+    )
 
-    owner_id: UUID = Field(foreign_key="usuario.id")
+    owner_id: UUID = Field(foreign_key="usuario.id", index=True)
     owner: Optional["Usuario"] = Relationship(back_populates="rooms")
     parent_id: UUID | None = Field(
         default=None,
         foreign_key="room.id",
         nullable=True,
+        index=True,
     )
+

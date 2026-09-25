@@ -141,3 +141,27 @@ class TestAuthenticationAnd401:
             headers={"Authorization": f"Bearer {expired_token}"}
         )
         assert resp.status_code == 401
+
+
+class TestCORSPolicy:
+    @pytest.mark.asyncio
+    async def test_cors_allowed_origin(self, async_client):
+        response = await async_client.options(
+            "/api/v1/auth/login",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+    @pytest.mark.asyncio
+    async def test_cors_disallowed_origin(self, async_client):
+        response = await async_client.options(
+            "/api/v1/auth/login",
+            headers={
+                "Origin": "http://evil-attacker.com",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert "access-control-allow-origin" not in response.headers

@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { TokenResponse, RefreshTokenRequest } from "./types/auth";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1",
@@ -19,39 +20,48 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const isAuthRoute =
-      originalRequest.url.includes("/auth/login") ||
-      originalRequest.url.includes("/auth/register") ||
-      originalRequest.url.includes("/auth/refresh");
+      originalRequest?.url?.includes("/auth/login") ||
+      originalRequest?.url?.includes("/auth/register") ||
+      originalRequest?.url?.includes("/auth/refresh");
 
     // Solo intentar refresh si NO es ruta de auth y no se ha reintentado aún
     if (
       error.response?.status === 401 &&
+      originalRequest &&
       !originalRequest._retry &&
       !isAuthRoute
     ) {
-      const currentToken = localStorage.getItem("token");
-      if (!currentToken) {
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (!refreshToken) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
+        window.location.href = "/login";
         return Promise.reject(error);
       }
 
       originalRequest._retry = true;
 
       try {
-        const refreshResponse = await api.post("/auth/refresh");
-        const newToken = refreshResponse.data.access_token;
+        const refreshResponse = await api.post<TokenResponse>(
+          "/auth/refresh",
+          { refresh_token: refreshToken } satisfies RefreshTokenRequest
+        );
+        const { access_token: newAccessToken, refresh_token: newRefreshToken } =
+          refreshResponse.data;
 
-        // FE-003: Validar que el token refresheado no sea falsy antes de persistirlo
-        if (!newToken) {
-          throw new Error("El servidor no devolvió un access_token válido en el refresh.");
+        // Validar que ambos tokens sean válidos
+        if (!newAccessToken || !newRefreshToken) {
+          throw new Error("El servidor no devolvió tokens válidos en el refresh.");
         }
 
-        localStorage.setItem("token", newToken);
-        originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
+        localStorage.setItem("token", newAccessToken);
+        localStorage.setItem("refreshToken", newRefreshToken);
+        originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
         window.location.href = "/login";
-        // FE-003: Propagar el error para que los catch de los llamadores lo reciban
         return Promise.reject(refreshError);
       }
     }

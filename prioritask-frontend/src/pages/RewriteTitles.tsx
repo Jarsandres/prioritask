@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
+import RetroWindow from "../components/common/RetroWindow";
+import EmptyState from "../components/common/EmptyState";
 
 interface Suggestion {
   id: string;
@@ -60,51 +62,110 @@ const RewriteTitles = () => {
     }
   };
 
-  if (loading) return <p className="container mt-4">Cargando sugerencias...</p>;
-
   return (
-    <div className="container mt-4">
-      <h2>🧠 Mejorar títulos</h2>
-      <button className="btn btn-secondary mb-3" onClick={() => navigate("/tasks")}>
-        Volver
-      </button>
+    <div className="container-fluid py-2">
+      {/* Botón Volver y Cabecera */}
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+          <h2 className="retro-page-title">
+            <span>🧠</span> OPTIMIZADOR DE TÍTULOS CON IA / TITLE_OPTIMIZER.EXE
+          </h2>
+          <p className="retro-page-subtitle">
+            Reescribe títulos ambiguos para maximizar la claridad operativa
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-retro btn-retro-outline"
+          style={{ minHeight: "40px" }}
+          onClick={() => navigate("/tasks")}
+        >
+          <span>⬅</span> <span>Volver a Tareas</span>
+        </button>
+      </div>
 
       {error && (
-        <div className="alert alert-danger" role="alert">
+        <div className="alert alert-danger mb-4" role="alert">
           {error}
         </div>
       )}
 
-      {suggestions.length === 0 ? (
-        <p>No hay sugerencias disponibles.</p>
-      ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Tarea original</th>
-              <th>Título sugerido</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
+      {/* Ventana Retro Principal */}
+      <RetroWindow
+        title="AI_TITLE_OPTIMIZER.EXE - SUGERENCIAS ACTIVAS"
+        icon="🧠"
+        variant="magenta"
+      >
+        {loading ? (
+          <EmptyState
+            icon="⏳"
+            title="Consultando red neuronal..."
+            description="Analizando sintaxis y contexto de tus títulos actuales."
+          />
+        ) : suggestions.length === 0 ? (
+          <EmptyState
+            icon="✨"
+            title="Todos los títulos están optimizados"
+            description="No hay recomendaciones pendientes del motor neuronal de Prioritask."
+            actionLabel="Volver a la lista de tareas"
+            onAction={() => navigate("/tasks")}
+          />
+        ) : (
+          <div className="d-flex flex-column gap-3">
             {suggestions.map((s) => (
-              <tr key={s.id}>
-                <td>{s.original}</td>
-                <td>{s.reformulada}</td>
-                <td>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => acceptSuggestion(s)}
-                    disabled={acceptingId === s.id}
-                  >
-                    {acceptingId === s.id ? "Aceptando..." : "Aceptar"}
-                  </button>
-                </td>
-              </tr>
+              <div key={s.id} className="retro-compare-card p-3">
+                <div className="row g-3 align-items-center">
+                  <div className="col-12 col-md-5">
+                    <div className="retro-compare-box">
+                      <span className="retro-compare-label text-muted">
+                        📁 TÍTULO ORIGINAL:
+                      </span>
+                      <div className="retro-compare-text">{s.original}</div>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-1 text-center d-none d-md-block">
+                    <span className="retro-compare-arrow">➔</span>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <div className="retro-compare-box">
+                      <span className="retro-compare-label text-success">
+                        ✨ TÍTULO RECOMENDADO POR IA:
+                      </span>
+                      <div className="retro-compare-text fw-bold text-success">
+                        {s.reformulada}
+                      </div>
+                      {s.motivo && (
+                        <div className="retro-compare-reason">
+                          <span>💡 Motivo: </span>
+                          <span>{s.motivo}</span>
+                        </div>
+                      )}
+                      <div className="mt-3 d-flex justify-content-end">
+                        <button
+                          type="button"
+                          className="btn-retro btn-retro-primary"
+                          style={{ minHeight: "44px" }}
+                          onClick={() => acceptSuggestion(s)}
+                          disabled={acceptingId === s.id}
+                        >
+                          <span>💾</span>
+                          <span>
+                            {acceptingId === s.id
+                              ? "Aplicando..."
+                              : "Aplicar Mejora"}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      )}
+          </div>
+        )}
+      </RetroWindow>
     </div>
   );
 };

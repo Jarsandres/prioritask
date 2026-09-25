@@ -171,6 +171,38 @@ async def get_tasks_by_room(
         limit=limit,
     )
 
+async def _get_task_with_access(
+    session: AsyncSession,
+    task_id: UUID,
+    current_user: Usuario,
+    allow_collaborator: bool = True,
+) -> tuple[Task, bool]:
+    """Retrieve task and verify owner or collaborator permissions."""
+    result = await session.exec(
+        select(Task)
+        .options(
+            selectinload(Task.colaboradores),
+            selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta),
+        )
+        .where(
+            Task.id == task_id,
+            Task.deleted_at.is_(None),
+        )
+    )
+    task = result.one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada")
+
+    is_owner = (task.user_id == current_user.id)
+    is_collaborator = any(c.user_id == current_user.id for c in task.colaboradores)
+
+    if not is_owner and not (allow_collaborator and is_collaborator):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para acceder a esta tarea")
+
+    return task, is_owner
+
+
 @router.post("", response_model=TaskRead, status_code=201, summary="Crear tarea", description="Crea una nueva tarea para el usuario actual.")
 async def create_task(
         payload: TaskCreate,
@@ -178,7 +210,11 @@ async def create_task(
         current_user: Usuario = Depends(get_current_user),
 ):
     room_id = payload.room_id
-    if room_id is None:
+    if room_id is not None:
+        room = await session.get(Room, room_id)
+        if not room or room.owner_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hogar no encontrado")
+    else:
         result = await session.exec(
             select(Room.id).where(Room.owner_id == current_user.id)
         )
@@ -241,8 +277,12 @@ async def assign_task(
             assigned_by=current_user.id
         )
         return assignment
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        if str(e) == "Task not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/assigned/{user_id}", response_model=list[TaskAssignmentRead], summary="Tareas asignadas", description="Obtiene las tareas asignadas a un usuario específico.")
@@ -251,7 +291,27 @@ async def get_assigned_tasks(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
-    return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
+    if current_user.id == user_id or getattr(current_user, "is_superuser", False):
+        return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
+
+    # Return assignments for user_id on tasks owned by current_user (tenant isolation for task owners)
+    tasks_assigned = await TaskAssignmentService.get_assigned_tasks(
+        session=session, user_id=user_id, filter_owner_id=current_user.id
+    )
+    if tasks_assigned:
+        return tasks_assigned
+
+    # Check if current_user owns any task in the system
+    owner_tasks = await session.exec(
+        select(Task.id).where(Task.user_id == current_user.id)
+    )
+    if owner_tasks.first() is not None:
+        return []
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="No tienes permiso para ver las tareas de este usuario",
+    )
 
 
 @router.get("/history", response_model=list[TaskHistoryRead], summary="Historial de tareas")
@@ -321,16 +381,23 @@ async def get_task_history(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID de tarea inválido")
 
-    # Validar propiedad del usuario y que la tarea no esté eliminada
+    # Validar propiedad del usuario o colaborador y que la tarea no esté eliminada
     task_result = await session.exec(
-        select(Task).where(
+        select(Task)
+        .options(selectinload(Task.colaboradores))
+        .where(
             Task.id == task_uuid,
-            Task.user_id == current_user.id,
             Task.deleted_at.is_(None)
         )
     )
     task = task_result.one_or_none()
     if not task:
+        raise HTTPException(status_code=404, detail="Historial no encontrado")
+
+    is_owner = (task.user_id == current_user.id)
+    is_collaborator = any(c.user_id == current_user.id for c in task.colaboradores)
+
+    if not is_owner and not is_collaborator:
         raise HTTPException(status_code=404, detail="Historial no encontrado")
 
     result = await session.exec(
@@ -347,22 +414,7 @@ async def get_task(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
-    result = await session.exec(
-        select(Task)
-        .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
-        .where(
-            Task.id == task_id,
-            Task.deleted_at.is_(None)
-        )
-    )
-    task = result.one_or_none()
-
-    if not task:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada")
-
-    if task.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="No tienes permiso para acceder a esta tarea")
-
+    task, _ = await _get_task_with_access(session, task_id, current_user, allow_collaborator=True)
     return task
 
 @router.put("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK, summary="Actualizar tarea", description="Actualiza una tarea existente del usuario actual.")
@@ -374,15 +426,23 @@ async def update_task(
 ):
     result = await session.exec(
         select(Task)
-        .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+        .options(
+            selectinload(Task.colaboradores),
+            selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta),
+        )
         .where(
             Task.id == task_id,
-            Task.user_id == current_user.id,
             Task.deleted_at.is_(None)
         )
     )
     task = result.one_or_none()
     if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    is_owner = (task.user_id == current_user.id)
+    is_collaborator = any(c.user_id == current_user.id for c in task.colaboradores)
+
+    if not is_owner and not is_collaborator:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
     changes: dict[str, Any] = {}
@@ -419,15 +479,31 @@ async def delete_task(
         session: AsyncSession = Depends(get_session),
 ):
     result = await session.exec(
-        select(Task).where(
+        select(Task)
+        .options(selectinload(Task.colaboradores))
+        .where(
             Task.id == task_id,
-            Task.user_id == current_user.id,
             Task.deleted_at.is_(None)
         )
     )
     task = result.one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    is_owner = (task.user_id == current_user.id)
+    is_collaborator = any(c.user_id == current_user.id for c in task.colaboradores)
+
+    if is_collaborator and not is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el propietario puede eliminar la tarea"
+        )
+
+    if not is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tarea no encontrada"
+        )
 
     task.deleted_at = datetime.now(UTC)
     session.add(task)
@@ -453,16 +529,24 @@ async def patch_task(
     try:
         result = await session.exec(
             select(Task)
-            .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+            .options(
+                selectinload(Task.colaboradores),
+                selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta),
+            )
             .where(
                 Task.id == task_id,
-                Task.deleted_at.is_(None),
-                Task.user_id == current_user.id
+                Task.deleted_at.is_(None)
             )
         )
         task = result.one_or_none()
 
         if not task:
+            raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+
+        is_owner = (task.user_id == current_user.id)
+        is_collaborator = any(c.user_id == current_user.id for c in task.colaboradores)
+
+        if not is_owner and not is_collaborator:
             raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
         update_data = payload.model_dump(exclude_unset=True)
@@ -472,8 +556,6 @@ async def patch_task(
         task.updated_at = datetime.now(UTC)
 
         session.add(task)
-        await session.commit()
-        await session.refresh(task)
 
         history = TaskHistory(
             task_id=task.id,
@@ -483,8 +565,11 @@ async def patch_task(
         )
         session.add(history)
         await session.commit()
+        await session.refresh(task)
 
         return task
+    except HTTPException:
+        raise
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
 
@@ -498,10 +583,12 @@ async def patch_task_status(
     try:
         result = await session.exec(
             select(Task)
-            .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+            .options(
+                selectinload(Task.colaboradores),
+                selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta),
+            )
             .where(
                 Task.id == task_id,
-                Task.user_id == current_user.id,
                 Task.deleted_at.is_(None)
             )
         )
@@ -510,12 +597,16 @@ async def patch_task_status(
         if not task:
             raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
+        is_owner = (task.user_id == current_user.id)
+        is_collaborator = any(c.user_id == current_user.id for c in task.colaboradores)
+
+        if not is_owner and not is_collaborator:
+            raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+
         task.estado = payload.estado
         task.updated_at = datetime.now(UTC)
 
         session.add(task)
-        await session.commit()
-        await session.refresh(task)
 
         history = TaskHistory(
             task_id=task.id,
@@ -525,8 +616,11 @@ async def patch_task_status(
         )
         session.add(history)
         await session.commit()
+        await session.refresh(task)
 
         return task
+    except HTTPException:
+        raise
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
 
@@ -537,6 +631,24 @@ async def remove_task_assignment(
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
+    # Verificar que la tarea existe y no está eliminada
+    result_task = await session.exec(
+        select(Task).where(
+            Task.id == task_id,
+            Task.deleted_at.is_(None)
+        )
+    )
+    task = result_task.one_or_none()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada")
+
+    # Solo el propietario de la tarea o el propio usuario asignado pueden eliminar la asignación
+    if task.user_id != current_user.id and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para modificar asignaciones de esta tarea"
+        )
+
     # Verificar existencia de la asignación
     result = await session.exec(
         select(TaskAssignment).where(
@@ -547,7 +659,7 @@ async def remove_task_assignment(
     assignment = result.one_or_none()
 
     if not assignment:
-        raise HTTPException(status_code=404, detail="Asignación no encontrada")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada")
 
     # Eliminar la asignación
     await session.delete(assignment)
