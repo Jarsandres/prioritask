@@ -1,10 +1,12 @@
 import logging
+
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.v1 import api_router
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ app = FastAPI(
 # Global Exception Handlers
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-    logger.error("Error de base de datos en %s: %s", request.url, exc, exc_info=True)
+    logger.error("Error de base de datos en %s: %s", request.url, exc, exc_info=exc)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -36,7 +38,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    logger.error("Excepción no capturada en %s: %s", request.url, exc, exc_info=True)
+    logger.error("Excepción no capturada en %s: %s", request.url, exc, exc_info=exc)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -48,7 +50,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # Registrar CORSMiddleware antes de cualquier otra configuración
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permitir todos los orígenes en entorno local
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

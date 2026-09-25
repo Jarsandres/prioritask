@@ -138,7 +138,10 @@ async def rewrite_tasks(
     summary="Sugerir prioridad de una tarea",
     description="Devuelve una prioridad sugerida para la tarea enviada.",
 )
-async def suggest_priority(payload: PrioritySuggestRequest) -> PrioritySuggestion:
+async def suggest_priority(
+    payload: PrioritySuggestRequest,
+    current_user: Usuario = Depends(get_current_user),
+) -> PrioritySuggestion:
     texto = f"{payload.titulo} {payload.descripcion or ''}"
     if contiene_palabra_clave(texto):
         prioridad = "alta"

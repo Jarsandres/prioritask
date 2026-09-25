@@ -8,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.enums import UserRole
 from app.models.user import Usuario
-from app.services.auth import ALGORITHM, SECRET_KEY, create_access_token, hash_password
+from app.services.auth import ALGORITHM, SECRET_KEY, hash_password
 
 
 class TestRegistrationPrivilegeEscalation:

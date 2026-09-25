@@ -290,7 +290,7 @@ async def test_register_mass_assignment_privilege_escalation_blocked(async_clien
 @pytest.mark.asyncio
 async def test_auth_me_reflects_accurate_role_and_superuser(async_client, session):
     # Standard user
-    std_user, std_token = await create_user_and_token(async_client)
+    _std_user, std_token = await create_user_and_token(async_client)
     me_std = await async_client.get(
         "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {std_token}"}
@@ -364,7 +364,7 @@ async def test_login_and_refresh_token_claims_integrity(async_client, session):
     assert admin_new_payload["role"] == "ADMIN"
 
     # 3. Login Standard
-    std_user, std_token = await create_user_and_token(async_client, email="std_login@example.com")
+    _std_user, std_token = await create_user_and_token(async_client, email="std_login@example.com")
     std_payload = jwt.decode(std_token, SECRET_KEY, algorithms=[ALGORITHM])
     assert std_payload["is_superuser"] is False
     assert std_payload["role"] == "USER"

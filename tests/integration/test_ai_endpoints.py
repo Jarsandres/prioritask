@@ -89,3 +89,15 @@ async def test_suggest_priority(async_client):
     data = response.json()
     assert "prioridad" in data
     assert data["prioridad"] in ["alta", "media", "baja"]
+
+
+@pytest.mark.asyncio
+async def test_suggest_priority_unauthenticated(async_client):
+    response = await async_client.post(
+        "/api/v1/tasks/ai/suggest",
+        json={
+            "titulo": "Entregar informe urgente",
+            "descripcion": "Debe enviarse hoy",
+        },
+    )
+    assert response.status_code == 401

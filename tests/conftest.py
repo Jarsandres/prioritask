@@ -1,4 +1,4 @@
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -9,7 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
 from app.main import app
-from app.models.enums import CategoriaTarea, UserRole
+from app.models.enums import CategoriaTarea
 from app.models.room import Room
 from app.models.task import Task
 from app.models.task_assignment import TaskAssignment

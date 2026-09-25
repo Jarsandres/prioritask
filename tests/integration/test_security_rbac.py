@@ -9,18 +9,15 @@ Covers:
 4. TestSafeExceptionAndIsolation: Exception hygiene, database constraint handling, and authentication enforcement.
 """
 
-from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.enums import CategoriaTarea, EstadoTarea, UserRole
 from app.models.room import Room
 from app.models.task import Task
-from app.models.task_assignment import TaskAssignment
 from app.models.user import Usuario
 from app.services.auth import SECRET_KEY, create_access_token, hash_password
 

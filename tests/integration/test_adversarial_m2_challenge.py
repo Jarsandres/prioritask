@@ -1,13 +1,12 @@
-﻿import pytest
-from httpx import AsyncClient
-from sqlmodel.ext.asyncio.session import AsyncSession
-from uuid import uuid4, UUID
+﻿from uuid import uuid4
 
+import pytest
+from httpx import AsyncClient
+
+from app.models.enums import CategoriaTarea
 from app.models.room import Room
 from app.models.task import Task
 from app.models.user import Usuario
-from app.models.enums import CategoriaTarea, EstadoTarea
-from tests.utils import create_task, create_user_and_token
 
 
 @pytest.mark.asyncio

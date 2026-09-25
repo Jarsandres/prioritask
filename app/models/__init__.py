@@ -9,13 +9,13 @@ from .user import Usuario
 __all__ = [
     'CategoriaTarea',
     'EstadoTarea',
-    'UserRole',
     'Room',
     'Tag',
     'Task',
     'TaskAssignment',
     'TaskHistory',
     'TaskTag',
+    'UserRole',
     'Usuario',
 ]
 
