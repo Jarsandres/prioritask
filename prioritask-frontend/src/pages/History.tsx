@@ -143,7 +143,7 @@ const History = () => {
 
       {/* Ventana de Filtros y Registro */}
       <RetroWindow
-        title="AUDIT_LOG_FILTER.PANEL"
+        title="REGISTRO DEL SISTEMA"
         icon="🎛️"
         className="mb-4"
       >
@@ -203,7 +203,7 @@ const History = () => {
 
       {/* Ventana de Eventos */}
       <RetroWindow
-        title={`TASK_AUDIT.LOG - ENTRADAS REGISTRADAS (${history.length})`}
+        title={`REGISTROS DE EVENTOS (${history.length})`}
         icon="📜"
       >
         {loading ? (

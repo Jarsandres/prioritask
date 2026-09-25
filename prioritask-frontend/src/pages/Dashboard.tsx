@@ -135,7 +135,7 @@ const Dashboard = () => {
         {/* Total de tareas */}
         <div className="col-12 col-md-4">
           <RetroWindow
-            title="TOTAL_TASKS.SYS"
+            title="TOTAL DE TAREAS"
             icon="📋"
             className="h-100"
             bodyClassName="d-flex flex-column align-items-center justify-content-center py-4 text-center"
@@ -149,7 +149,7 @@ const Dashboard = () => {
         {/* Completadas */}
         <div className="col-12 col-md-4">
           <RetroWindow
-            title="COMPLETED.SYS"
+            title="COMPLETADAS"
             icon="✅"
             variant="green"
             className="h-100"
@@ -164,7 +164,7 @@ const Dashboard = () => {
         {/* Pendientes */}
         <div className="col-12 col-md-4">
           <RetroWindow
-            title="PENDING.SYS"
+            title="PENDIENTES"
             icon="⚠️"
             variant="amber"
             className="h-100"
@@ -177,9 +177,9 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Ventana de Explorador de Hogares / ROOMS.DIR */}
+      {/* Ventana de Explorador de Hogares */}
       <RetroWindow
-        title="EXPLORADOR DE HOGARES / ROOMS.DIR"
+        title="EXPLORADOR DE HOGARES"
         icon="📁"
       >
         <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">

@@ -121,7 +121,7 @@ const Tags = () => {
       <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div>
           <h2 className="retro-page-title">
-            <span>🏷️</span> ADMINISTRADOR DE ETIQUETAS / TAG_MANAGER.SYS
+            <span>🏷️</span> ADMINISTRADOR DE ETIQUETAS
           </h2>
           <p className="retro-page-subtitle">
             Crea y administra etiquetas para clasificar y organizar tareas
@@ -130,7 +130,7 @@ const Tags = () => {
       </div>
 
       <RetroWindow
-        title="TAG_MANAGER.SYS - CATÁLOGO DE ETIQUETAS"
+        title="ETIQUETAS"
         icon="🏷️"
       >
         {error && <div className="alert alert-danger mb-3">{error}</div>}
