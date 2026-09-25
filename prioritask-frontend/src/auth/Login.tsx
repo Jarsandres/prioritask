@@ -3,10 +3,14 @@ import api from "../api";
 import { useNavigate, Link } from "react-router-dom";
 import styles from "./Login.module.css";
 import { RoomContext } from "../context/RoomContext";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
+import type { TokenResponse } from "../types/auth";
+import type { Room } from "../types/task";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   // FE-005 (bonus): Estado de carga para prevenir doble submit
   const [isLoading, setIsLoading] = useState(false);
@@ -18,14 +22,15 @@ export default function Login() {
     setError("");
     setIsLoading(true);
     try {
-      const response = await api.post("/auth/login", {
+      const response = await api.post<TokenResponse>("/auth/login", {
         email,
         password,
       });
-      const { access_token } = response.data;
+      const { access_token, refresh_token } = response.data;
       localStorage.setItem("token", access_token);
+      localStorage.setItem("refreshToken", refresh_token);
 
-      const roomsRes = await api.get("/rooms");
+      const roomsRes = await api.get<Room[]>("/rooms");
       const rooms = roomsRes.data;
       if (rooms.length === 0) {
         navigate("/rooms/create");
@@ -64,15 +69,26 @@ export default function Login() {
             disabled={isLoading}
             required
           />
-          <input
-            type="password"
-            placeholder="Contraseña"
-            className={styles.input}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={isLoading}
-            required
-          />
+          <div className={styles.passwordContainer}>
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Contraseña"
+              className={styles.passwordInput}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+              required
+            />
+            <button
+              type="button"
+              className={styles.togglePasswordBtn}
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
+              disabled={isLoading}
+            >
+              {showPassword ? <FaEyeSlash /> : <FaEye />}
+            </button>
+          </div>
           {/* FE-005: Botón deshabilitado durante la petición */}
           <button
             type="submit"

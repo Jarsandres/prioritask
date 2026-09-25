@@ -6,7 +6,8 @@ router = APIRouter()
 
 def execute_query(query, params=None):
     """Función auxiliar simulada para ejecutar consultas parametrizadas."""
-    pass
+
+
 
 
 @router.get("/users/{user_id}")

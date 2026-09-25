@@ -21,6 +21,7 @@ const Sidebar = ({ isOpen = false, onClose }: SidebarProps) => {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("refreshToken");
     if (onClose) onClose();
     navigate("/login");
   };

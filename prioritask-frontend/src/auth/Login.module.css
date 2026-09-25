@@ -65,6 +65,71 @@
   box-shadow: 2px 2px 0px #2563eb;
 }
 
+.passwordContainer {
+  position: relative;
+  width: 100%;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+}
+
+.passwordInput {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.65rem 2.85rem 0.65rem 0.9rem;
+  margin-bottom: 0;
+  border: 2px solid var(--input-border);
+  border-radius: 8px;
+  font-size: 16px;
+  color: var(--input-text);
+  background-color: var(--input-bg);
+  box-sizing: border-box;
+  box-shadow: 2px 2px 0px var(--input-shadow);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.passwordInput:focus {
+  border-color: #2563eb;
+  box-shadow: 2px 2px 0px #2563eb;
+}
+
+.togglePasswordBtn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  font-size: 1.15rem;
+  border-radius: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  min-height: 32px;
+  min-width: 32px;
+  z-index: 1;
+}
+
+.togglePasswordBtn:hover:not(:disabled) {
+  color: var(--text-main);
+  background-color: rgba(125, 125, 125, 0.15);
+}
+
+.togglePasswordBtn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.togglePasswordBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .button {
   width: 100%;
   min-height: 48px;
