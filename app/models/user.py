@@ -8,6 +8,7 @@ from .enums import UserRole
 
 if TYPE_CHECKING:
     from .room import Room
+    from .room_member import RoomMember
     from .tag import Tag
     from .task import Task
     from .task_assignment import TaskAssignment
@@ -24,6 +25,7 @@ class Usuario(SQLModel, table=True):
     is_superuser: bool = Field(default=False)
 
     rooms:   list["Room"]  = Relationship(back_populates="owner")
+    rooms_member: list["RoomMember"] = Relationship(back_populates="user")
     tasks:   list["Task"]  = Relationship(back_populates="usuario")
     tasks_asignadas: list["TaskAssignment"] = Relationship(back_populates="user", sa_relationship_kwargs={"foreign_keys": "TaskAssignment.user_id"})
     etiquetas: list["Tag"] = Relationship(back_populates="usuario", sa_relationship_kwargs={"cascade": "all, delete-orphan"})

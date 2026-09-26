@@ -5,6 +5,49 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## 🚀 Versión 0.3.0-alpha (Sistema Colaborativo de Hogares — Core DB Sprint) — [2026-09-26]
+
+### 🟡 Base de Datos y Modelo de Datos (Database & Models)
+- **[BE-DB-010] Modelo `RoomMember` — Tabla Intermedia Many-to-Many (`app/models/room_member.py`)**:
+  - Creado el modelo `RoomMember(SQLModel, table=True)` con `__tablename__ = "roommember"`.
+  - Clave primaria compuesta `(user_id, room_id)` con claves foráneas a `usuario.id` y `room.id`.
+  - Campo `joined_at: datetime` con `default_factory=lambda: datetime.now(UTC)` timezone-aware.
+  - Campo `role: RoomMemberRole` con valor por defecto `MEMBER`, previniendo escalada de privilegios implícita.
+  - Relaciones bidireccionales protegidas con `TYPE_CHECKING`: `user -> Usuario.rooms_member` y `room -> Room.members`.
+- **[BE-DB-011] Enum `RoomMemberRole` (`app/models/enums.py`)**:
+  - Añadido `class RoomMemberRole(str, Enum)` con miembros `ADMIN` y `MEMBER`.
+  - Coexiste con el `UserRole` global del sistema (sin colisión).
+- **[BE-DB-012] Campo `is_recurring` en modelo `Task` (`app/models/task.py`)**:
+  - Añadido `is_recurring: bool = Field(default=False)` para preparar el modelo de cara al motor de IA.
+  - Refactorizados todos los imports directos en runtime hacia el bloque `if TYPE_CHECKING:`, eliminando riesgos de importación circular.
+  - Añadida relación `room: Optional["Room"] = Relationship(back_populates="tasks")`.
+- **[BE-DB-013] Relaciones Bidireccionales en `Usuario` y `Room` (`app/models/user.py`, `app/models/room.py`)**:
+  - `Usuario`: añadida relación `rooms_member: list["RoomMember"]` con `back_populates="user"`.
+  - `Room`: añadidas relaciones `tasks: list["Task"]` y `members: list["RoomMember"]` con `back_populates` correspondientes.
+  - Inicialización completa de mappers SQLAlchemy validada sin ciclos.
+
+### 🔵 Migraciones Alembic
+- **[BE-MIG-001] Migración `75cee56d2723_add_roommember_and_task_models.py`**:
+  - Genera la tabla `roommember` con todos sus campos, índices y claves foráneas.
+  - Añade columna `is_recurring BOOLEAN NOT NULL DEFAULT 0` a la tabla `task` usando `op.batch_alter_table` para compatibilidad SQLite, sin afectar los 625 registros preexistentes.
+  - Auditado: **0 sentencias `DROP TABLE` accidentales**. Todas las tablas existentes preservadas.
+  - `downgrade()` simétrico y reversible implementado.
+- **[BE-MIG-002] Blindaje de `env.py` de Alembic (`app/db/migrations/env.py`)**:
+  - Añadidos imports de `Tag`, `TaskTag`, `TaskHistory` y `RoomMember` para evitar drops accidentales en futuros autogenerates.
+
+### 🟢 Tests de Persistencia
+- **[BE-TEST-010] Tests Asíncronos de Persistencia (`tests/unit/test_room_member_persistence.py`)**:
+  - `test_room_member_multiple_membership`: Crea un Room, añade dos usuarios vía `RoomMember` con roles distintos, y verifica bidireccionalidad de la relación.
+  - `test_task_room_link_assignment_and_done_status`: Crea una Task vinculada a un Room, asigna al usuario, cambia estado a `DONE` y verifica vía `room.tasks`.
+  - Cobertura total de la suite: **67%** (129 tests pasando, umbral 65% superado).
+
+### 🔒 Seguridad y Calidad
+- **[BE-SEC-010] Backup de Base de Datos Previa a Migración**: Generado `prioritask.db.bak` (copia de los 625 registros previos).
+- **Ruff Linter**: 0 errores en `app/` y `tests/`.
+- **QA-Sentinel**: Dictamen **APROBADO** — 129/129 tests pasando, cobertura 67%, 0 vulnerabilidades detectadas.
+
+---
+
 ## 🚀 Versión 0.2.1-alpha (Mitigación CORS CWE-942 y Autenticación en Inferencia IA) — [2026-09-25]
 
 ### 🔴 Correcciones Críticas y Seguridad (Security & Critical Fixes)

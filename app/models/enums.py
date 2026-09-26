@@ -17,3 +17,8 @@ class UserRole(str, Enum):
     ADMIN = "ADMIN"
     USER = "USER"
 
+
+class RoomMemberRole(str, Enum):
+    ADMIN = "ADMIN"
+    MEMBER = "MEMBER"
+

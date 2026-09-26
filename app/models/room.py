@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 if TYPE_CHECKING:
+    from .room_member import RoomMember
+    from .task import Task
     from .user import Usuario
 
 class Room(SQLModel, table=True):
@@ -28,4 +30,7 @@ class Room(SQLModel, table=True):
         nullable=True,
         index=True,
     )
+
+    tasks: list["Task"] = Relationship(back_populates="room")
+    members: list["RoomMember"] = Relationship(back_populates="room")
 
