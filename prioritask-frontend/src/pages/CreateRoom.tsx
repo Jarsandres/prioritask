@@ -2,24 +2,32 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api";
 import { useRoom } from "../context/RoomContext";
-import RetroWindow from "../components/common/RetroWindow";
+import { Card } from "../components/ui/Card";
+import { Button } from "../components/ui/Button";
+import { LuHouse, LuArrowLeft, LuCheck } from "react-icons/lu";
 
 const CreateRoom = () => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { setRoomId } = useRoom();
+  const { setRoomId, refreshRooms } = useRoom();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName) {
+      setError("El nombre del hogar no puede estar vacío.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
     try {
-      const res = await api.post<{ id: string }>("/rooms", { nombre: name });
+      const res = await api.post<{ id: string }>("/rooms", { nombre: cleanName });
       const { id } = res.data;
-      localStorage.setItem("roomId", id);
       setRoomId(id);
+      await refreshRooms();
       navigate("/dashboard");
     } catch (err: unknown) {
       console.error(err);
@@ -32,7 +40,7 @@ const CreateRoom = () => {
           (err as { response: { data: { detail: string } } }).response.data.detail
         );
       } else {
-        setError("Error al crear el hogar");
+        setError("Error al crear el hogar. Intenta nuevamente.");
       }
     } finally {
       setIsSubmitting(false);
@@ -40,62 +48,94 @@ const CreateRoom = () => {
   };
 
   return (
-    <div className="container-fluid py-2" style={{ maxWidth: "680px" }}>
+    <div className="container-fluid py-2" style={{ maxWidth: "620px" }}>
+      {/* Cabecera */}
       <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div>
-          <h2 className="retro-page-title">
-            <span>🏠</span> CONFIGURACIÓN DE HOGAR / CREATE_ROOM.EXE
+          <div className="d-flex align-items-center gap-2 mb-1">
+            <Link
+              to="/dashboard"
+              className="text-muted d-flex align-items-center gap-1 text-decoration-none small"
+              title="Volver al Dashboard"
+            >
+              <LuArrowLeft size={16} />
+              <span>Dashboard</span>
+            </Link>
+          </div>
+          <h2 className="fw-bold mb-1" style={{ fontSize: "24px" }}>
+            Crear Nuevo Hogar
           </h2>
-          <p className="retro-page-subtitle">
-            Crea tu espacio colaborativo para sincronizar las tareas del grupo
+          <p className="text-muted mb-0" style={{ fontSize: "14px" }}>
+            Configura un espacio colaborativo para sincronizar las tareas del grupo
           </p>
         </div>
-        <Link
-          to="/dashboard"
-          className="btn-retro btn-retro-outline"
-          style={{ minHeight: "40px" }}
-        >
-          <span>⬅</span> <span>Volver</span>
+
+        <Link to="/dashboard">
+          <Button variant="outline" size="sm" leftIcon={<LuArrowLeft size={14} />}>
+            Volver
+          </Button>
         </Link>
       </div>
 
-      <RetroWindow
-        title="CREATE_ROOM.EXE - ASISTENTE DE CREACIÓN"
-        icon="🏠"
+      <Card
+        title="Información del Hogar"
+        subtitle="Un hogar agrupa todas las tareas, estados y miembros convivientes"
+        icon={<LuHouse size={20} className="text-primary" />}
+        className="mb-4"
       >
-        {error && <div className="alert alert-danger mb-4">{error}</div>}
+        {error && (
+          <div className="alert alert-danger mb-4" role="alert">
+            {error}
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="mb-4">
-            <label htmlFor="room-name" className="form-label fw-bold small text-muted">
-              NOMBRE DEL HOGAR O ESPACIO OPERATIVO *
+            <label htmlFor="room-name" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
+              Nombre del hogar o espacio *
             </label>
             <input
               id="room-name"
               type="text"
-              className="form-control retro-input"
-              placeholder="Ej. Casa Principal, Oficina Compartida, Loft..."
+              className="form-control"
+              style={{
+                borderRadius: "10px",
+                borderColor: "var(--border-default)",
+                backgroundColor: "var(--bg-subtle)",
+                color: "var(--text-main)",
+                minHeight: "44px",
+                fontSize: "15px",
+              }}
+              placeholder="Ej. Casa Principal, Apartamento 4B, Oficina..."
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               disabled={isSubmitting}
             />
-            <small className="text-muted mt-1 d-block">
-              Este nombre identificará el espacio para ti y los miembros colaboradores.
+            <small className="text-muted mt-2 d-block" style={{ fontSize: "12px" }}>
+              Este nombre identificará el espacio compartido para ti y todos los miembros invitados.
             </small>
           </div>
 
-          <button
-            type="submit"
-            className="btn-retro btn-retro-primary w-100"
-            style={{ minHeight: "48px" }}
-            disabled={!name.trim() || isSubmitting}
-          >
-            <span>{isSubmitting ? "⏳" : "💾"}</span>
-            <span>{isSubmitting ? "Inicializando Hogar..." : "Crear Hogar"}</span>
-          </button>
+          <div className="d-flex justify-content-end gap-2 pt-3 border-top">
+            <Link to="/dashboard">
+              <Button variant="ghost" size="md" disabled={isSubmitting}>
+                Cancelar
+              </Button>
+            </Link>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              leftIcon={<LuCheck size={16} />}
+              isLoading={isSubmitting}
+              disabled={!name.trim() || isSubmitting}
+            >
+              Crear Hogar
+            </Button>
+          </div>
         </form>
-      </RetroWindow>
+      </Card>
     </div>
   );
 };

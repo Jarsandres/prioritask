@@ -1,5 +1,21 @@
+import { useState, useRef, useEffect } from "react";
 import type { Task } from "../../types/task";
-import { PriorityBadge, StatusBadge, RecurringBadge, getCategoryIcon } from "./Badges";
+import {
+  PriorityBadge,
+  StatusBadge,
+  RecurringBadge,
+  CategoryIcon,
+} from "./Badges";
+import {
+  LuCheck,
+  LuCircleCheck,
+  LuEllipsisVertical,
+  LuPencil,
+  LuTrash2,
+  LuCalendar,
+  LuLoaderCircle,
+} from "react-icons/lu";
+import "../tasks/tasks.css";
 
 export interface TaskCardProps {
   task: Task;
@@ -9,6 +25,8 @@ export interface TaskCardProps {
   isCompleting?: boolean;
   isDeleting?: boolean;
   className?: string;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
 }
 
 export const TaskCard = ({
@@ -19,124 +37,157 @@ export const TaskCard = ({
   isCompleting = false,
   isDeleting = false,
   className = "",
+  draggable = false,
+  onDragStart,
 }: TaskCardProps) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const isDone = task.estado === "DONE";
+
+  // Manejar clic exterior para cerrar el menú de acciones
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
+
+  const handleToggleComplete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onComplete && !isCompleting && !isDeleting) {
+      onComplete(task.id);
+    }
+  };
 
   return (
     <div
-      className={`retro-window retro-task-card ${isDone ? "task-done" : ""} ${className}`.trim()}
+      className={`ui-task-card ${isDone ? "task-done" : ""} ${className}`.trim()}
+      draggable={draggable}
+      onDragStart={onDragStart}
     >
-      {/* Header de ventana retro con categoría y controles decorativos */}
-      <div className="retro-window-header">
-        <div className="d-flex align-items-center gap-2 text-truncate pe-2">
-          <span role="img" aria-label={task.categoria}>
-            {getCategoryIcon(task.categoria)}
+      {/* Cabecera superior: Badges + Menú contextual de 3 puntos */}
+      <div className="ui-task-card-header">
+        <div className="ui-task-card-badges">
+          <span className="badge rounded-pill bg-light text-dark border d-inline-flex align-items-center gap-1 px-2 py-1 small">
+            <CategoryIcon category={task.categoria} size={13} />
+            <span className="text-uppercase" style={{ fontSize: "11px", fontWeight: 600 }}>
+              {task.categoria || "OTRO"}
+            </span>
           </span>
-          <span className="text-uppercase fw-bold small text-truncate">
-            {task.categoria || "OTRO"}
-          </span>
-        </div>
-        <div className="retro-window-controls flex-shrink-0" aria-hidden="true">
-          <span className="retro-window-btn">─</span>
-          <span className="retro-window-btn">□</span>
-          <span className="retro-window-btn">✕</span>
-        </div>
-      </div>
-
-      <div className="retro-window-body">
-        {/* Badges de prioridad y estado */}
-        <div className="d-flex flex-wrap gap-2 mb-2 align-items-center">
           <PriorityBadge peso={task.peso} />
           <StatusBadge status={task.estado} />
           {task.is_recurring && <RecurringBadge />}
         </div>
 
-        {/* Título de tarea */}
-        <h5 className="retro-task-title fw-bold mb-2 text-break">
-          {task.titulo}
-        </h5>
+        {(onEdit || onDelete) && (
+          <div className="ui-task-actions-dropdown" ref={menuRef}>
+            <button
+              type="button"
+              className="ui-task-menu-trigger"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen((prev) => !prev);
+              }}
+              aria-label="Acciones de la tarea"
+              aria-haspopup="true"
+              aria-expanded={menuOpen}
+            >
+              <LuEllipsisVertical size={16} aria-hidden="true" />
+            </button>
 
-        {/* Descripción si existe */}
-        {task.descripcion && (
-          <p
-            className="text-muted small mb-2 text-break"
-            style={{
-              display: "-webkit-box",
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {task.descripcion}
-          </p>
-        )}
-
-        {/* Fecha de vencimiento si existe */}
-        {task.due_date && (
-          <div className="small text-muted mb-2 d-flex align-items-center gap-1">
-            <span>📅</span>
-            <span>Vence: {task.due_date}</span>
+            {menuOpen && (
+              <div className="ui-task-menu-menu" role="menu">
+                {onEdit && (
+                  <button
+                    type="button"
+                    className="ui-task-menu-item"
+                    role="menuitem"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                      onEdit(task);
+                    }}
+                    disabled={isDeleting || isCompleting}
+                  >
+                    <LuPencil size={14} aria-hidden="true" />
+                    <span>Editar</span>
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    className="ui-task-menu-item danger"
+                    role="menuitem"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                      onDelete(task);
+                    }}
+                    disabled={isDeleting || isCompleting}
+                  >
+                    <LuTrash2 size={14} aria-hidden="true" />
+                    <span>{isDeleting ? "Eliminando..." : "Eliminar"}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
+      </div>
 
-        {/* Tags con estilo retro hashtag */}
+      {/* Fila principal: Checkbox circular interactivo + Título */}
+      <div className="ui-task-main-row">
+        <button
+          type="button"
+          className={`ui-task-checkbox ${isDone ? "checked" : ""}`}
+          onClick={handleToggleComplete}
+          disabled={isCompleting || isDeleting}
+          aria-label={isDone ? `Desmarcar tarea ${task.titulo}` : `Completar tarea ${task.titulo}`}
+          title={isDone ? "Tarea completada" : "Completar tarea"}
+        >
+          {isCompleting ? (
+            <LuLoaderCircle size={14} className="ui-btn-spinner" aria-hidden="true" />
+          ) : isDone ? (
+            <LuCircleCheck size={18} aria-hidden="true" />
+          ) : (
+            <LuCheck size={12} aria-hidden="true" />
+          )}
+        </button>
+
+        <h4 className="ui-task-title">{task.titulo}</h4>
+      </div>
+
+      {/* Descripción opcional */}
+      {task.descripcion && (
+        <p className="ui-task-desc" title={task.descripcion}>
+          {task.descripcion}
+        </p>
+      )}
+
+      {/* Footer meta: Fecha de vencimiento y Tags */}
+      <div className="ui-task-meta-footer">
+        {task.due_date ? (
+          <div className="ui-task-due-date" title={`Fecha de vencimiento: ${task.due_date}`}>
+            <LuCalendar size={13} aria-hidden="true" />
+            <span>{task.due_date}</span>
+          </div>
+        ) : (
+          <span />
+        )}
+
         {task.tags && task.tags.length > 0 && (
-          <div className="retro-tags-container mb-3">
+          <div className="ui-task-tags">
             {task.tags.map((tag) => (
-              <span key={tag.id} className="retro-tag">
+              <span key={tag.id} className="ui-task-tag">
                 #{tag.nombre}
               </span>
             ))}
           </div>
         )}
-
-        {/* Zona Táctil del Pulgar (Thumb Zone) */}
-        <div className="retro-task-actions">
-          {!isDone && onComplete && (
-            <button
-              type="button"
-              className="btn-retro btn-retro-success w-100 mb-2 py-2 d-flex align-items-center justify-content-center gap-2"
-              style={{ minHeight: "44px" }}
-              onClick={() => onComplete(task.id)}
-              disabled={isCompleting || isDeleting}
-              aria-label={`Completar tarea ${task.titulo}`}
-            >
-              <span>{isCompleting ? "⏳" : "✅"}</span>
-              <span>
-                {isCompleting ? "Completando..." : "Completar Tarea"}
-              </span>
-            </button>
-          )}
-
-          {(onEdit || onDelete) && (
-            <div className="d-flex gap-2">
-              {onEdit && (
-                <button
-                  type="button"
-                  className="btn-retro btn-retro-outline flex-fill py-2 d-flex align-items-center justify-content-center gap-1"
-                  style={{ minHeight: "40px" }}
-                  onClick={() => onEdit(task)}
-                  disabled={isDeleting || isCompleting}
-                >
-                  <span>✏️</span>
-                  <span>Editar</span>
-                </button>
-              )}
-              {onDelete && (
-                <button
-                  type="button"
-                  className="btn-retro btn-retro-danger flex-fill py-2 d-flex align-items-center justify-content-center gap-1"
-                  style={{ minHeight: "40px" }}
-                  onClick={() => onDelete(task)}
-                  disabled={isDeleting || isCompleting}
-                >
-                  <span>🗑️</span>
-                  <span>{isDeleting ? "Eliminando..." : "Eliminar"}</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

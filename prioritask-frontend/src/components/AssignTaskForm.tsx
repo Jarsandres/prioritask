@@ -3,12 +3,18 @@ import api from "../api";
 import Select from "react-select";
 import { getCurrentRoomId } from "../utils/room";
 import { useTheme } from "../context/ThemeContext";
-import RetroWindow from "./common/RetroWindow";
+import { Card } from "./ui/Card";
+import { Button } from "./ui/Button";
 import EmptyState from "./common/EmptyState";
-import { getRetroSelectStyles } from "../utils/selectStyles";
+import { getModernSelectStyles } from "../utils/selectStyles";
 import type { Assignment, SelectOption, Task } from "../types/task";
-
-// FE-010: Tipos importados del módulo compartido
+import {
+  LuUsers,
+  LuListTodo,
+  LuTrash2,
+  LuCheck,
+  LuUserCheck,
+} from "react-icons/lu";
 
 const AssignTaskForm = () => {
   const [userId, setUserId] = useState("");
@@ -17,14 +23,11 @@ const AssignTaskForm = () => {
   const [error, setError] = useState("");
   const [users, setUsers] = useState<SelectOption[]>([]);
   const [tasks, setTasks] = useState<SelectOption[]>([]);
-  // FE-005: Estado de carga para el botón "Asignar"
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Estado de carga para el botón "Quitar" (por fila)
   const [removingTaskId, setRemovingTaskId] = useState<string | null>(null);
 
   const { theme } = useTheme();
 
-  // Carga inicial de usuarios y tareas
   useEffect(() => {
     const load = async () => {
       try {
@@ -52,7 +55,6 @@ const AssignTaskForm = () => {
     load();
   }, []);
 
-  // FE-007: fetchAssignments con useCallback para poder usar en useEffect
   const fetchAssignments = useCallback(async () => {
     if (!userId) return;
     setError("");
@@ -75,7 +77,6 @@ const AssignTaskForm = () => {
     }
   }, [userId]);
 
-  // FE-007: Reemplazar onBlur por useEffect reactivo a userId
   useEffect(() => {
     if (userId) {
       fetchAssignments();
@@ -84,12 +85,10 @@ const AssignTaskForm = () => {
     }
   }, [userId, fetchAssignments]);
 
-  // FE-005 + FE-007: handleAssign con validación previa y estado isSubmitting
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    // FE-007: Validar que ambos campos estén seleccionados antes de llamar a la API
     if (!userId || !taskId) {
       setError("Debes seleccionar un usuario y una tarea.");
       return;
@@ -117,7 +116,6 @@ const AssignTaskForm = () => {
         setError("Error al asignar tarea");
       }
     } finally {
-      // FE-005: Restaurar siempre en el finally
       setIsSubmitting(false);
     }
   };
@@ -146,32 +144,38 @@ const AssignTaskForm = () => {
     }
   };
 
-  const selectStyles = getRetroSelectStyles<SelectOption>(theme);
+  const selectStyles = getModernSelectStyles<SelectOption>(theme);
 
   return (
-    <div className="container-fluid py-2">
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <div>
-          <h2 className="retro-page-title">
-            <span>🤝</span> ASIGNACIÓN DE TAREAS / TASK_ASSIGN.EXE
-          </h2>
-          <p className="retro-page-subtitle">
-            Vincula miembros del equipo a tareas activas y supervisa la carga de trabajo
-          </p>
-        </div>
+    <div className="container-fluid py-2" style={{ maxWidth: "860px" }}>
+      {/* Cabecera */}
+      <div className="mb-4">
+        <h2 className="d-flex align-items-center gap-2 mb-1 fw-bold" style={{ fontSize: "24px" }}>
+          <LuUsers className="text-primary" size={26} aria-hidden="true" />
+          <span>Asignación de Tareas</span>
+        </h2>
+        <p className="text-muted mb-0" style={{ fontSize: "14px" }}>
+          Vincula miembros del equipo a tareas activas y supervisa la carga de trabajo
+        </p>
       </div>
 
-      <RetroWindow
-        title="TASK_ASSIGN.EXE - VINCULACIÓN OPERATIVA"
-        icon="🤝"
+      <Card
+        title="Vincular Responsable"
+        subtitle="Selecciona un conviviente y una tarea para registrar la asignación"
+        icon={<LuUserCheck size={20} className="text-primary" />}
+        className="mb-4"
       >
-        {error && <div className="alert alert-danger mb-4">{error}</div>}
+        {error && (
+          <div className="alert alert-danger mb-4" role="alert">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleAssign} className="mb-4">
           <div className="row g-3">
             <div className="col-12 col-md-6">
-              <label className="form-label fw-bold small text-muted">
-                USUARIO RESPONSABLE *
+              <label className="form-label fw-semibold" style={{ fontSize: "13px" }}>
+                Usuario responsable *
               </label>
               <Select
                 options={users}
@@ -187,8 +191,8 @@ const AssignTaskForm = () => {
             </div>
 
             <div className="col-12 col-md-6">
-              <label className="form-label fw-bold small text-muted">
-                TAREA A ASIGNAR *
+              <label className="form-label fw-semibold" style={{ fontSize: "13px" }}>
+                Tarea a asignar *
               </label>
               <Select
                 options={tasks}
@@ -201,64 +205,75 @@ const AssignTaskForm = () => {
             </div>
           </div>
 
-          <div className="mt-4">
-            <button
+          <div className="mt-4 d-flex justify-content-end">
+            <Button
               type="submit"
-              className="btn-retro btn-retro-primary w-100"
-              style={{ minHeight: "48px" }}
+              variant="primary"
+              size="md"
+              leftIcon={<LuCheck size={16} />}
+              isLoading={isSubmitting}
               disabled={isSubmitting || !userId || !taskId}
             >
-              <span>{isSubmitting ? "⏳" : "🤝"}</span>
-              <span>{isSubmitting ? "Asignando tarea..." : "Asignar Tarea"}</span>
-            </button>
+              Asignar Tarea
+            </Button>
           </div>
         </form>
 
         {/* Listado de tareas asignadas al usuario seleccionado */}
         {userId && (
-          <div className="pt-4 border-top border-2">
-            <h5 className="fw-bold mb-3 d-flex align-items-center gap-2">
-              <span>📋</span>
+          <div className="pt-4 border-top">
+            <h5 className="fw-bold mb-3 d-flex align-items-center gap-2" style={{ fontSize: "16px" }}>
+              <LuListTodo size={18} className="text-primary" />
               <span>Tareas asignadas ({assignments.length})</span>
             </h5>
 
             {assignments.length === 0 ? (
               <EmptyState
-                icon="📂"
+                icon={<LuListTodo size={28} />}
                 title="Sin tareas asignadas"
                 description="No hay tareas asignadas actualmente a este usuario."
                 className="py-3"
               />
             ) : (
               <div className="d-flex flex-column gap-2">
-                {assignments.map((a) => (
-                  <div
-                    key={a.id}
-                    className="retro-log-entry p-3 d-flex justify-content-between align-items-center flex-wrap gap-2"
-                  >
-                    <div className="d-flex align-items-center gap-2">
-                      <span className="fs-5">📌</span>
-                      <span className="fw-bold retro-task-title">
-                        {tasks.find((t) => t.value === a.task_id)?.label || a.task_id}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-retro btn-retro-danger"
-                      style={{ minHeight: "40px", padding: "0.35rem 0.9rem" }}
-                      onClick={() => removeAssignment(a.task_id)}
-                      disabled={removingTaskId === a.task_id}
+                {assignments.map((a) => {
+                  const taskLabel =
+                    tasks.find((t) => t.value === a.task_id)?.label || a.task_id;
+                  const isRemoving = removingTaskId === a.task_id;
+
+                  return (
+                    <div
+                      key={a.id}
+                      className="p-3 d-flex justify-content-between align-items-center flex-wrap gap-2 rounded-3 border"
+                      style={{
+                        backgroundColor: "var(--bg-subtle)",
+                        borderColor: "var(--border-default)",
+                      }}
                     >
-                      <span>🗑️</span>
-                      <span>{removingTaskId === a.task_id ? "Quitando..." : "Quitar Asignación"}</span>
-                    </button>
-                  </div>
-                ))}
+                      <div className="d-flex align-items-center gap-2">
+                        <LuListTodo size={16} className="text-muted" />
+                        <span className="fw-semibold text-heading" style={{ fontSize: "14px" }}>
+                          {taskLabel}
+                        </span>
+                      </div>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        leftIcon={<LuTrash2 size={14} />}
+                        onClick={() => removeAssignment(a.task_id)}
+                        isLoading={isRemoving}
+                        disabled={isRemoving}
+                      >
+                        Quitar
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         )}
-      </RetroWindow>
+      </Card>
     </div>
   );
 };

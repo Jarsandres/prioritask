@@ -1,4 +1,6 @@
+import { forwardRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { Card, type CardVariant } from "../ui/Card";
 
 export type RetroWindowVariant =
   | "primary"
@@ -36,46 +38,49 @@ const getHeaderVariantClass = (variant?: RetroWindowVariant): string => {
   }
 };
 
-export const RetroWindow = ({
-  title,
-  icon,
-  variant = "primary",
-  badge,
-  headerActions,
-  children,
-  className = "",
-  headerClassName = "",
-  bodyClassName = "",
-  style,
-}: RetroWindowProps) => {
-  const variantClass = getHeaderVariantClass(variant);
+/**
+ * RetroWindow: componente de compatibilidad hacia atrás que delega en la primitiva moderna <Card />.
+ * Erradica definitivamente los falsos controles de ventana (─ □ ✕) y adopta el sistema de diseño Clean SaaS.
+ */
+export const RetroWindow = forwardRef<HTMLDivElement, RetroWindowProps>(
+  (
+    {
+      title,
+      icon,
+      variant = "primary",
+      badge,
+      headerActions,
+      children,
+      className = "",
+      headerClassName = "",
+      bodyClassName = "",
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const variantClass = getHeaderVariantClass(variant);
 
-  return (
-    <div className={`retro-window ${className}`.trim()} style={style}>
-      <div className={`retro-window-header ${variantClass} ${headerClassName}`.trim()}>
-        <div className="d-flex align-items-center gap-2 text-truncate pe-2">
-          {icon && (
-            <span role="img" aria-hidden="true">
-              {icon}
-            </span>
-          )}
-          <span className="text-truncate">{title}</span>
-        </div>
-        <div className="d-flex align-items-center gap-2 flex-shrink-0">
-          {badge}
-          {headerActions}
-          <div className="retro-window-controls ms-1" aria-hidden="true">
-            <span className="retro-window-btn">─</span>
-            <span className="retro-window-btn">□</span>
-            <span className="retro-window-btn">✕</span>
-          </div>
-        </div>
-      </div>
-      <div className={`retro-window-body ${bodyClassName}`.trim()}>
+    return (
+      <Card
+        ref={ref}
+        title={title}
+        icon={icon}
+        variant={variant as CardVariant}
+        badge={badge}
+        headerActions={headerActions}
+        className={`retro-window ${className}`.trim()}
+        headerClassName={`retro-window-header ${variantClass} ${headerClassName}`.trim()}
+        bodyClassName={`retro-window-body ${bodyClassName}`.trim()}
+        style={style}
+        {...props}
+      >
         {children}
-      </div>
-    </div>
-  );
-};
+      </Card>
+    );
+  }
+);
+
+RetroWindow.displayName = "RetroWindow";
 
 export default RetroWindow;

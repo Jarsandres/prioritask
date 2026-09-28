@@ -1,4 +1,11 @@
 import { NavLink, useLocation } from "react-router-dom";
+import {
+  LuLayoutDashboard,
+  LuSquareCheck,
+  LuPlus,
+  LuBrain,
+  LuMenu,
+} from "react-icons/lu";
 import "./MobileBottomNav.css";
 
 interface MobileBottomNavProps {
@@ -8,9 +15,11 @@ interface MobileBottomNavProps {
 const MobileBottomNav = ({ onOpenMenu }: MobileBottomNavProps) => {
   const location = useLocation();
 
-  // Comprobar si la sección de tareas está activa
+  // Comprobar si la sección de tareas está activa (incluyendo tareas de una sala)
   const isTasksActive =
-    location.pathname === "/tasks" || location.pathname.startsWith("/tasks/edit");
+    location.pathname === "/tasks" ||
+    location.pathname.startsWith("/tasks/edit") ||
+    (location.pathname.startsWith("/rooms/") && location.pathname.includes("/tasks"));
 
   return (
     <nav className="mobile-bottom-nav" aria-label="Navegación inferior móvil">
@@ -21,8 +30,8 @@ const MobileBottomNav = ({ onOpenMenu }: MobileBottomNavProps) => {
           `mobile-nav-item ${isActive ? "active" : ""}`
         }
       >
-        <span className="mobile-nav-icon" role="img" aria-label="Dashboard">
-          📊
+        <span className="mobile-nav-icon">
+          <LuLayoutDashboard size={20} aria-hidden="true" />
         </span>
         <span className="mobile-nav-label">Dashboard</span>
       </NavLink>
@@ -32,8 +41,8 @@ const MobileBottomNav = ({ onOpenMenu }: MobileBottomNavProps) => {
         to="/tasks"
         className={() => `mobile-nav-item ${isTasksActive ? "active" : ""}`}
       >
-        <span className="mobile-nav-icon" role="img" aria-label="Tareas">
-          📝
+        <span className="mobile-nav-icon">
+          <LuSquareCheck size={20} aria-hidden="true" />
         </span>
         <span className="mobile-nav-label">Tareas</span>
       </NavLink>
@@ -45,7 +54,7 @@ const MobileBottomNav = ({ onOpenMenu }: MobileBottomNavProps) => {
         aria-label="Crear nueva tarea"
       >
         <div className="mobile-nav-create-btn">
-          <span role="img" aria-label="Nueva">➕</span>
+          <LuPlus size={24} aria-hidden="true" />
         </div>
         <span className="mobile-nav-label">Crear</span>
       </NavLink>
@@ -57,8 +66,8 @@ const MobileBottomNav = ({ onOpenMenu }: MobileBottomNavProps) => {
           `mobile-nav-item ${isActive ? "active" : ""}`
         }
       >
-        <span className="mobile-nav-icon" role="img" aria-label="IA">
-          🧠
+        <span className="mobile-nav-icon">
+          <LuBrain size={20} aria-hidden="true" />
         </span>
         <span className="mobile-nav-label">IA</span>
       </NavLink>
@@ -70,8 +79,8 @@ const MobileBottomNav = ({ onOpenMenu }: MobileBottomNavProps) => {
         onClick={onOpenMenu}
         aria-label="Abrir menú"
       >
-        <span className="mobile-nav-icon" role="img" aria-label="Menú">
-          ☰
+        <span className="mobile-nav-icon">
+          <LuMenu size={20} aria-hidden="true" />
         </span>
         <span className="mobile-nav-label">Menú</span>
       </button>

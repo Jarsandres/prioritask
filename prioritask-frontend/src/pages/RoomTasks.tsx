@@ -3,14 +3,23 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { useRoom } from "../context/RoomContext";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
-import RetroWindow from "../components/common/RetroWindow";
 import EmptyState from "../components/common/EmptyState";
 import TaskCard from "../components/common/TaskCard";
 import ConfirmModal from "../components/ConfirmModal";
 import RoomMembersModal from "../components/RoomMembersModal";
-import type { Task, Room } from "../types/task";
-
-// FE-010: Tipado con interfaz Task del módulo compartido
+import { Skeleton } from "../components/ui/Skeleton";
+import { Button } from "../components/ui/Button";
+import TaskViewSwitcher, { type TaskViewMode } from "../components/tasks/TaskViewSwitcher";
+import TaskListView from "../components/tasks/TaskListView";
+import TaskKanbanBoard from "../components/tasks/TaskKanbanBoard";
+import type { Task, Room, TaskStatus } from "../types/task";
+import {
+  LuHouse,
+  LuUsers,
+  LuPlus,
+  LuArrowLeft,
+} from "react-icons/lu";
+import "../components/tasks/tasks.css";
 
 const RoomTasks = () => {
   const { roomId } = useParams();
@@ -26,9 +35,18 @@ const RoomTasks = () => {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const [viewMode, setViewMode] = useState<TaskViewMode>(() => {
+    return (localStorage.getItem("tasks_view_mode") as TaskViewMode) || "grid";
+  });
+
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
+  const handleChangeViewMode = (mode: TaskViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem("tasks_view_mode", mode);
+  };
 
   useEffect(() => {
     setRoomId(roomId ?? null);
@@ -36,8 +54,6 @@ const RoomTasks = () => {
 
   useEffect(() => {
     if (!roomId) return;
-
-    // AbortController para cancelar si el componente se desmonta o roomId cambia
     const controller = new AbortController();
 
     const fetchTasks = async () => {
@@ -75,21 +91,28 @@ const RoomTasks = () => {
     };
   }, [roomId]);
 
-  const marcarComoCompletada = async (taskId: string) => {
+  const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     setCompletingId(taskId);
     setActionError(null);
     try {
-      await api.patch(`/tasks/${taskId}/status`, { estado: "DONE" });
+      await api.patch(`/tasks/${taskId}/status`, { estado: newStatus });
       setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, estado: "DONE" } : t))
+        prev.map((t) => (t.id === taskId ? { ...t, estado: newStatus } : t))
       );
       notifyUpdate();
     } catch (err) {
-      console.error("Error al marcar como completada:", err);
+      console.error("Error al actualizar el estado de la tarea:", err);
       setActionError("Error al actualizar el estado de la tarea.");
     } finally {
       setCompletingId(null);
     }
+  };
+
+  const handleToggleComplete = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const nextStatus: TaskStatus = task.estado === "DONE" ? "TODO" : "DONE";
+    await handleStatusChange(taskId, nextStatus);
   };
 
   const promptDelete = (tarea: Task) => {
@@ -130,38 +153,48 @@ const RoomTasks = () => {
 
   return (
     <div className="container-fluid py-2">
-      {/* Cabecera y botón de navegación */}
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+      {/* Cabecera y acciones */}
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
-          <h2 className="retro-page-title">
-            <span>🏠</span> TAREAS DEL HOGAR / ROOM_TASKS.DAT
+          <div className="d-flex align-items-center gap-2 mb-1">
+            <Link
+              to="/dashboard"
+              className="text-muted d-flex align-items-center gap-1 text-decoration-none small"
+              title="Volver al Dashboard"
+            >
+              <LuArrowLeft size={16} />
+              <span>Dashboard</span>
+            </Link>
+          </div>
+          <h2 className="d-flex align-items-center gap-2 mb-1 fw-bold" style={{ fontSize: "24px" }}>
+            <LuHouse className="text-primary" size={26} aria-hidden="true" />
+            <span>{roomName ? `Tareas de ${roomName}` : "Tareas del Hogar"}</span>
           </h2>
-          <p className="retro-page-subtitle">
-            {roomName ? `Hogar activo: ${roomName}` : "Listado de tareas asignadas al hogar"}
+          <p className="text-muted mb-0" style={{ fontSize: "14px" }}>
+            {tasks.length} tarea(s) registradas en este espacio.
           </p>
         </div>
-        <div className="d-flex gap-2 flex-wrap">
-          <button
-            type="button"
-            className="btn-retro btn-retro-outline"
-            style={{ minHeight: "40px" }}
+
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          {/* Switcher de Vistas */}
+          <TaskViewSwitcher
+            currentMode={viewMode}
+            onChangeMode={handleChangeViewMode}
+          />
+
+          <Button
+            variant="secondary"
+            size="md"
+            leftIcon={<LuUsers size={16} />}
             onClick={() => setIsMembersModalOpen(true)}
           >
-            <span>👥</span> <span>Convivientes</span>
-          </button>
-          <Link
-            to="/dashboard"
-            className="btn-retro btn-retro-outline"
-            style={{ minHeight: "40px" }}
-          >
-            <span>⬅</span> <span>Volver al Dashboard</span>
-          </Link>
-          <Link
-            to="/tasks/create"
-            className="btn-retro btn-retro-primary"
-            style={{ minHeight: "40px" }}
-          >
-            <span>➕</span> <span>Nueva Tarea</span>
+            Convivientes
+          </Button>
+
+          <Link to="/tasks/create">
+            <Button variant="primary" size="md" leftIcon={<LuPlus size={16} />}>
+              Nueva Tarea
+            </Button>
           </Link>
         </div>
       </div>
@@ -173,7 +206,7 @@ const RoomTasks = () => {
       )}
 
       {actionError && (
-        <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+        <div className="alert alert-danger alert-dismissible fade show mb-3" role="alert">
           {actionError}
           <button
             type="button"
@@ -183,61 +216,76 @@ const RoomTasks = () => {
         </div>
       )}
 
-      {/* Ventana Retro */}
-      <RetroWindow
-        title={`ROOM_TASKS.DAT ${roomName ? `[${roomName.toUpperCase()}]` : ""}`}
-        icon="🏠"
-        badge={
-          <span className="retro-badge retro-badge-high">
-            {tasks.length} tareas
-          </span>
-        }
-      >
-        {loading ? (
-          <EmptyState
-            icon="⏳"
-            title="Cargando tareas del hogar..."
-          />
-        ) : tasks.length === 0 ? (
-          <EmptyState
-            icon="📁"
-            title="No hay tareas en este hogar"
-            description="Crea la primera tarea para empezar a organizar este espacio."
-            actionLabel="➕ Crear Tarea"
-            actionTo="/tasks/create"
-          />
-        ) : (
-          <div className="row g-3">
-            {tasks.map((t) => (
-              <div key={t.id} className="col-12 col-md-6 col-lg-4">
-                <TaskCard
-                  task={t}
-                  onComplete={marcarComoCompletada}
-                  onEdit={(tarea) => navigate(`/tasks/edit/${tarea.id}`)}
-                  onDelete={promptDelete}
-                  isCompleting={completingId === t.id}
-                  isDeleting={deletingId === t.id}
-                />
+      {/* Renderizado de vistas */}
+      {loading ? (
+        <div className="row g-3">
+          {[1, 2, 3].map((idx) => (
+            <div key={idx} className="col-12 col-md-6 col-lg-4">
+              <div className="ui-task-card p-3">
+                <div className="d-flex justify-content-between mb-3">
+                  <Skeleton variant="rounded" width="80px" height="20px" className="rounded-pill" />
+                  <Skeleton variant="rounded" width="60px" height="20px" className="rounded-pill" />
+                </div>
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <Skeleton variant="circular" width="20px" height="20px" />
+                  <Skeleton width="75%" height="20px" />
+                </div>
+                <Skeleton width="90%" height="14px" className="mb-3" />
+                <div className="d-flex justify-content-between pt-2 border-top">
+                  <Skeleton width="70px" height="14px" />
+                  <Skeleton width="50px" height="14px" />
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </RetroWindow>
-
-      {/* Modal de confirmación reactivo */}
-      <ConfirmModal
-        isOpen={!!taskToDelete}
-        title="Eliminar tarea"
-        message={`¿Estás seguro de que deseas eliminar la tarea "${taskToDelete?.titulo}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        variant="danger"
-        isLoading={!!deletingId}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setTaskToDelete(null)}
-      />
+            </div>
+          ))}
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="p-4 text-center my-4">
+          <EmptyState
+            icon={<LuHouse size={28} />}
+            title="No hay tareas en este hogar"
+            description="Comienza creando la primera tarea para organizar las actividades del hogar."
+            actionLabel="+ Crear nueva tarea"
+            onAction={() => navigate("/tasks/create")}
+          />
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="row g-3">
+          {tasks.map((task) => (
+            <div key={task.id} className="col-12 col-md-6 col-lg-4">
+              <TaskCard
+                task={task}
+                onComplete={handleToggleComplete}
+                onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+                onDelete={promptDelete}
+                isCompleting={completingId === task.id}
+                isDeleting={deletingId === task.id}
+              />
+            </div>
+          ))}
+        </div>
+      ) : viewMode === "list" ? (
+        <TaskListView
+          tasks={tasks}
+          onComplete={handleToggleComplete}
+          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onDelete={promptDelete}
+          completingId={completingId}
+          deletingId={deletingId}
+        />
+      ) : (
+        <TaskKanbanBoard
+          tasks={tasks}
+          onStatusChange={handleStatusChange}
+          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onDelete={promptDelete}
+          completingId={completingId}
+          deletingId={deletingId}
+        />
+      )}
 
       {/* Modal de Convivientes del Hogar */}
-      {roomId && (
+      {isMembersModalOpen && roomId && (
         <RoomMembersModal
           roomId={roomId}
           roomName={roomName}
@@ -250,6 +298,18 @@ const RoomTasks = () => {
           ownerEmail={currentRoom?.owner}
         />
       )}
+
+      {/* Modal de confirmación para eliminar */}
+      <ConfirmModal
+        isOpen={!!taskToDelete}
+        title="Eliminar tarea"
+        message={`¿Estás seguro de que deseas eliminar la tarea "${taskToDelete?.titulo}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={!!deletingId}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setTaskToDelete(null)}
+      />
     </div>
   );
 };

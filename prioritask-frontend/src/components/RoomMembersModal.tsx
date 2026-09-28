@@ -1,7 +1,23 @@
 import { useState, useEffect, useCallback } from "react";
+import {
+  LuUsers,
+  LuUserPlus,
+  LuCrown,
+  LuShield,
+  LuUser,
+  LuTrash2,
+  LuLogOut,
+  LuX,
+  LuArrowUpDown,
+  LuChevronUp,
+} from "react-icons/lu";
 import api from "../api";
 import type { RoomRole, RoomMember, Room } from "../types/task";
 import ConfirmModal from "./ConfirmModal";
+import Button from "./ui/Button";
+import Input from "./ui/Input";
+import Badge from "./ui/Badge";
+import { useToast } from "../context/ToastContext";
 
 export interface RoomMembersModalProps {
   roomId: string;
@@ -55,6 +71,7 @@ const RoomMembersModal = ({
   const [isLeavingRoom, setIsLeavingRoom] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const toast = useToast();
   const canManage = isOwner || myRole === "ADMIN";
 
   const fetchMembersAndContext = useCallback(async () => {
@@ -102,6 +119,18 @@ const RoomMembersModal = ({
     }
   }, [isOpen, fetchMembersAndContext]);
 
+  // Manejo de tecla Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -121,6 +150,7 @@ const RoomMembersModal = ({
         user_id: cleanUserId,
         role: newRole,
       });
+      toast.success("Conviviente añadido correctamente al hogar.");
       setSuccess("Conviviente añadido correctamente.");
       setNewUserId("");
       setNewRole("MEMBER");
@@ -155,9 +185,9 @@ const RoomMembersModal = ({
       await api.patch(`/rooms/${roomId}/members/${member.user_id}`, {
         role: nextRole,
       });
-      setSuccess(
-        `Rol actualizado a ${nextRole === "ADMIN" ? "Administrador" : "Conviviente"}.`
-      );
+      const roleText = nextRole === "ADMIN" ? "Administrador" : "Conviviente";
+      toast.success(`Rol actualizado a ${roleText}.`);
+      setSuccess(`Rol actualizado a ${roleText}.`);
       await fetchMembersAndContext();
       onMembersChanged?.();
     } catch (err: unknown) {
@@ -186,6 +216,7 @@ const RoomMembersModal = ({
 
     try {
       await api.delete(`/rooms/${roomId}/members/${memberToRemove.user_id}`);
+      toast.info("Miembro expulsado del hogar.");
       setSuccess("Miembro expulsado del hogar.");
       setMemberToRemove(null);
       await fetchMembersAndContext();
@@ -215,6 +246,7 @@ const RoomMembersModal = ({
 
     try {
       await api.delete(`/rooms/${roomId}/members/${currentUser.id}`);
+      toast.info(`Has abandonado el hogar "${roomName}".`);
       setIsLeavingRoom(false);
       onMembersChanged?.();
       onClose();
@@ -252,6 +284,16 @@ const RoomMembersModal = ({
     }
   };
 
+  const getInitials = (name?: string) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0].toUpperCase())
+      .join("");
+  };
+
   const effectiveOwnerId = roomOwner?.id;
   const isTargetOwner = (userId: string) => effectiveOwnerId === userId;
 
@@ -260,41 +302,84 @@ const RoomMembersModal = ({
       <div
         className="modal show d-block"
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="room-members-modal-title"
         style={{
-          backgroundColor: "rgba(0, 0, 0, 0.7)",
-          backdropFilter: "blur(2px)",
+          backgroundColor: "rgba(15, 23, 42, 0.65)",
+          backdropFilter: "blur(6px)",
+          WebkitBackdropFilter: "blur(6px)",
           zIndex: 1050,
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            onClose();
+          }
         }}
       >
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div
-            className="retro-window w-100"
-            style={{ border: "2.5px solid var(--window-border)" }}
+            className="modal-content rounded-4 border shadow-xl overflow-hidden"
+            style={{
+              backgroundColor: "var(--bg-surface, #ffffff)",
+              borderColor: "var(--border-default, #e2e8f0)",
+            }}
           >
-            {/* Header Retro */}
-            <div className="retro-window-header">
-              <div className="d-flex align-items-center gap-2 text-truncate pe-2">
-                <span>👥</span>
-                <span className="text-uppercase fw-bold text-truncate">
-                  CONVIVIENTES / ROOM_MEMBERS.SYS [{roomName.toUpperCase()}]
-                </span>
+            {/* Header Moderno */}
+            <div
+              className="d-flex align-items-center justify-content-between p-3 px-md-4 border-bottom"
+              style={{ borderColor: "var(--border-default, #e2e8f0)" }}
+            >
+              <div className="d-flex align-items-center gap-2.5 text-truncate pe-2">
+                <div
+                  className="d-flex align-items-center justify-content-center rounded-3 p-2"
+                  style={{
+                    backgroundColor: "rgba(37, 99, 235, 0.1)",
+                    color: "#2563eb",
+                  }}
+                >
+                  <LuUsers size={20} />
+                </div>
+                <div>
+                  <h2
+                    id="room-members-modal-title"
+                    className="h5 mb-0 fw-bold d-flex align-items-center gap-2 flex-wrap"
+                    style={{
+                      color: "var(--text-heading, #0f172a)",
+                      letterSpacing: "-0.01em",
+                    }}
+                  >
+                    <span>Convivientes del Hogar</span>
+                    <Badge variant="primary">{roomName}</Badge>
+                  </h2>
+                  <div className="text-muted small">
+                    Administra los integrantes y niveles de acceso a este espacio compartido
+                  </div>
+                </div>
               </div>
+
               <button
                 type="button"
-                className="retro-window-btn"
+                className="btn btn-sm btn-ghost p-1.5 rounded-circle text-muted d-flex align-items-center justify-content-center"
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  border: "none",
+                  backgroundColor: "transparent",
+                }}
                 onClick={onClose}
                 aria-label="Cerrar modal"
-                style={{ cursor: "pointer", background: "rgba(255,255,255,0.2)" }}
               >
-                ✕
+                <LuX size={18} />
               </button>
             </div>
 
-            <div className="retro-window-body p-3 p-md-4">
-              {/* Feedback retro */}
+            {/* Cuerpo del Modal */}
+            <div className="p-3 p-md-4" style={{ maxHeight: "75vh", overflowY: "auto" }}>
+              {/* Feedback en caso de error / éxito */}
               {error && (
-                <div className="alert alert-danger alert-dismissible fade show mb-3" role="alert">
-                  <strong>⚠️ ERROR: </strong> {error}
+                <div className="alert alert-danger alert-dismissible fade show mb-3 rounded-3 shadow-xs" role="alert">
+                  <strong>Error: </strong> {error}
                   <button
                     type="button"
                     className="btn-close"
@@ -304,8 +389,8 @@ const RoomMembersModal = ({
               )}
 
               {success && (
-                <div className="alert alert-success alert-dismissible fade show mb-3" role="alert">
-                  <strong>✅ SISTEMA: </strong> {success}
+                <div className="alert alert-success alert-dismissible fade show mb-3 rounded-3 shadow-xs" role="alert">
+                  {success}
                   <button
                     type="button"
                     className="btn-close"
@@ -318,42 +403,35 @@ const RoomMembersModal = ({
               {canManage && (
                 <div className="mb-4">
                   <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span className="fw-bold small text-muted text-uppercase">
-                      Administración de convivientes
+                    <span className="fw-semibold small text-muted text-uppercase" style={{ letterSpacing: "0.04em" }}>
+                      Gestión de Convivientes
                     </span>
-                    <button
-                      type="button"
-                      className="btn-retro btn-retro-primary py-1 px-3"
-                      style={{ minHeight: "36px" }}
+                    <Button
+                      variant={showAddForm ? "outline" : "primary"}
+                      size="sm"
+                      leftIcon={showAddForm ? <LuChevronUp size={15} /> : <LuUserPlus size={15} />}
                       onClick={() => setShowAddForm((prev) => !prev)}
                     >
-                      <span>{showAddForm ? "▲ Ocultar" : "➕ Agregar Conviviente"}</span>
-                    </button>
+                      {showAddForm ? "Ocultar Formulario" : "Añadir Conviviente"}
+                    </Button>
                   </div>
 
                   {showAddForm && (
                     <div
-                      className="p-3 mb-3"
+                      className="p-3 mb-3 rounded-3"
                       style={{
-                        background: "var(--compare-box-bg, #f8fafc)",
-                        border: "2px dashed var(--window-border)",
-                        borderRadius: "8px",
+                        backgroundColor: "var(--bg-subtle, #f8fafc)",
+                        border: "1px dashed var(--border-default, #e2e8f0)",
                       }}
                     >
-                      <h6 className="fw-bold mb-2">Añadir Nuevo Conviviente</h6>
+                      <h6 className="fw-bold mb-2.5 small" style={{ color: "var(--text-heading, #0f172a)" }}>
+                        Invitar o Añadir Conviviente por UUID
+                      </h6>
                       <form onSubmit={handleAddMember}>
                         <div className="row g-2 align-items-end">
                           <div className="col-12 col-md-7">
-                            <label
-                              htmlFor="member-uuid-input"
-                              className="form-label small fw-bold text-muted mb-1"
-                            >
-                              UUID de Usuario *
-                            </label>
-                            <input
-                              id="member-uuid-input"
-                              type="text"
-                              className="form-control retro-input"
+                            <Input
+                              label="UUID del Usuario *"
                               placeholder="Ej. e7b54d31-419b-430c-8367-bf1b570cbcf1"
                               value={newUserId}
                               onChange={(e) => setNewUserId(e.target.value)}
@@ -365,34 +443,38 @@ const RoomMembersModal = ({
                           <div className="col-12 col-md-3">
                             <label
                               htmlFor="member-role-select"
-                              className="form-label small fw-bold text-muted mb-1"
+                              className="form-label small fw-semibold text-muted mb-1.5"
                             >
                               Rol Inicial
                             </label>
                             <select
                               id="member-role-select"
-                              className="form-select retro-select"
+                              className="form-select"
+                              style={{
+                                borderRadius: "var(--radius-md, 10px)",
+                                borderColor: "var(--border-default, #cbd5e1)",
+                                padding: "8px 12px",
+                                fontSize: "0.9rem",
+                              }}
                               value={newRole}
-                              onChange={(e) =>
-                                setNewRole(e.target.value as RoomRole)
-                              }
+                              onChange={(e) => setNewRole(e.target.value as RoomRole)}
                               disabled={isAdding}
                             >
-                              <option value="MEMBER">👤 Conviviente</option>
-                              <option value="ADMIN">🛡️ Administrador</option>
+                              <option value="MEMBER">Conviviente</option>
+                              <option value="ADMIN">Administrador</option>
                             </select>
                           </div>
 
                           <div className="col-12 col-md-2">
-                            <button
+                            <Button
                               type="submit"
-                              className="btn-retro btn-retro-success w-100 py-2 d-flex align-items-center justify-content-center gap-1"
-                              style={{ minHeight: "42px" }}
-                              disabled={isAdding}
+                              variant="primary"
+                              size="md"
+                              className="w-100"
+                              isLoading={isAdding}
                             >
-                              <span>{isAdding ? "⏳" : "➕"}</span>
-                              <span>{isAdding ? "..." : "Añadir"}</span>
-                            </button>
+                              Añadir
+                            </Button>
                           </div>
                         </div>
                       </form>
@@ -402,47 +484,61 @@ const RoomMembersModal = ({
               )}
 
               {/* Lista de Miembros */}
-              <div className="mb-4">
-                <h6 className="fw-bold small text-muted text-uppercase mb-3">
-                  Lista de Miembros Registrados ({members.length + (effectiveOwnerId ? 1 : 0)})
-                </h6>
+              <div>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <span className="fw-semibold small text-muted text-uppercase" style={{ letterSpacing: "0.04em" }}>
+                    Integrantes ({members.length + (effectiveOwnerId ? 1 : 0)})
+                  </span>
+                </div>
 
                 {loading ? (
-                  <div className="text-center py-4 text-muted">
-                    <span>⏳ Cargando convivientes...</span>
+                  <div className="text-center py-4 text-muted small">
+                    <span className="spin d-inline-block me-2">⏳</span> Cargando integrantes...
                   </div>
                 ) : (
                   <div className="d-flex flex-column gap-2">
                     {/* Tarjeta destacada del Propietario si se conoce */}
                     {effectiveOwnerId && (
                       <div
-                        className="p-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
+                        className="p-3 rounded-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
                         style={{
-                          background: "var(--card-bg, #ffffff)",
-                          border: "2px solid var(--window-border)",
-                          borderRadius: "8px",
-                          boxShadow: "2px 2px 0px var(--window-shadow)",
+                          backgroundColor: "var(--bg-surface, #ffffff)",
+                          border: "1px solid var(--border-default, #e2e8f0)",
+                          boxShadow: "var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.05))",
                         }}
                       >
                         <div className="d-flex align-items-center gap-3">
-                          <span style={{ fontSize: "1.8rem" }}>👑</span>
+                          <div
+                            className="d-flex align-items-center justify-content-center rounded-circle fw-bold text-white flex-shrink-0"
+                            style={{
+                              width: "40px",
+                              height: "40px",
+                              background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                              fontSize: "0.95rem",
+                            }}
+                          >
+                            <LuCrown size={18} />
+                          </div>
                           <div>
                             <div className="d-flex align-items-center gap-2 flex-wrap">
-                              <span className="fw-bold">
+                              <span className="fw-bold" style={{ color: "var(--text-heading, #0f172a)" }}>
                                 {isOwner
                                   ? `${currentUser?.nombre || "Tú"} (Propietario)`
                                   : roomOwner?.email || "Propietario del Hogar"}
                               </span>
-                              <span className="retro-badge retro-badge-high">
-                                👑 Propietario
-                              </span>
+                              <Badge variant="warning">
+                                <LuCrown size={12} className="me-1" />
+                                Propietario
+                              </Badge>
                             </div>
-                            <div className="small text-muted font-monospace">
+                            <div className="small text-muted">
                               {roomOwner?.email || effectiveOwnerId}
                             </div>
                           </div>
                         </div>
-                        <span className="badge-retro text-muted">Hogar Creador</span>
+                        <span className="badge rounded-pill fw-normal text-muted" style={{ backgroundColor: "var(--bg-subtle, #f1f5f9)" }}>
+                          Creador del Hogar
+                        </span>
                       </div>
                     )}
 
@@ -452,43 +548,58 @@ const RoomMembersModal = ({
                       .map((member) => {
                         const isSelf = currentUser?.id === member.user_id;
                         const isMemberAdmin = member.role === "ADMIN";
+                        const memberDisplayName =
+                          member.user_nombre ||
+                          member.user_email ||
+                          `Usuario (${member.user_id.slice(0, 8)}...)`;
 
                         return (
                           <div
                             key={member.user_id}
-                            className="p-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
+                            className="p-3 rounded-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
                             style={{
-                              background: "var(--card-bg, #ffffff)",
-                              border: "2px solid var(--window-border)",
-                              borderRadius: "8px",
-                              boxShadow: "2px 2px 0px var(--window-shadow)",
+                              backgroundColor: "var(--bg-surface, #ffffff)",
+                              border: "1px solid var(--border-default, #e2e8f0)",
+                              boxShadow: "var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.05))",
                             }}
                           >
                             <div className="d-flex align-items-center gap-3">
-                              <span style={{ fontSize: "1.8rem" }}>
-                                {isMemberAdmin ? "🛡️" : "👤"}
-                              </span>
+                              <div
+                                className="d-flex align-items-center justify-content-center rounded-circle fw-bold flex-shrink-0"
+                                style={{
+                                  width: "40px",
+                                  height: "40px",
+                                  backgroundColor: isMemberAdmin
+                                    ? "rgba(139, 92, 246, 0.12)"
+                                    : "rgba(37, 99, 235, 0.1)",
+                                  color: isMemberAdmin ? "#8b5cf6" : "#2563eb",
+                                  fontSize: "0.85rem",
+                                }}
+                              >
+                                {isMemberAdmin ? <LuShield size={18} /> : getInitials(memberDisplayName)}
+                              </div>
                               <div>
                                 <div className="d-flex align-items-center gap-2 flex-wrap">
-                                  <span className="fw-bold">
-                                    {member.user_nombre ||
-                                      member.user_email ||
-                                      `Usuario (${member.user_id.slice(0, 8)}...)`}
+                                  <span className="fw-bold" style={{ color: "var(--text-heading, #0f172a)" }}>
+                                    {memberDisplayName}
                                     {isSelf && " (Tú)"}
                                   </span>
 
                                   {isTargetOwner(member.user_id) ? (
-                                    <span className="retro-badge retro-badge-high">
-                                      👑 Propietario
-                                    </span>
+                                    <Badge variant="warning">
+                                      <LuCrown size={12} className="me-1" />
+                                      Propietario
+                                    </Badge>
                                   ) : isMemberAdmin ? (
-                                    <span className="retro-badge retro-badge-medium">
-                                      🛡️ Administrador
-                                    </span>
+                                    <Badge variant="secondary">
+                                      <LuShield size={12} className="me-1" />
+                                      Administrador
+                                    </Badge>
                                   ) : (
-                                    <span className="retro-badge retro-badge-todo">
-                                      👤 Conviviente
-                                    </span>
+                                    <Badge variant="default">
+                                      <LuUser size={12} className="me-1" />
+                                      Conviviente
+                                    </Badge>
                                   )}
                                 </div>
 
@@ -504,30 +615,26 @@ const RoomMembersModal = ({
                             {/* Acciones de administración de miembro */}
                             {canManage && !isTargetOwner(member.user_id) && (
                               <div className="d-flex gap-2 align-items-center">
-                                <button
-                                  type="button"
-                                  className="btn-retro btn-retro-outline py-1 px-2 small"
-                                  style={{ minHeight: "36px" }}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  leftIcon={<LuArrowUpDown size={14} />}
                                   onClick={() => handleToggleRole(member)}
-                                  disabled={updatingUserId === member.user_id}
+                                  isLoading={updatingUserId === member.user_id}
                                   title={`Cambiar rol a ${isMemberAdmin ? "Conviviente" : "Administrador"}`}
                                 >
-                                  {updatingUserId === member.user_id
-                                    ? "⏳..."
-                                    : isMemberAdmin
-                                    ? "Degradar a Conviviente"
-                                    : "Promover a Admin"}
-                                </button>
+                                  {isMemberAdmin ? "Cambiar a Conviviente" : "Promover a Admin"}
+                                </Button>
 
-                                <button
-                                  type="button"
-                                  className="btn-retro btn-retro-danger py-1 px-2 small"
-                                  style={{ minHeight: "36px" }}
+                                <Button
+                                  variant="danger"
+                                  size="sm"
+                                  leftIcon={<LuTrash2 size={14} />}
                                   onClick={() => setMemberToRemove(member)}
                                   title="Expulsar conviviente"
                                 >
-                                  🗑️ Expulsar
-                                </button>
+                                  Expulsar
+                                </Button>
                               </div>
                             )}
                           </div>
@@ -536,36 +643,46 @@ const RoomMembersModal = ({
 
                     {members.filter((m) => m.user_id !== effectiveOwnerId).length === 0 &&
                       !loading && (
-                        <div className="p-3 text-center text-muted border border-dashed rounded">
-                          No hay otros convivientes registrados en este hogar.
+                        <div
+                          className="p-4 text-center text-muted rounded-3"
+                          style={{
+                            backgroundColor: "var(--bg-subtle, #f8fafc)",
+                            border: "1px dashed var(--border-default, #e2e8f0)",
+                            fontSize: "0.9rem",
+                          }}
+                        >
+                          No hay otros convivientes registrados en este hogar aún.
                         </div>
                       )}
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Pie con botón de Abandonar Hogar si corresponde */}
-              <div className="d-flex justify-content-between align-items-center pt-3 border-top border-2 flex-wrap gap-2">
-                {!isOwner && myRole && currentUser && (
-                  <button
-                    type="button"
-                    className="btn-retro btn-retro-danger py-2 px-3"
-                    style={{ minHeight: "40px" }}
-                    onClick={() => setIsLeavingRoom(true)}
-                  >
-                    🚪 Abandonar Hogar
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="btn-retro btn-retro-outline ms-auto py-2 px-4"
-                  style={{ minHeight: "40px" }}
-                  onClick={onClose}
+            {/* Footer */}
+            <div
+              className="d-flex justify-content-between align-items-center p-3 px-md-4 border-top flex-wrap gap-2"
+              style={{
+                backgroundColor: "var(--bg-subtle, #f8fafc)",
+                borderColor: "var(--border-default, #e2e8f0)",
+              }}
+            >
+              {!isOwner && myRole && currentUser ? (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  leftIcon={<LuLogOut size={15} />}
+                  onClick={() => setIsLeavingRoom(true)}
                 >
-                  Cerrar
-                </button>
-              </div>
+                  Abandonar Hogar
+                </Button>
+              ) : (
+                <div />
+              )}
+
+              <Button variant="outline" size="sm" onClick={onClose}>
+                Cerrar
+              </Button>
             </div>
           </div>
         </div>
@@ -575,12 +692,12 @@ const RoomMembersModal = ({
       <ConfirmModal
         isOpen={Boolean(memberToRemove)}
         title="Expulsar conviviente"
-        message={`¿Estás seguro de que deseas expulsar a ${
+        message={`¿Estás seguro de que deseas expulsar a "${
           memberToRemove?.user_nombre ||
           memberToRemove?.user_email ||
           "este miembro"
-        } del hogar?`}
-        confirmText="Expulsar"
+        }" del hogar? Perderá acceso inmediato a las tareas compartidas.`}
+        confirmText="Expulsar Miembro"
         variant="danger"
         isLoading={actionLoading}
         onConfirm={handleConfirmRemoveMember}
@@ -591,7 +708,7 @@ const RoomMembersModal = ({
       <ConfirmModal
         isOpen={isLeavingRoom}
         title="Abandonar hogar"
-        message={`¿Estás seguro de que deseas abandonar el hogar "${roomName}"? Perderás acceso inmediato a sus tareas compartidas.`}
+        message={`¿Estás seguro de que deseas abandonar el hogar "${roomName}"? Perderás acceso inmediato a sus tareas y notas compartidas.`}
         confirmText="Abandonar Hogar"
         variant="danger"
         isLoading={actionLoading}

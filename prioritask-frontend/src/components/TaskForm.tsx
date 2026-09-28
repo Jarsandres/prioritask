@@ -1,15 +1,22 @@
 import { useState, useEffect } from "react";
 import api from "../api";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import Select from "react-select";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
 import { useTheme } from "../context/ThemeContext";
 import { getCurrentRoomId } from "../utils/room";
-import RetroWindow from "./common/RetroWindow";
-import { getRetroSelectStyles } from "../utils/selectStyles";
+import { getModernSelectStyles } from "../utils/selectStyles";
+import { Card } from "./ui/Card";
+import { Button } from "./ui/Button";
 import type { Tag } from "../types/task";
-
-// FE-010: Tag importado desde tipos compartidos
+import {
+  LuSparkles,
+  LuArrowLeft,
+  LuCheck,
+  LuRepeat,
+  LuTag,
+  LuLayers,
+} from "react-icons/lu";
 
 interface AISuggestion {
   prioridad: string;
@@ -28,7 +35,6 @@ const TaskForm = () => {
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<{ value: string; label: string }[]>([]);
   const [sugerencia, setSugerencia] = useState<AISuggestion | null>(null);
-  // FE-005: Estados de carga para submit y sugerencia AI
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
 
@@ -85,7 +91,6 @@ const TaskForm = () => {
           setEstado(estado);
           setIsRecurring(Boolean(response.data.is_recurring));
 
-          // FE-010: tipado con Tag en lugar de (t: any)
           const taskTags: string[] =
             response.data.tags?.map((t: Tag) => t.id) ??
             response.data.tag_ids ??
@@ -115,7 +120,6 @@ const TaskForm = () => {
     return 1;
   };
 
-  // FE-005: handleSuggest con isSuggesting
   const handleSuggest = async () => {
     setIsSuggesting(true);
     try {
@@ -135,50 +139,46 @@ const TaskForm = () => {
     }
   };
 
-  // FE-005 + FE-006: handleSubmit con isSubmitting y validación client-side
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
 
-    const cleanTitle = titulo.trim();
-    if (!cleanTitle) {
+    const cleanTitulo = titulo.trim();
+    if (!cleanTitulo) {
       setError("El título de la tarea es obligatorio y no puede contener solo espacios.");
       return;
     }
 
-    if (peso < 1 || peso > 5) {
-      setError("El peso de la tarea debe estar comprendido entre 1 y 5.");
+    if (dateError) {
+      setError("Corrige la fecha de vencimiento antes de guardar.");
       return;
     }
 
-    // FE-005: Bloquear doble envío
     setIsSubmitting(true);
-
-    const taskData = {
-      titulo: cleanTitle,
-      descripcion: descripcion.trim() || undefined,
-      categoria,
-      peso,
-      due_date: dueDate ? formatearFecha(dueDate) : undefined,
-      estado,
-      room_id: getCurrentRoomId() || undefined,
-      is_recurring: isRecurring,
-    };
+    setError("");
 
     try {
-      let id = taskId;
-      if (taskId) {
-        await api.put(`/tasks/${taskId}`, taskData);
-      } else {
-        const res = await api.post<{ id: string }>("/tasks", taskData);
-        id = res.data.id;
+      const payload: Record<string, unknown> = {
+        titulo: cleanTitulo,
+        descripcion: descripcion.trim() || undefined,
+        categoria,
+        peso,
+        due_date: dueDate ? formatearFecha(dueDate) : null,
+        estado,
+        tag_ids: selectedTags.map((t) => t.value),
+        is_recurring: isRecurring,
+      };
+
+      if (!taskId) {
+        const activeRoomId = getCurrentRoomId();
+        if (activeRoomId) {
+          payload.room_id = activeRoomId;
+        }
       }
 
-      // FE-006: Llamar SIEMPRE al endpoint de tags si tenemos un id válido
-      if (id) {
-        await api.post(`/tags/tasks/${id}/tags`, {
-          tag_ids: selectedTags.map((t) => t.value),
-        });
+      if (taskId) {
+        await api.put(`/tasks/${taskId}`, payload);
+      } else {
+        await api.post("/tasks", payload);
       }
 
       notifyUpdate();
@@ -194,33 +194,52 @@ const TaskForm = () => {
           (err as { response: { data: { detail: string } } }).response.data.detail
         );
       } else {
-        setError("Error al guardar la tarea");
+        setError("Error al guardar la tarea. Revisa los campos requeridos.");
       }
     } finally {
-      // FE-005: Restaurar el estado siempre, incluso en error
       setIsSubmitting(false);
     }
   };
 
-  const selectStyles = getRetroSelectStyles<{ value: string; label: string }, true>(theme);
+  const selectStyles = getModernSelectStyles<{ value: string; label: string }, true>(theme);
 
   return (
-    <div className="container mt-4 mb-5" style={{ maxWidth: "760px" }}>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <button
-          type="button"
-          className="btn-retro btn-retro-outline"
-          style={{ minHeight: "40px" }}
-          onClick={() => navigate("/tasks")}
-          disabled={isSubmitting}
-        >
-          ⬅ Volver a Tareas
-        </button>
+    <div className="container-fluid py-2" style={{ maxWidth: "780px" }}>
+      {/* Cabecera */}
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+          <div className="d-flex align-items-center gap-2 mb-1">
+            <Link
+              to="/tasks"
+              className="text-muted d-flex align-items-center gap-1 text-decoration-none small"
+              title="Volver a la lista de tareas"
+            >
+              <LuArrowLeft size={16} />
+              <span>Tareas</span>
+            </Link>
+          </div>
+          <h2 className="fw-bold mb-1" style={{ fontSize: "24px" }}>
+            {taskId ? "Editar Tarea" : "Nueva Tarea"}
+          </h2>
+          <p className="text-muted mb-0" style={{ fontSize: "14px" }}>
+            {taskId
+              ? "Actualiza los detalles, asignación y estado de la tarea."
+              : "Crea y prioriza una nueva actividad para organizar tu hogar."}
+          </p>
+        </div>
+
+        <Link to="/tasks">
+          <Button variant="outline" size="sm" leftIcon={<LuArrowLeft size={14} />}>
+            Volver
+          </Button>
+        </Link>
       </div>
 
-      <RetroWindow
-        title={taskId ? "EDITAR TAREA" : "CREAR NUEVA TAREA"}
-        icon={taskId ? "✏️" : "📝"}
+      <Card
+        title={taskId ? "Detalles de la Tarea" : "Formulario de Creación"}
+        subtitle="Los campos marcados con asterisco (*) son obligatorios"
+        icon={<LuLayers size={18} className="text-primary" />}
+        className="mb-4"
       >
         {error && (
           <div className="alert alert-danger mb-4" role="alert">
@@ -228,15 +247,24 @@ const TaskForm = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
+          {/* Título */}
           <div className="mb-3">
-            <label htmlFor="titulo" className="form-label fw-bold">
-              Título *
+            <label htmlFor="titulo" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
+              Título de la tarea *
             </label>
             <input
               id="titulo"
               type="text"
-              className="form-control retro-input"
+              className="form-control"
+              style={{
+                borderRadius: "10px",
+                borderColor: "var(--border-default)",
+                backgroundColor: "var(--bg-subtle)",
+                color: "var(--text-main)",
+                minHeight: "42px",
+                fontSize: "14px",
+              }}
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
               placeholder="Ej. Limpiar la cocina a fondo"
@@ -245,18 +273,21 @@ const TaskForm = () => {
             />
           </div>
 
+          {/* Descripción */}
           <div className="mb-3">
-            <label htmlFor="descripcion" className="form-label fw-bold">
+            <label htmlFor="descripcion" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
               Descripción
             </label>
             <textarea
               id="descripcion"
               className="form-control"
               style={{
+                borderRadius: "10px",
+                borderColor: "var(--border-default)",
+                backgroundColor: "var(--bg-subtle)",
+                color: "var(--text-main)",
                 minHeight: "88px",
-                fontSize: "16px",
-                border: "2px solid #1e293b",
-                borderRadius: "8px",
+                fontSize: "14px",
               }}
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
@@ -265,33 +296,50 @@ const TaskForm = () => {
             />
           </div>
 
+          {/* Categoría y Peso */}
           <div className="row g-3 mb-3">
             <div className="col-12 col-md-6">
-              <label htmlFor="categoria" className="form-label fw-bold">
+              <label htmlFor="categoria" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
                 Categoría
               </label>
               <select
                 id="categoria"
-                className="form-select retro-select"
+                className="form-select"
+                style={{
+                  borderRadius: "10px",
+                  borderColor: "var(--border-default)",
+                  backgroundColor: "var(--bg-subtle)",
+                  color: "var(--text-main)",
+                  minHeight: "42px",
+                  fontSize: "14px",
+                }}
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value)}
                 disabled={isSubmitting}
               >
-                <option value="LIMPIEZA">Limpieza 🧹</option>
-                <option value="COMPRA">Compra 🛒</option>
-                <option value="MANTENIMIENTO">Mantenimiento 🔧</option>
-                <option value="OTRO">Otro 📁</option>
+                <option value="LIMPIEZA">Limpieza</option>
+                <option value="COMPRA">Compra</option>
+                <option value="MANTENIMIENTO">Mantenimiento</option>
+                <option value="OTRO">Otro</option>
               </select>
             </div>
 
             <div className="col-12 col-md-6">
-              <label htmlFor="peso" className="form-label fw-bold">
-                Peso (1 a 5)
+              <label htmlFor="peso" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
+                Nivel de Prioridad / Peso (1 = Baja, 5 = Alta)
               </label>
               <input
                 id="peso"
                 type="number"
-                className="form-control retro-input"
+                className="form-control"
+                style={{
+                  borderRadius: "10px",
+                  borderColor: "var(--border-default)",
+                  backgroundColor: "var(--bg-subtle)",
+                  color: "var(--text-main)",
+                  minHeight: "42px",
+                  fontSize: "14px",
+                }}
                 value={peso}
                 onChange={(e) => setPeso(Number(e.target.value))}
                 min="1"
@@ -301,53 +349,83 @@ const TaskForm = () => {
             </div>
           </div>
 
-          {/* FE-005: Botón AI destacado en magenta retro táctil */}
+          {/* Botón de Asistente IA */}
           <div className="mb-3">
-            <button
+            <Button
               type="button"
-              className="btn-retro btn-retro-magenta w-100 py-2 d-flex align-items-center justify-content-center gap-2"
-              style={{ minHeight: "44px" }}
+              variant="ai"
+              size="md"
+              leftIcon={<LuSparkles size={16} />}
               onClick={handleSuggest}
+              isLoading={isSuggesting}
               disabled={isSuggesting || isSubmitting}
+              className="w-100"
             >
-              <span>🧠</span>
-              <span>{isSuggesting ? "Analizando con IA..." : "Sugerir prioridad con IA"}</span>
-            </button>
+              {isSuggesting ? "Analizando con IA..." : "Sugerir prioridad con IA"}
+            </Button>
           </div>
 
+          {/* Banner de sugerencia IA */}
           {sugerencia && (
-            <div className="retro-ai-alert p-3 mb-3" role="alert">
-              <div className="fw-bold mb-1 d-flex align-items-center gap-2">
-                <span>💡</span> Sugerencia de Prioridad: {sugerencia.prioridad.toUpperCase()}
+            <div
+              className="p-3 mb-3 border rounded-3"
+              style={{
+                backgroundColor: "var(--ai-50)",
+                borderColor: "rgba(139, 92, 246, 0.3)",
+              }}
+              role="alert"
+            >
+              <div className="fw-bold mb-1 d-flex align-items-center gap-2" style={{ color: "var(--ai-600)" }}>
+                <LuSparkles size={16} />
+                <span>Sugerencia IA: Prioridad {sugerencia.prioridad.toUpperCase()}</span>
               </div>
-              <p className="mb-0 small">{sugerencia.motivo}</p>
+              <p className="mb-0 small text-muted">{sugerencia.motivo}</p>
             </div>
           )}
 
+          {/* Fecha y Estado */}
           <div className="row g-3 mb-3">
             <div className="col-12 col-md-6">
-              <label htmlFor="dueDate" className="form-label fw-bold">
+              <label htmlFor="dueDate" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
                 Fecha de vencimiento
               </label>
-              <input
-                id="dueDate"
-                type="date"
-                className={`form-control retro-input ${dateError ? "is-invalid" : ""}`}
-                value={dueDate}
-                min={today}
-                onChange={handleDueDateChange}
-                disabled={isSubmitting}
-              />
-              {dateError && <div className="invalid-feedback">{dateError}</div>}
+              <div className="input-group">
+                <input
+                  id="dueDate"
+                  type="date"
+                  className={`form-control ${dateError ? "is-invalid" : ""}`}
+                  style={{
+                    borderRadius: "10px",
+                    borderColor: "var(--border-default)",
+                    backgroundColor: "var(--bg-subtle)",
+                    color: "var(--text-main)",
+                    minHeight: "42px",
+                    fontSize: "14px",
+                  }}
+                  value={dueDate}
+                  min={today}
+                  onChange={handleDueDateChange}
+                  disabled={isSubmitting}
+                />
+              </div>
+              {dateError && <div className="invalid-feedback d-block">{dateError}</div>}
             </div>
 
             <div className="col-12 col-md-6">
-              <label htmlFor="estado-task" className="form-label fw-bold">
+              <label htmlFor="estado-task" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
                 Estado
               </label>
               <select
                 id="estado-task"
-                className="form-select retro-select"
+                className="form-select"
+                style={{
+                  borderRadius: "10px",
+                  borderColor: "var(--border-default)",
+                  backgroundColor: "var(--bg-subtle)",
+                  color: "var(--text-main)",
+                  minHeight: "42px",
+                  fontSize: "14px",
+                }}
                 value={estado}
                 onChange={(e) => setEstado(e.target.value)}
                 disabled={isSubmitting}
@@ -359,8 +437,12 @@ const TaskForm = () => {
             </div>
           </div>
 
-          <div className="mb-4">
-            <label className="form-label fw-bold">Etiquetas</label>
+          {/* Etiquetas */}
+          <div className="mb-3">
+            <label className="form-label fw-semibold d-flex align-items-center gap-1" style={{ fontSize: "13px" }}>
+              <LuTag size={14} className="text-muted" />
+              <span>Etiquetas</span>
+            </label>
             <Select
               isMulti
               options={tags.map((t) => ({ value: t.id, label: t.nombre }))}
@@ -371,44 +453,50 @@ const TaskForm = () => {
               classNamePrefix="select"
               isDisabled={isSubmitting}
               styles={selectStyles}
+              placeholder="Seleccionar o buscar etiquetas..."
             />
           </div>
 
-          {/* S4-T2: Control retro para tarea recurrente */}
-          <div className="form-check retro-checkbox-container mb-3 d-flex align-items-center gap-2">
+          {/* Switch de Tarea Recurrente */}
+          <div className="form-check form-switch mb-4 d-flex align-items-center gap-2 ps-0">
             <input
               id="task-recurring"
               type="checkbox"
-              className="form-check-input retro-checkbox"
+              className="form-check-input ms-0 me-2"
+              role="switch"
+              style={{ width: "38px", height: "20px", cursor: "pointer" }}
               checked={isRecurring}
               onChange={(e) => setIsRecurring(e.target.checked)}
               disabled={isSubmitting}
             />
-            <label htmlFor="task-recurring" className="form-check-label fw-bold small text-muted cursor-pointer mb-0">
-              🔄 TAREA RECURRENTE (RUTINA PERIÓDICA AUTOMÁTICA)
+            <label htmlFor="task-recurring" className="form-check-label fw-semibold" style={{ cursor: "pointer", fontSize: "14px" }}>
+              <span className="d-flex align-items-center gap-1">
+                <LuRepeat size={14} className="text-primary" />
+                <span>Tarea recurrente (se reiniciará automáticamente tras completarse)</span>
+              </span>
             </label>
           </div>
 
-          {/* FE-005: Botón submit táctil con altura min 48px */}
-          <button
-            type="submit"
-            className="btn-retro btn-retro-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2"
-            style={{ minHeight: "48px" }}
-            disabled={isSubmitting}
-          >
-            <span>{isSubmitting ? "⏳" : taskId ? "💾" : "➕"}</span>
-            <span>
-              {isSubmitting
-                ? taskId
-                  ? "Actualizando..."
-                  : "Creando..."
-                : taskId
-                ? "Actualizar Tarea"
-                : "Guardar Tarea"}
-            </span>
-          </button>
+          {/* Botones de acción */}
+          <div className="d-flex justify-content-end gap-2 pt-3 border-top">
+            <Link to="/tasks">
+              <Button variant="ghost" size="md" disabled={isSubmitting}>
+                Cancelar
+              </Button>
+            </Link>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              leftIcon={<LuCheck size={16} />}
+              isLoading={isSubmitting}
+              disabled={isSubmitting}
+            >
+              {taskId ? "Actualizar Tarea" : "Crear Tarea"}
+            </Button>
+          </div>
         </form>
-      </RetroWindow>
+      </Card>
     </div>
   );
 };

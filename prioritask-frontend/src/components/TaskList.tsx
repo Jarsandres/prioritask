@@ -1,15 +1,25 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import api from "../api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
-import { getCurrentRoomId } from "../utils/room";
+import { useRoom } from "../context/RoomContext";
 import ConfirmModal from "./ConfirmModal";
-import type { Task } from "../types/task";
-import RetroWindow from "./common/RetroWindow";
+import type { Task, TaskStatus } from "../types/task";
 import TaskCard from "./common/TaskCard";
 import EmptyState from "./common/EmptyState";
-
-// FE-010: Reutilizamos la interfaz Task del módulo de tipos compartidos
+import { Skeleton } from "./ui/Skeleton";
+import { Button } from "./ui/Button";
+import TaskViewSwitcher, { type TaskViewMode } from "./tasks/TaskViewSwitcher";
+import TaskListView from "./tasks/TaskListView";
+import TaskKanbanBoard from "./tasks/TaskKanbanBoard";
+import FilterBar from "./tasks/FilterBar";
+import {
+  LuPlus,
+  LuSparkles,
+  LuListTodo,
+  LuCircleCheck,
+} from "react-icons/lu";
+import "./tasks/tasks.css";
 
 const TaskList = () => {
   const [tareas, setTareas] = useState<Task[]>([]);
@@ -18,31 +28,33 @@ const TaskList = () => {
   const [categoria, setCategoria] = useState("");
   const [fechaLimite, setFechaLimite] = useState("");
   const [busqueda, setBusqueda] = useState("");
-  // FE-002: Estado para deshabilitar el botón "Eliminar" de la fila en proceso
+
+  const [viewMode, setViewMode] = useState<TaskViewMode>(() => {
+    return (localStorage.getItem("tasks_view_mode") as TaskViewMode) || "grid";
+  });
+
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  // Estado para deshabilitar "Completar" mientras se procesa
   const [completingId, setCompletingId] = useState<string | null>(null);
-  // FE-014: Estado de error para acciones inline
   const [actionError, setActionError] = useState<string | null>(null);
-  // FE-017: Estado para modal de confirmación
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   const navigate = useNavigate();
   const { version, notifyUpdate } = useTaskUpdate();
+  const { roomId } = useRoom();
 
-  // FE-001: fetchTareas en useCallback con sus dependencias de filtro
-  // FE-009: Eliminadas las variables `token` que no se usaban (el interceptor las gestiona)
+  const handleChangeViewMode = (mode: TaskViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem("tasks_view_mode", mode);
+  };
+
   const fetchTareas = useCallback(async () => {
     setLoading(true);
     try {
-      // FE-010: params tipado en lugar de `any`
       const params: Record<string, string> = {};
-
       if (estado) params.estado = estado;
       if (categoria) params.categoria = categoria;
       if (fechaLimite) params.due_date_max = fechaLimite;
       if (busqueda) params.search = busqueda;
-      const roomId = getCurrentRoomId();
       if (roomId) params.room_id = roomId;
 
       const res = await api.get<Task[]>("/tasks", { params });
@@ -52,34 +64,30 @@ const TaskList = () => {
     } finally {
       setLoading(false);
     }
-  }, [estado, categoria, fechaLimite, busqueda]);
+  }, [estado, categoria, fechaLimite, busqueda, roomId]);
 
-  // FE-001: Carga inicial y reacción al estado global de actualizaciones
   useEffect(() => {
     fetchTareas();
   }, [fetchTareas, version]);
 
-  // FE-001: debounce para búsqueda de texto con useRef para estabilidad del timer
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       fetchTareas();
-    }, 500);
+    }, 400);
 
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, [busqueda]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // FE-017: Apertura de modal de confirmación
   const promptDelete = (tarea: Task) => {
     setActionError(null);
     setTaskToDelete(tarea);
   };
 
-  // FE-002 + FE-014 + FE-017: Confirmar eliminación vía modal sin alert()
   const handleConfirmDelete = async () => {
     if (!taskToDelete) return;
     const id = taskToDelete.id;
@@ -98,22 +106,28 @@ const TaskList = () => {
     }
   };
 
-  // FE-002 + FE-014: "Completar" sin alert()
-  const marcarComoCompletada = async (taskId: string) => {
+  const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     setCompletingId(taskId);
     setActionError(null);
     try {
-      await api.patch(`/tasks/${taskId}/status`, { estado: "DONE" });
+      await api.patch(`/tasks/${taskId}/status`, { estado: newStatus });
       setTareas((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, estado: "DONE" } : t))
+        prev.map((t) => (t.id === taskId ? { ...t, estado: newStatus } : t))
       );
       notifyUpdate();
     } catch (error) {
-      console.error("Error al marcar como completada:", error);
+      console.error("Error al cambiar estado:", error);
       setActionError("Error al actualizar el estado de la tarea.");
     } finally {
       setCompletingId(null);
     }
+  };
+
+  const handleToggleComplete = async (taskId: string) => {
+    const task = tareas.find((t) => t.id === taskId);
+    if (!task) return;
+    const nextStatus: TaskStatus = task.estado === "DONE" ? "TODO" : "DONE";
+    await handleStatusChange(taskId, nextStatus);
   };
 
   const handleClearFilters = () => {
@@ -123,189 +137,149 @@ const TaskList = () => {
     setBusqueda("");
   };
 
-  if (loading) {
-    return (
-      <div className="container mt-4 d-flex justify-content-center">
-        <RetroWindow
-          title="SISTEMA PRIORITASK"
-          className="p-4 text-center my-5"
-          style={{ maxWidth: "420px", width: "100%" }}
-        >
-          <div className="py-4">
-            <div className="spinner-border text-primary mb-3" role="status">
-              <span className="visually-hidden">Cargando...</span>
-            </div>
-            <p className="fw-bold mb-1">Cargando tareas...</p>
-            <small className="text-muted">Leyendo registros del sistema...</small>
-          </div>
-        </RetroWindow>
-      </div>
-    );
-  }
-
   return (
-    <>
-      <div className="container mt-4">
-        {/* Panel de Filtros Retro Window */}
-        <RetroWindow
-          title="FILTRAR TAREAS"
-          icon="🔎"
-          className="mb-4"
-        >
-          <div className="row g-3 align-items-end">
-            <div className="col-12 col-sm-6 col-md-3">
-              <label htmlFor="estado" className="form-label fw-bold small">
-                Estado
-              </label>
-              <select
-                id="estado"
-                className="form-select retro-select"
-                value={estado}
-                onChange={(e) => setEstado(e.target.value)}
-              >
-                <option value="">Todos</option>
-                <option value="TODO">Pendiente</option>
-                <option value="IN_PROGRESS">En progreso</option>
-                <option value="DONE">Completada</option>
-              </select>
-            </div>
-
-            <div className="col-12 col-sm-6 col-md-3">
-              <label htmlFor="categoria" className="form-label fw-bold small">
-                Categoría
-              </label>
-              <select
-                id="categoria"
-                className="form-select retro-select"
-                value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
-              >
-                <option value="">Todas</option>
-                <option value="LIMPIEZA">Limpieza</option>
-                <option value="COMPRA">Compra</option>
-                <option value="MANTENIMIENTO">Mantenimiento</option>
-                <option value="OTRO">Otro</option>
-              </select>
-            </div>
-
-            <div className="col-12 col-sm-6 col-md-2">
-              <label htmlFor="fechaLimite" className="form-label fw-bold small">
-                Fecha límite
-              </label>
-              <input
-                id="fechaLimite"
-                type="date"
-                className="form-control retro-input"
-                value={fechaLimite}
-                onChange={(e) => setFechaLimite(e.target.value)}
-              />
-            </div>
-
-            <div className="col-12 col-sm-6 col-md-4">
-              <label htmlFor="busqueda" className="form-label fw-bold small">
-                Búsqueda por texto
-              </label>
-              <input
-                id="busqueda"
-                type="text"
-                className="form-control retro-input"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar por título o descripción"
-              />
-            </div>
-
-            <div className="col-12 d-flex justify-content-end gap-2 flex-wrap">
-              <button
-                type="button"
-                className="btn-retro btn-retro-outline"
-                style={{ minHeight: "44px" }}
-                onClick={handleClearFilters}
-              >
-                <span>🔄</span> Limpiar filtros
-              </button>
-              <button
-                type="button"
-                className="btn-retro btn-retro-primary"
-                style={{ minHeight: "44px" }}
-                onClick={fetchTareas}
-                disabled={loading}
-              >
-                <span>🔎</span> Aplicar filtros
-              </button>
-            </div>
-          </div>
-        </RetroWindow>
-
-        {/* Acciones de la vista */}
-        <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-          <h2 className="mb-0 fw-bold d-flex align-items-center gap-2">
-            <span role="img" aria-label="Lista">📝</span>
-            <span>Tareas pendientes</span>
+    <div className="container-fluid py-2">
+      {/* Cabecera de la vista de Tareas */}
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+          <h2 className="d-flex align-items-center gap-2 mb-1 fw-bold" style={{ fontSize: "24px" }}>
+            <LuListTodo className="text-primary" size={26} aria-hidden="true" />
+            <span>Listado de Tareas</span>
           </h2>
-          <div className="d-flex gap-2 flex-wrap">
-            <button
-              type="button"
-              className="btn-retro btn-retro-magenta"
-              style={{ minHeight: "44px" }}
-              onClick={() => navigate("/tasks/rewrite")}
-            >
-              🧠 Mejorar títulos
-            </button>
-            <button
-              type="button"
-              className="btn-retro btn-retro-primary"
-              style={{ minHeight: "44px" }}
-              onClick={() => navigate("/tasks/create")}
-            >
-              ➕ Crear nueva tarea
-            </button>
-          </div>
+          <p className="text-muted mb-0" style={{ fontSize: "14px" }}>
+            Gestiona, filtra y organiza el trabajo de tu hogar en tiempo real.
+          </p>
         </div>
 
-        {/* FE-014: Banner de error inline para acciones destructivas/mutaciones */}
-        {actionError && (
-          <div className="alert alert-danger alert-dismissible fade show mb-3" role="alert">
-            {actionError}
-            <button
-              type="button"
-              className="btn-close"
-              onClick={() => setActionError(null)}
-            ></button>
-          </div>
-        )}
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          {/* Selector de Vistas: Grid | List | Kanban */}
+          <TaskViewSwitcher
+            currentMode={viewMode}
+            onChangeMode={handleChangeViewMode}
+          />
 
-        {/* Lista en cuadrícula de tarjetas Retro Window o Empty State */}
-        {tareas.length === 0 ? (
-          <div className="retro-window p-4 text-center my-4">
-            <EmptyState
-              icon="🖥️"
-              badge="[ OK · SISTEMA DESPEJADO ]"
-              title="¡Escritorio despejado!"
-              description="No hay tareas pendientes para los filtros seleccionados. Disfruta tu momento o crea una nueva tarea."
-              actionLabel="➕ Crear nueva tarea"
-              onAction={() => navigate("/tasks/create")}
-            />
-          </div>
-        ) : (
-          <div className="row g-3">
-            {tareas.map((tarea) => (
-              <div key={tarea.id} className="col-12 col-md-6 col-lg-4">
-                <TaskCard
-                  task={tarea}
-                  onComplete={marcarComoCompletada}
-                  onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
-                  onDelete={promptDelete}
-                  isCompleting={completingId === tarea.id}
-                  isDeleting={deletingId === tarea.id}
-                />
-              </div>
-            ))}
-          </div>
-        )}
+          <Link to="/tasks/rewrite">
+            <Button variant="secondary" size="md" leftIcon={<LuSparkles size={16} />}>
+              Mejorar títulos
+            </Button>
+          </Link>
+
+          <Link to="/tasks/create">
+            <Button variant="primary" size="md" leftIcon={<LuPlus size={16} />}>
+              Nueva Tarea
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {/* FE-017: Modal de confirmación reactivo */}
+      {/* Barra de Filtros Compacta */}
+      <FilterBar
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        estado={estado}
+        onEstadoChange={setEstado}
+        categoria={categoria}
+        onCategoriaChange={setCategoria}
+        fechaLimite={fechaLimite}
+        onFechaLimiteChange={setFechaLimite}
+        onClearFilters={handleClearFilters}
+        totalTasks={tareas}
+      />
+
+      {/* Banner de error para mutaciones inline */}
+      {actionError && (
+        <div className="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+          {actionError}
+          <button
+            type="button"
+            className="btn-close"
+            onClick={() => setActionError(null)}
+          ></button>
+        </div>
+      )}
+
+      {/* Renderizado de vistas */}
+      {loading ? (
+        <div className="row g-3">
+          {[1, 2, 3, 4, 5, 6].map((idx) => (
+            <div key={idx} className="col-12 col-md-6 col-lg-4">
+              <div className="ui-task-card p-3">
+                <div className="d-flex justify-content-between mb-3">
+                  <Skeleton variant="rounded" width="80px" height="20px" className="rounded-pill" />
+                  <Skeleton variant="rounded" width="60px" height="20px" className="rounded-pill" />
+                </div>
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <Skeleton variant="circular" width="20px" height="20px" />
+                  <Skeleton width="75%" height="20px" />
+                </div>
+                <Skeleton width="90%" height="14px" className="mb-3" />
+                <div className="d-flex justify-content-between pt-2 border-top">
+                  <Skeleton width="70px" height="14px" />
+                  <Skeleton width="50px" height="14px" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : tareas.length === 0 ? (
+        <div className="p-4 text-center my-4">
+          <EmptyState
+            icon={<LuCircleCheck size={32} style={{ color: "#10b981" }} />}
+            badge="TODO AL DÍA"
+            title="¡No hay tareas pendientes!"
+            description={
+              estado || categoria || fechaLimite || busqueda
+                ? "No se encontraron tareas con los filtros aplicados. Intenta restablecer los filtros."
+                : "No hay tareas registradas en este hogar. Crea la primera tarea para comenzar."
+            }
+            actionLabel={
+              estado || categoria || fechaLimite || busqueda
+                ? "Limpiar filtros"
+                : "+ Crear nueva tarea"
+            }
+            onAction={
+              estado || categoria || fechaLimite || busqueda
+                ? handleClearFilters
+                : () => navigate("/tasks/create")
+            }
+          />
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="row g-3">
+          {tareas.map((tarea) => (
+            <div key={tarea.id} className="col-12 col-md-6 col-lg-4">
+              <TaskCard
+                task={tarea}
+                onComplete={handleToggleComplete}
+                onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+                onDelete={promptDelete}
+                isCompleting={completingId === tarea.id}
+                isDeleting={deletingId === tarea.id}
+              />
+            </div>
+          ))}
+        </div>
+      ) : viewMode === "list" ? (
+        <TaskListView
+          tasks={tareas}
+          onComplete={handleToggleComplete}
+          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onDelete={promptDelete}
+          completingId={completingId}
+          deletingId={deletingId}
+        />
+      ) : (
+        <TaskKanbanBoard
+          tasks={tareas}
+          onStatusChange={handleStatusChange}
+          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onDelete={promptDelete}
+          completingId={completingId}
+          deletingId={deletingId}
+        />
+      )}
+
+      {/* Modal de confirmación para eliminar */}
       <ConfirmModal
         isOpen={!!taskToDelete}
         title="Eliminar tarea"
@@ -316,7 +290,7 @@ const TaskList = () => {
         onConfirm={handleConfirmDelete}
         onCancel={() => setTaskToDelete(null)}
       />
-    </>
+    </div>
   );
 };
 

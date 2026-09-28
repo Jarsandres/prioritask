@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { LuSparkles, LuLoader, LuTriangleAlert } from "react-icons/lu";
 import api from "../../api";
 import type { AIHealthStatus } from "../../types/task";
 
 export interface AIHealthBadgeProps {
   className?: string;
+  showDetails?: boolean;
 }
 
 export const AIHealthBadge = ({ className = "" }: AIHealthBadgeProps) => {
@@ -45,10 +47,17 @@ export const AIHealthBadge = ({ className = "" }: AIHealthBadgeProps) => {
   if (loading) {
     return (
       <span
-        className={`retro-badge retro-badge-todo ${className}`.trim()}
+        className={`d-inline-flex align-items-center gap-1.5 px-2.5 py-1 rounded-pill small fw-medium ${className}`.trim()}
+        style={{
+          backgroundColor: "var(--bg-subtle, #f1f5f9)",
+          color: "var(--text-muted, #64748b)",
+          border: "1px solid var(--border-default, #e2e8f0)",
+          fontSize: "0.75rem",
+        }}
         title="Verificando telemetría de Inteligencia Artificial..."
       >
-        <span>⏳</span> <span>IA: CONECTANDO...</span>
+        <LuLoader className="spin" size={12} />
+        <span>IA: Conectando...</span>
       </span>
     );
   }
@@ -62,20 +71,43 @@ export const AIHealthBadge = ({ className = "" }: AIHealthBadgeProps) => {
     const modelLabel = health.model || "Qwen 2.5";
     return (
       <span
-        className={`retro-badge retro-badge-low ${className}`.trim()}
+        className={`d-inline-flex align-items-center gap-1.5 px-2.5 py-1 rounded-pill small fw-medium ${className}`.trim()}
+        style={{
+          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          color: "#059669",
+          border: "1px solid rgba(16, 185, 129, 0.25)",
+          fontSize: "0.75rem",
+        }}
         title={`Circuit Breaker: ${health.circuit_state} | Éxitos: ${health.success_count} | Fallos: ${health.failure_count}`}
       >
-        <span>🟢</span> <span>IA: ONLINE ({modelLabel})</span>
+        <span
+          style={{
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            backgroundColor: "#10b981",
+            boxShadow: "0 0 0 2px rgba(16, 185, 129, 0.3)",
+          }}
+        />
+        <LuSparkles size={12} />
+        <span>IA Online ({modelLabel})</span>
       </span>
     );
   }
 
   return (
     <span
-      className={`retro-badge retro-badge-high ${className}`.trim()}
+      className={`d-inline-flex align-items-center gap-1.5 px-2.5 py-1 rounded-pill small fw-medium ${className}`.trim()}
+      style={{
+        backgroundColor: "rgba(245, 158, 11, 0.1)",
+        color: "#d97706",
+        border: "1px solid rgba(245, 158, 11, 0.25)",
+        fontSize: "0.75rem",
+      }}
       title="El servicio de IA se encuentra degradado o en circuito abierto. Prioritask utiliza clasificación heurística por reglas."
     >
-      <span>🟡</span> <span>IA: EN REPOSO / MODO HEURÍSTICO</span>
+      <LuTriangleAlert size={12} />
+      <span>Modo Heurístico</span>
     </span>
   );
 };

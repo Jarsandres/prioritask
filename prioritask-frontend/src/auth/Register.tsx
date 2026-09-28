@@ -1,11 +1,22 @@
-import { useState, useContext } from "react";
-import api from "../api";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import styles from "./Login.module.css";
-import { RoomContext } from "../context/RoomContext";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
+import {
+  LuUser,
+  LuMail,
+  LuLock,
+  LuEye,
+  LuEyeOff,
+  LuCircleAlert,
+  LuSun,
+  LuMoon,
+} from "react-icons/lu";
+import api from "../api";
+import { useRoom } from "../context/RoomContext";
+import { useTheme } from "../context/ThemeContext";
+import { Card, Input, Button } from "../components/ui";
 import type { TokenResponse } from "../types/auth";
 import type { Room } from "../types/task";
+import "./Auth.css";
 
 export default function Register() {
   const [username, setUsername] = useState("");
@@ -15,11 +26,12 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
-  // FE-005 (bonus): Estado de carga para prevenir doble submit
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("Registrando...");
+  const [loadingMessage, setLoadingMessage] = useState("Creando cuenta...");
+
   const navigate = useNavigate();
-  const { setRoomId } = useContext(RoomContext);
+  const { setRoomId, refreshRooms } = useRoom();
+  const { theme, toggleTheme } = useTheme();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +61,7 @@ export default function Register() {
     }
 
     setIsLoading(true);
-    setLoadingMessage("Registrando...");
+    setLoadingMessage("Creando tu cuenta...");
     try {
       await api.post("/auth/register", {
         nombre: cleanUsername,
@@ -71,10 +83,12 @@ export default function Register() {
       const roomsRes = await api.get<Room[]>("/rooms");
       const rooms = roomsRes.data;
       if (rooms.length === 0) {
+        setRoomId(null);
         navigate("/rooms/create");
       } else {
         const id = rooms[0].id;
         setRoomId(id);
+        await refreshRooms();
         navigate("/dashboard");
       }
     } catch (err: unknown) {
@@ -87,96 +101,133 @@ export default function Register() {
           (err as { response: { data: { detail: string } } }).response.data.detail
         );
       } else {
-        setError("Error al registrar. Revisa los datos.");
+        setError("Error al registrar la cuenta. Revisa los datos ingresados.");
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-
   return (
-    <div className={styles.container}>
-      <div className={styles.card}>
-        <img src="/logo.png" alt="Prioritask logo" className={styles.logo} />
-        <h1 className={styles.title}>Crear cuenta</h1>
-        <form onSubmit={handleRegister}>
-          <input
+    <div className="auth-container">
+      {/* Selector de tema flotante */}
+      <button
+        type="button"
+        className="auth-theme-toggle"
+        onClick={toggleTheme}
+        aria-label={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`}
+        title={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`}
+      >
+        {theme === "dark" ? <LuSun size={18} /> : <LuMoon size={18} />}
+      </button>
+
+      <Card className="auth-card" noBodyWrap={true}>
+        <div className="auth-header">
+          <div className="auth-logo-badge">
+            <img src="/logo.png" alt="Prioritask logo" className="auth-logo-img" />
+          </div>
+          <h1 className="auth-title">Crear cuenta</h1>
+          <p className="auth-subtitle">Únete a Prioritask para organizar las tareas del hogar</p>
+        </div>
+
+        <form onSubmit={handleRegister} className="auth-form" noValidate>
+          {error && (
+            <div className="auth-error-banner" role="alert">
+              <LuCircleAlert size={18} className="auth-error-icon" aria-hidden="true" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <Input
+            label="Nombre completo o alias"
             type="text"
-            placeholder="Nombre de usuario"
-            className={styles.input}
+            placeholder="Ej. Alex Gómez"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             disabled={isLoading}
+            leftIcon={<LuUser size={16} />}
             required
+            autoComplete="name"
           />
-          <input
+
+          <Input
+            label="Correo electrónico"
             type="email"
-            placeholder="Correo electrónico"
-            className={styles.input}
+            placeholder="nombre@ejemplo.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={isLoading}
+            leftIcon={<LuMail size={16} />}
             required
+            autoComplete="email"
           />
-          <div className={styles.passwordContainer}>
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Contraseña"
-              className={styles.passwordInput}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading}
-              required
-            />
-            <button
-              type="button"
-              className={styles.togglePasswordBtn}
-              onClick={() => setShowPassword((prev) => !prev)}
-              aria-label={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
-              disabled={isLoading}
-            >
-              {showPassword ? <FaEyeSlash /> : <FaEye />}
-            </button>
-          </div>
-          <div className={styles.passwordContainer}>
-            <input
-              type={showConfirmPassword ? "text" : "password"}
-              placeholder="Confirmar contraseña"
-              className={styles.passwordInput}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              disabled={isLoading}
-              required
-            />
-            <button
-              type="button"
-              className={styles.togglePasswordBtn}
-              onClick={() => setShowConfirmPassword((prev) => !prev)}
-              aria-label={showConfirmPassword ? "Ocultar confirmar contraseña" : "Ver confirmar contraseña"}
-              disabled={isLoading}
-            >
-              {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-            </button>
-          </div>
-          {error && <p className={styles.error}>{error}</p>}
-          {/* FE-005: Botón deshabilitado durante el registro */}
-          <button
-            type="submit"
-            className={styles.button}
+
+          <Input
+            label="Contraseña"
+            type={showPassword ? "text" : "password"}
+            placeholder="Mínimo 6 caracteres"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             disabled={isLoading}
+            leftIcon={<LuLock size={16} />}
+            rightIcon={
+              <button
+                type="button"
+                className="auth-password-toggle"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                tabIndex={-1}
+              >
+                {showPassword ? <LuEyeOff size={16} /> : <LuEye size={16} />}
+              </button>
+            }
+            required
+            autoComplete="new-password"
+          />
+
+          <Input
+            label="Confirmar contraseña"
+            type={showConfirmPassword ? "text" : "password"}
+            placeholder="Repite la contraseña"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            disabled={isLoading}
+            leftIcon={<LuLock size={16} />}
+            rightIcon={
+              <button
+                type="button"
+                className="auth-password-toggle"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                aria-label={showConfirmPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? <LuEyeOff size={16} /> : <LuEye size={16} />}
+              </button>
+            }
+            required
+            autoComplete="new-password"
+          />
+
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            isLoading={isLoading}
+            className="auth-submit-btn"
           >
-            {isLoading ? loadingMessage : "Registrarse"}
-          </button>
+            {isLoading ? loadingMessage : "Crear cuenta"}
+          </Button>
         </form>
-        <p className={styles.registerText}>
-          {/* FE-008: Sustituido <a href> por <Link to> para navegación SPA */}
-          ¿Ya tienes cuenta?{" "}
-          <Link to="/login" className={styles.registerLink}>
-            Iniciar sesión
-          </Link>
-        </p>
-      </div>
+
+        <div className="auth-footer">
+          <p>
+            ¿Ya tienes una cuenta?{" "}
+            <Link to="/login" className="auth-link">
+              Inicia sesión aquí
+            </Link>
+          </p>
+        </div>
+      </Card>
     </div>
   );
 }

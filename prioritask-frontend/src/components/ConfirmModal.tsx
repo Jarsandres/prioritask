@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import { LuTriangleAlert, LuCircleAlert, LuInfo, LuX } from "react-icons/lu";
+import Button from "./ui/Button";
 
-interface ConfirmModalProps {
+export interface ConfirmModalProps {
   isOpen: boolean;
   title: string;
   message: string;
@@ -12,7 +14,7 @@ interface ConfirmModalProps {
   onCancel: () => void;
 }
 
-const ConfirmModal: React.FC<ConfirmModalProps> = ({
+export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   isOpen,
   title,
   message,
@@ -23,73 +25,197 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
+  const previousActiveElement = useRef<Element | null>(null);
+
+  // Focus trap y soporte de teclado (Escape)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    previousActiveElement.current = document.activeElement;
+    document.body.style.overflow = "hidden";
+
+    // Foco inicial en el botón de cancelar para prevenir confirmaciones accidentales
+    const timer = setTimeout(() => {
+      cancelBtnRef.current?.focus();
+    }, 50);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (!isLoading) onCancel();
+        return;
+      }
+
+      if (e.key === "Tab" && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+      clearTimeout(timer);
+      if (previousActiveElement.current instanceof HTMLElement) {
+        previousActiveElement.current.focus();
+      }
+    };
+  }, [isOpen, isLoading, onCancel]);
+
   if (!isOpen) return null;
 
-  const btnVariantClass =
-    variant === "danger"
-      ? "btn-retro-danger"
-      : variant === "warning"
-      ? "btn-retro-warning"
-      : "btn-retro-primary";
+  const iconComponent =
+    variant === "danger" ? (
+      <div
+        className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
+        style={{
+          width: "44px",
+          height: "44px",
+          backgroundColor: "rgba(239, 68, 68, 0.12)",
+          color: "#ef4444",
+        }}
+      >
+        <LuTriangleAlert size={22} />
+      </div>
+    ) : variant === "warning" ? (
+      <div
+        className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
+        style={{
+          width: "44px",
+          height: "44px",
+          backgroundColor: "rgba(245, 158, 11, 0.12)",
+          color: "#f59e0b",
+        }}
+      >
+        <LuCircleAlert size={22} />
+      </div>
+    ) : (
+      <div
+        className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
+        style={{
+          width: "44px",
+          height: "44px",
+          backgroundColor: "rgba(37, 99, 235, 0.12)",
+          color: "#2563eb",
+        }}
+      >
+        <LuInfo size={22} />
+      </div>
+    );
+
+  const mappedButtonVariant = variant === "danger" ? "danger" : "primary";
 
   return (
     <div
       className="modal show d-block"
       tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-modal-title"
       style={{
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
-        backdropFilter: "blur(2px)",
-        zIndex: 1050,
+        backgroundColor: "rgba(15, 23, 42, 0.65)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        zIndex: 1060,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isLoading) {
+          onCancel();
+        }
       }}
     >
-      <div className="modal-dialog modal-dialog-centered">
-        <div className="retro-window w-100" style={{ border: "2.5px solid var(--window-border)" }}>
-          <div
-            className="retro-window-header"
-            style={{
-              background:
-                variant === "danger"
-                  ? "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)"
-                  : "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
-            }}
-          >
-            <div className="d-flex align-items-center gap-2">
-              <span>⚠️</span>
-              <span>{title.toUpperCase()}</span>
+      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: "480px" }}>
+        <div
+          ref={modalRef}
+          className="modal-content rounded-4 border shadow-xl p-4"
+          style={{
+            backgroundColor: "var(--bg-surface, #ffffff)",
+            borderColor: "var(--border-default, #e2e8f0)",
+          }}
+        >
+          {/* Header con icono y botón de cerrar */}
+          <div className="d-flex justify-content-between align-items-start mb-3">
+            <div className="d-flex align-items-center gap-3">
+              {iconComponent}
+              <h2
+                id="confirm-modal-title"
+                className="h5 mb-0 fw-bold"
+                style={{
+                  color: "var(--text-heading, #0f172a)",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {title}
+              </h2>
             </div>
             <button
               type="button"
-              className="retro-window-btn"
+              className="btn btn-sm btn-ghost p-1 rounded-circle text-muted d-flex align-items-center justify-content-center"
+              style={{
+                width: "32px",
+                height: "32px",
+                backgroundColor: "transparent",
+                border: "none",
+              }}
               onClick={onCancel}
               disabled={isLoading}
-              style={{ cursor: "pointer", background: "rgba(255,255,255,0.2)" }}
               aria-label="Cerrar modal"
             >
-              ✕
+              <LuX size={18} />
             </button>
           </div>
-          <div className="retro-window-body">
-            <p className="mb-4 fs-6">{message}</p>
-            <div className="d-flex justify-content-end gap-2">
-              <button
-                type="button"
-                className="btn-retro btn-retro-outline"
-                style={{ minHeight: "40px" }}
-                onClick={onCancel}
-                disabled={isLoading}
-              >
-                {cancelText}
-              </button>
-              <button
-                type="button"
-                className={`btn-retro ${btnVariantClass}`}
-                style={{ minHeight: "40px" }}
-                onClick={onConfirm}
-                disabled={isLoading}
-              >
-                {isLoading ? "Procesando..." : confirmText}
-              </button>
-            </div>
+
+          {/* Mensaje descriptivo */}
+          <p
+            className="mb-4"
+            style={{
+              color: "var(--text-body, #475569)",
+              fontSize: "0.94rem",
+              lineHeight: "1.55",
+            }}
+          >
+            {message}
+          </p>
+
+          {/* Acciones */}
+          <div className="d-flex justify-content-end gap-2">
+            <Button
+              ref={cancelBtnRef}
+              variant="outline"
+              size="md"
+              onClick={onCancel}
+              disabled={isLoading}
+            >
+              {cancelText}
+            </Button>
+            <Button
+              variant={mappedButtonVariant}
+              size="md"
+              onClick={onConfirm}
+              isLoading={isLoading}
+            >
+              {confirmText}
+            </Button>
           </div>
         </div>
       </div>

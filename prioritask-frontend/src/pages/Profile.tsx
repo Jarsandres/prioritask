@@ -1,9 +1,22 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  LuUser,
+  LuMail,
+  LuFingerprint,
+  LuSun,
+  LuMoon,
+  LuLogOut,
+  LuShieldCheck,
+} from "react-icons/lu";
 import api from "../api";
 import { useTheme } from "../context/ThemeContext";
-import RetroWindow from "../components/common/RetroWindow";
+import Card from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
+import Skeleton from "../components/ui/Skeleton";
 import EmptyState from "../components/common/EmptyState";
+import { useToast } from "../context/ToastContext";
 
 interface User {
   id: string;
@@ -17,6 +30,7 @@ const Profile = () => {
   const [error, setError] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
+  const toast = useToast();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -44,139 +58,214 @@ const Profile = () => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("refreshToken");
+    toast.info("Has cerrado sesión.");
     navigate("/login");
   };
 
+  const getInitials = (name?: string) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0].toUpperCase())
+      .join("");
+  };
+
   return (
-    <div className="container-fluid py-2" style={{ maxWidth: "780px" }}>
-      {/* Cabecera */}
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <div>
-          <h2 className="retro-page-title">
-            <span>👤</span> ADMINISTRATOR / USER_PROFILE.SYS
-          </h2>
-          <p className="retro-page-subtitle">
-            Información de la cuenta, credenciales y preferencias del sistema
-          </p>
+    <div className="container-fluid py-3 px-2 px-md-4" style={{ maxWidth: "800px" }}>
+      {/* Cabecera Moderna */}
+      <div className="mb-4">
+        <div className="d-flex align-items-center gap-2 mb-1">
+          <div
+            className="d-flex align-items-center justify-content-center rounded-3 p-2"
+            style={{
+              backgroundColor: "rgba(37, 99, 235, 0.1)",
+              color: "#2563eb",
+            }}
+          >
+            <LuUser size={22} />
+          </div>
+          <h1 className="h3 mb-0 fw-bold" style={{ letterSpacing: "-0.02em" }}>
+            Perfil de Usuario
+          </h1>
         </div>
+        <p className="text-muted mb-0 small">
+          Información de tu cuenta, credenciales de acceso y preferencias de apariencia
+        </p>
       </div>
 
       {error && (
-        <div className="alert alert-danger mb-4" role="alert">
+        <div className="alert alert-danger mb-4 rounded-3 border-0 shadow-xs" role="alert">
           {error}
         </div>
       )}
 
-      {/* Ventana Retro Administrator */}
-      <RetroWindow
-        title="ADMINISTRATOR / USER_PROFILE"
-        icon="👤"
-        variant="admin"
-      >
-        {loading ? (
+      {loading ? (
+        <Card className="p-4">
+          <div className="d-flex align-items-center gap-3 mb-4">
+            <Skeleton variant="circular" width={64} height={64} />
+            <div>
+              <Skeleton variant="text" width={160} height={24} className="mb-2" />
+              <Skeleton variant="text" width={220} height={16} />
+            </div>
+          </div>
+          <div className="row g-3 mb-4">
+            <div className="col-12 col-md-6">
+              <Skeleton variant="rounded" width="100%" height={60} />
+            </div>
+            <div className="col-12 col-md-6">
+              <Skeleton variant="rounded" width="100%" height={60} />
+            </div>
+          </div>
+          <Skeleton variant="rounded" width="100%" height={80} />
+        </Card>
+      ) : !user ? (
+        <Card className="p-4">
           <EmptyState
-            icon="⏳"
-            title="Cargando credenciales de usuario..."
-          />
-        ) : !user ? (
-          <EmptyState
-            icon="⚠️"
+            icon={<LuUser size={28} />}
             title="Sesión no disponible"
-            description="Por favor, inicia sesión nuevamente."
-            actionLabel="Ir a Login"
+            description="Por favor, inicia sesión nuevamente para acceder a tu perfil."
+            actionLabel="Iniciar Sesión"
             onAction={handleLogout}
           />
-        ) : (
-          <>
-            {/* Tarjeta de Identidad Retro */}
-            <div className="retro-admin-card">
-              <div className="retro-admin-avatar">
-                <span>👾</span>
+        </Card>
+      ) : (
+        <div className="d-flex flex-column gap-4">
+          {/* Tarjeta de Identidad */}
+          <Card className="p-4 shadow-xs">
+            <div className="d-flex align-items-center gap-3 flex-wrap mb-4">
+              <div
+                className="d-flex align-items-center justify-content-center rounded-circle fw-bold text-white shadow-sm flex-shrink-0"
+                style={{
+                  width: "64px",
+                  height: "64px",
+                  background: "linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)",
+                  fontSize: "1.4rem",
+                  letterSpacing: "0.03em",
+                }}
+              >
+                {getInitials(user.nombre)}
               </div>
               <div className="flex-grow-1">
                 <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
-                  <h4 className="mb-0 fw-bold">{user.nombre}</h4>
-                  <span className="retro-badge retro-badge-low">ACTIVO</span>
-                  <span className="retro-badge retro-badge-medium">ADMIN</span>
+                  <h2
+                    className="h4 mb-0 fw-bold"
+                    style={{ color: "var(--text-heading, #0f172a)" }}
+                  >
+                    {user.nombre}
+                  </h2>
+                  <Badge variant="success">● Activo</Badge>
+                  <Badge variant="primary">
+                    <LuShieldCheck size={12} className="me-1" />
+                    Autenticado
+                  </Badge>
                 </div>
-                <p className="text-muted small mb-0 font-monospace">
-                  UUID: {user.id}
-                </p>
-              </div>
-            </div>
-
-            {/* Campos de Usuario */}
-            <div className="mb-4">
-              <h6 className="fw-bold text-uppercase small mb-3 text-muted">
-                📋 DATOS DE REGISTRO EN EL SISTEMA
-              </h6>
-
-              <div className="row g-3">
-                <div className="col-12 col-md-6">
-                  <label className="form-label fw-bold small text-muted">
-                    NOMBRE DE USUARIO
-                  </label>
-                  <div className="retro-field-display">{user.nombre}</div>
-                </div>
-
-                <div className="col-12 col-md-6">
-                  <label className="form-label fw-bold small text-muted">
-                    CORREO ELECTRÓNICO (LOGIN)
-                  </label>
-                  <div className="retro-field-display">{user.email}</div>
+                <div className="text-muted small d-flex align-items-center gap-1.5 font-monospace">
+                  <LuFingerprint size={14} />
+                  <span>ID: {user.id}</span>
                 </div>
               </div>
             </div>
 
-            {/* Selector de Modo Claro / Modo Oscuro */}
-            <div className="mb-4 pt-3 border-top border-2">
-              <h6 className="fw-bold text-uppercase small mb-3 text-muted">
-                🎨 PREFERENCIA DE APARIENCIA / SYSTEM_THEME
+            {/* Datos Personales */}
+            <div className="row g-3 mb-4">
+              <div className="col-12 col-md-6">
+                <div
+                  className="p-3 rounded-3"
+                  style={{
+                    backgroundColor: "var(--bg-subtle, #f8fafc)",
+                    border: "1px solid var(--border-default, #e2e8f0)",
+                  }}
+                >
+                  <div className="d-flex align-items-center gap-1.5 text-muted small mb-1 fw-semibold">
+                    <LuUser size={14} />
+                    <span>NOMBRE COMPLETO</span>
+                  </div>
+                  <div
+                    className="fw-semibold"
+                    style={{ color: "var(--text-heading, #0f172a)", fontSize: "0.95rem" }}
+                  >
+                    {user.nombre}
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-12 col-md-6">
+                <div
+                  className="p-3 rounded-3"
+                  style={{
+                    backgroundColor: "var(--bg-subtle, #f8fafc)",
+                    border: "1px solid var(--border-default, #e2e8f0)",
+                  }}
+                >
+                  <div className="d-flex align-items-center gap-1.5 text-muted small mb-1 fw-semibold">
+                    <LuMail size={14} />
+                    <span>CORREO ELECTRÓNICO</span>
+                  </div>
+                  <div
+                    className="fw-semibold text-truncate"
+                    style={{ color: "var(--text-heading, #0f172a)", fontSize: "0.95rem" }}
+                  >
+                    {user.email}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Preferencias de Apariencia */}
+            <div
+              className="pt-3 border-top mb-4"
+              style={{ borderColor: "var(--border-default, #e2e8f0)" }}
+            >
+              <h6
+                className="fw-bold small text-muted text-uppercase mb-3"
+                style={{ letterSpacing: "0.04em" }}
+              >
+                Preferencia de Tema
               </h6>
-              <div className="theme-switch-group">
-                <button
+              <div className="d-flex gap-2">
+                <Button
                   type="button"
-                  className={`theme-switch-btn ${theme === "light" ? "active" : ""}`}
+                  variant={theme === "light" ? "primary" : "outline"}
+                  size="md"
+                  leftIcon={<LuSun size={16} />}
                   onClick={() => setTheme("light")}
-                  aria-label="Activar Modo Claro"
                 >
-                  <span>☀️</span>
-                  <span>Modo Claro</span>
-                </button>
-
-                <button
+                  Modo Claro
+                </Button>
+                <Button
                   type="button"
-                  className={`theme-switch-btn ${theme === "dark" ? "active" : ""}`}
+                  variant={theme === "dark" ? "primary" : "outline"}
+                  size="md"
+                  leftIcon={<LuMoon size={16} />}
                   onClick={() => setTheme("dark")}
-                  aria-label="Activar Modo Oscuro"
                 >
-                  <span>🌙</span>
-                  <span>Modo Oscuro</span>
-                </button>
+                  Modo Oscuro
+                </Button>
               </div>
             </div>
 
-            {/* Control de Sesión y Logout */}
-            <div className="pt-3 border-top border-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <div>
-                <span className="text-muted small">Estado de sesión: </span>
-                <span className="fw-bold small text-success font-monospace">
-                  ● AUTENTICADO
-                </span>
-              </div>
-              <button
-                type="button"
-                className="btn-retro btn-retro-danger"
-                style={{ minHeight: "44px" }}
+            {/* Control de Sesión */}
+            <div
+              className="pt-3 border-top d-flex justify-content-between align-items-center flex-wrap gap-2"
+              style={{ borderColor: "var(--border-default, #e2e8f0)" }}
+            >
+              <span className="text-muted small">
+                Sesión segura activa en este navegador
+              </span>
+              <Button
+                variant="danger"
+                size="md"
+                leftIcon={<LuLogOut size={16} />}
                 onClick={handleLogout}
               >
-                <span>🔓</span>
-                <span>Cerrar Sesión</span>
-              </button>
+                Cerrar Sesión
+              </Button>
             </div>
-          </>
-        )}
-      </RetroWindow>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import type { StylesConfig, GroupBase } from "react-select";
 
-export const getRetroSelectStyles = <Option, IsMulti extends boolean = false>(
+export const getModernSelectStyles = <Option, IsMulti extends boolean = false>(
   theme: "light" | "dark"
 ): StylesConfig<Option, IsMulti, GroupBase<Option>> => {
   const isDark = theme === "dark";
@@ -8,57 +8,59 @@ export const getRetroSelectStyles = <Option, IsMulti extends boolean = false>(
   return {
     control: (base, state) => ({
       ...base,
-      minHeight: "44px",
+      minHeight: "42px",
       backgroundColor: isDark
-        ? "var(--input-bg, #0b1120)"
-        : "var(--input-bg, #ffffff)",
+        ? "var(--bg-subtle, #19233c)"
+        : "var(--bg-surface, #ffffff)",
       borderColor: state.isFocused
-        ? "#2563eb"
+        ? "var(--border-focus, #3b82f6)"
         : isDark
-        ? "var(--input-border, #475569)"
-        : "var(--input-border, #1e293b)",
-      borderWidth: "2px",
-      borderRadius: "8px",
-      boxShadow: state.isFocused ? "2px 2px 0px #2563eb" : "none",
+        ? "var(--border-default, #1e293c)"
+        : "var(--border-default, #e2e8f0)",
+      borderWidth: "1px",
+      borderRadius: "10px",
+      boxShadow: state.isFocused
+        ? "0 0 0 3px rgba(37, 99, 235, 0.15)"
+        : "var(--shadow-xs)",
       "&:hover": {
-        borderColor: "#2563eb",
+        borderColor: "var(--border-focus, #3b82f6)",
       },
       cursor: "pointer",
+      transition: "all 0.15s ease",
     }),
     menu: (base) => ({
       ...base,
       backgroundColor: isDark
-        ? "var(--window-bg, #1e293b)"
-        : "var(--window-bg, #ffffff)",
-      border: `2px solid ${
-        isDark ? "var(--window-border, #334155)" : "var(--window-border, #1e293b)"
+        ? "var(--bg-surface, #131b2e)"
+        : "var(--bg-surface, #ffffff)",
+      border: `1px solid ${
+        isDark ? "var(--border-default, #1e293c)" : "var(--border-default, #e2e8f0)"
       }`,
-      borderRadius: "8px",
+      borderRadius: "12px",
       boxShadow: isDark
-        ? "4px 4px 0px var(--window-shadow, #000000)"
-        : "4px 4px 0px var(--window-shadow, rgba(30, 41, 59, 0.9))",
+        ? "0 10px 25px -5px rgba(0, 0, 0, 0.75)"
+        : "0 10px 25px -5px rgba(15, 23, 42, 0.1)",
       zIndex: 9999,
       overflow: "hidden",
+      padding: "4px",
     }),
     menuList: (base) => ({
       ...base,
       padding: 0,
-      backgroundColor: isDark
-        ? "var(--window-bg, #1e293b)"
-        : "var(--window-bg, #ffffff)",
+      backgroundColor: "transparent",
     }),
     option: (base, state) => {
-      let bg = isDark ? "var(--window-bg, #1e293b)" : "var(--window-bg, #ffffff)";
+      let bg = "transparent";
       let color = isDark
-        ? "var(--text-main, #f8fafc)"
+        ? "var(--text-main, #f1f5f9)"
         : "var(--text-main, #1e293b)";
 
       if (state.isSelected) {
         bg = "#2563eb";
         color = "#ffffff";
       } else if (state.isFocused) {
-        bg = isDark ? "#334155" : "#f1f5f9";
-        color = isDark ? "#ffffff" : "#0f172a";
+        bg = isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff";
+        color = isDark ? "#ffffff" : "#1d4ed8";
       }
 
       return {
@@ -66,9 +68,10 @@ export const getRetroSelectStyles = <Option, IsMulti extends boolean = false>(
         backgroundColor: bg,
         color,
         cursor: "pointer",
-        padding: "10px 14px",
-        fontSize: "0.95rem",
-        fontWeight: state.isSelected ? "700" : "500",
+        padding: "8px 12px",
+        borderRadius: "6px",
+        fontSize: "0.9rem",
+        fontWeight: state.isSelected ? "600" : "500",
         "&:active": {
           backgroundColor: "#2563eb",
           color: "#ffffff",
@@ -78,45 +81,45 @@ export const getRetroSelectStyles = <Option, IsMulti extends boolean = false>(
     singleValue: (base) => ({
       ...base,
       color: isDark
-        ? "var(--text-main, #f8fafc)"
+        ? "var(--text-main, #f1f5f9)"
         : "var(--text-main, #1e293b)",
-      fontSize: "0.95rem",
+      fontSize: "0.9rem",
       fontWeight: "500",
     }),
     multiValue: (base) => ({
       ...base,
-      backgroundColor: isDark ? "#334155" : "#f5f3ff",
-      border: `1px solid ${isDark ? "#475569" : "#c4b5fd"}`,
+      backgroundColor: isDark ? "rgba(139, 92, 246, 0.2)" : "#f5f3ff",
+      border: `1px solid ${isDark ? "rgba(139, 92, 246, 0.3)" : "#ddd6fe"}`,
       borderRadius: "6px",
+      padding: "1px 4px",
     }),
     multiValueLabel: (base) => ({
       ...base,
-      color: isDark ? "#f8fafc" : "#7c3aed",
+      color: isDark ? "#c4b5fd" : "#7c3aed",
       fontWeight: "600",
-      fontSize: "0.85rem",
+      fontSize: "0.82rem",
     }),
     multiValueRemove: (base) => ({
       ...base,
-      color: isDark ? "#94a3b8" : "#7c3aed",
+      color: isDark ? "#a78bfa" : "#7c3aed",
+      cursor: "pointer",
+      borderRadius: "4px",
       "&:hover": {
-        backgroundColor: isDark ? "#475569" : "#e9d5ff",
-        color: isDark ? "#ffffff" : "#6d28d9",
+        backgroundColor: isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2",
+        color: "#ef4444",
       },
-    }),
-    placeholder: (base) => ({
-      ...base,
-      color: isDark
-        ? "var(--text-muted, #94a3b8)"
-        : "var(--text-muted, #64748b)",
-      fontSize: "0.95rem",
     }),
     input: (base) => ({
       ...base,
-      color: isDark
-        ? "var(--input-text, #f8fafc)"
-        : "var(--input-text, #1e293b)",
+      color: isDark ? "var(--text-main, #f1f5f9)" : "var(--text-main, #1e293b)",
+    }),
+    placeholder: (base) => ({
+      ...base,
+      color: "var(--text-muted, #94a3b8)",
+      fontSize: "0.9rem",
     }),
   };
 };
 
-export default getRetroSelectStyles;
+/** Alias retrocompatible para pantallas existentes */
+export const getRetroSelectStyles = getModernSelectStyles;

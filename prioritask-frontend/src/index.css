@@ -4,39 +4,91 @@
   line-height: 1.5;
   font-weight: 400;
 
-  /* Variables Retro 90's - Modo Claro */
-  --bg-primary: #f0f4f8;
-  --bg-grid-line: rgba(37, 99, 235, 0.05);
-  --window-bg: #ffffff;
-  --window-border: #1e293b;
-  --window-shadow: rgba(30, 41, 59, 0.9);
+  /* =========================================================
+     DESIGN TOKENS — CLEAN SAAS (LIGHT MODE)
+     ========================================================= */
+  --bg-canvas: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-rgb: 255, 255, 255;
+  --bg-subtle: #f1f5f9;
+  --bg-hover: #e2e8f0;
+
+  --border-subtle: #f1f5f9;
+  --border-default: #e2e8f0;
+  --border-focus: #3b82f6;
+
   --text-main: #1e293b;
   --text-muted: #64748b;
+  --text-subtle: #94a3b8;
   --text-heading: #0f172a;
-  --card-bg: #ffffff;
-  --input-bg: #ffffff;
-  --input-text: #1e293b;
-  --input-border: #1e293b;
-  --input-shadow: rgba(30, 41, 59, 0.1);
-  --retro-btn-outline-bg: #ffffff;
-  --retro-btn-outline-text: #1e293b;
-  --retro-btn-outline-hover: #f8fafc;
-  --retro-nav-bottom-bg: #ffffff;
-  --retro-nav-border: #1e293b;
-  --retro-badge-todo-bg: #e2e8f0;
-  --retro-badge-todo-text: #334155;
-  --sidebar-bg: #2563eb;
-  --sidebar-text: #ffffff;
-  --folder-bg: #ffffff;
-  --folder-border: #1e293b;
-  --compare-box-bg: #f8fafc;
-  --log-entry-bg: #ffffff;
-  --log-entry-border: #e2e8f0;
-  --tag-row-bg: #ffffff;
-  --task-done-bg: #f8fafc;
-  --ai-alert-bg: #fdf4ff;
-  --ai-alert-border: #c026d3;
-  --ai-alert-text: #701a75;
+
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
+  --primary-500: #2563eb;
+  --primary-600: #1d4ed8;
+  --primary-700: #1e40af;
+
+  --success-50: #ecfdf5;
+  --success-500: #10b981;
+  --success-600: #059669;
+
+  --warning-50: #fffbeb;
+  --warning-500: #f59e0b;
+  --warning-600: #d97706;
+
+  --danger-50: #fef2f2;
+  --danger-500: #ef4444;
+  --danger-600: #dc2626;
+
+  --ai-50: #faf5ff;
+  --ai-500: #8b5cf6;
+  --ai-600: #7c3aed;
+
+  /* Border Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+
+  /* Diffuse Multi-Layer Gaussian Elevations */
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+
+  /* Retro Compatibility Mappings */
+  --bg-primary: var(--bg-canvas);
+  --bg-grid-line: transparent;
+  --window-bg: var(--bg-surface);
+  --window-border: var(--border-default);
+  --window-shadow: var(--shadow-sm);
+  --card-bg: var(--bg-surface);
+  --input-bg: var(--bg-surface);
+  --input-text: var(--text-main);
+  --input-border: var(--border-default);
+  --input-shadow: none;
+  --retro-btn-outline-bg: var(--bg-surface);
+  --retro-btn-outline-text: var(--text-main);
+  --retro-btn-outline-hover: var(--bg-subtle);
+  --retro-nav-bottom-bg: var(--bg-surface);
+  --retro-nav-border: var(--border-default);
+  --retro-badge-todo-bg: #f1f5f9;
+  --retro-badge-todo-text: #475569;
+  --sidebar-bg: #1e293b;
+  --sidebar-text: #f8fafc;
+  --folder-bg: var(--bg-surface);
+  --folder-border: var(--border-default);
+  --compare-box-bg: var(--bg-subtle);
+  --log-entry-bg: var(--bg-surface);
+  --log-entry-border: var(--border-default);
+  --tag-row-bg: var(--bg-surface);
+  --task-done-bg: var(--bg-subtle);
+  --ai-alert-bg: #faf5ff;
+  --ai-alert-border: #d8b4fe;
+  --ai-alert-text: #6b21a8;
 
   color: var(--text-main);
   background-color: var(--bg-primary);
@@ -48,39 +100,83 @@
 }
 
 [data-theme="dark"] {
-  /* Variables Retro 90's - Modo Oscuro (Deep Slate / Cyber Vaporwave) */
-  --bg-primary: #0f172a;
-  --bg-grid-line: rgba(56, 189, 248, 0.07);
-  --window-bg: #1e293b;
-  --window-border: #334155;
-  --window-shadow: #000000;
-  --text-main: #f8fafc;
+  /* =========================================================
+     DESIGN TOKENS — CLEAN SAAS (DARK MODE)
+     ========================================================= */
+  --bg-canvas: #090d16;
+  --bg-surface: #131b2e;
+  --bg-surface-rgb: 19, 27, 46;
+  --bg-subtle: #19233c;
+  --bg-hover: #1e293b;
+
+  --border-subtle: #19233c;
+  --border-default: #1e293b;
+  --border-focus: #60a5fa;
+
+  --text-main: #f1f5f9;
   --text-muted: #94a3b8;
+  --text-subtle: #64748b;
   --text-heading: #ffffff;
-  --card-bg: #1e293b;
+
+  --primary-50: rgba(37, 99, 235, 0.15);
+  --primary-100: rgba(37, 99, 235, 0.25);
+  --primary-500: #3b82f6;
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
+
+  --success-50: rgba(16, 185, 129, 0.15);
+  --success-500: #10b981;
+  --success-600: #059669;
+
+  --warning-50: rgba(245, 158, 11, 0.15);
+  --warning-500: #f59e0b;
+  --warning-600: #d97706;
+
+  --danger-50: rgba(239, 68, 68, 0.15);
+  --danger-500: #ef4444;
+  --danger-600: #dc2626;
+
+  --ai-50: rgba(139, 92, 246, 0.15);
+  --ai-500: #a855f7;
+  --ai-600: #9333ea;
+
+  /* Diffuse Multi-Layer Gaussian Elevations (Dark Mode) */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.45), 0 1px 2px -1px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.55), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 18px -3px rgba(0, 0, 0, 0.65), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.75), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+
+  /* Retro Compatibility Mappings */
+  --bg-primary: var(--bg-canvas);
+  --bg-grid-line: transparent;
+  --window-bg: var(--bg-surface);
+  --window-border: var(--border-default);
+  --window-shadow: var(--shadow-sm);
+  --card-bg: var(--bg-surface);
   --input-bg: #0b1120;
-  --input-text: #f8fafc;
-  --input-border: #475569;
-  --input-shadow: rgba(0, 0, 0, 0.4);
-  --retro-btn-outline-bg: #1e293b;
-  --retro-btn-outline-text: #f8fafc;
-  --retro-btn-outline-hover: #334155;
-  --retro-nav-bottom-bg: #1e293b;
-  --retro-nav-border: #334155;
-  --retro-badge-todo-bg: #334155;
-  --retro-badge-todo-text: #e2e8f0;
+  --input-text: var(--text-main);
+  --input-border: var(--border-default);
+  --input-shadow: none;
+  --retro-btn-outline-bg: var(--bg-surface);
+  --retro-btn-outline-text: var(--text-main);
+  --retro-btn-outline-hover: var(--bg-subtle);
+  --retro-nav-bottom-bg: var(--bg-surface);
+  --retro-nav-border: var(--border-default);
+  --retro-badge-todo-bg: #1e293b;
+  --retro-badge-todo-text: #cbd5e1;
   --sidebar-bg: #0b1120;
   --sidebar-text: #f8fafc;
-  --folder-bg: #1e293b;
-  --folder-border: #334155;
-  --compare-box-bg: #0f172a;
-  --log-entry-bg: #1e293b;
-  --log-entry-border: #334155;
-  --tag-row-bg: #1e293b;
-  --task-done-bg: #151e2e;
-  --ai-alert-bg: rgba(192, 38, 211, 0.15);
-  --ai-alert-border: #a21caf;
-  --ai-alert-text: #f0abfc;
+  --folder-bg: var(--bg-surface);
+  --folder-border: var(--border-default);
+  --compare-box-bg: var(--bg-subtle);
+  --log-entry-bg: var(--bg-surface);
+  --log-entry-border: var(--border-default);
+  --tag-row-bg: var(--bg-surface);
+  --task-done-bg: #0e172a;
+  --ai-alert-bg: rgba(168, 85, 247, 0.12);
+  --ai-alert-border: rgba(168, 85, 247, 0.3);
+  --ai-alert-text: #e9d5ff;
 
   color: var(--text-main);
   background-color: var(--bg-primary);
@@ -90,63 +186,56 @@ html, body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  /* Cyber-Grid sobre fondo adaptable */
-  background-color: var(--bg-primary);
-  background-image:
-    linear-gradient(to right, var(--bg-grid-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--bg-grid-line) 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-color: var(--bg-canvas);
   color: var(--text-main);
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 a {
   font-weight: 500;
-  color: #38bdf8;
+  color: var(--primary-500);
   text-decoration: none;
-}
-[data-theme="light"] a {
-  color: #2563eb;
+  transition: color 0.15s ease;
 }
 a:hover {
-  color: #60a5fa;
-}
-[data-theme="light"] a:hover {
-  color: #1d4ed8;
+  color: var(--primary-600);
 }
 
 /* =========================================================
-   SISTEMA DE DISEÑO RETRO-MODERNO (90's Mobile-First)
+   COMPATIBILIDAD CON VISTAS EXISTENTES (MODERNIZADAS)
    ========================================================= */
 
-/* Ventana Retro (Card / Contenedor principal) */
+/* Contenedor Retro Window refactorizado a Clean Card */
 .retro-window {
   background: var(--window-bg);
-  border: 2px solid var(--window-border);
-  border-radius: 10px;
-  box-shadow: 4px 4px 0px var(--window-shadow);
+  border: 1px solid var(--window-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
   transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.2s ease, border-color 0.2s ease;
   color: var(--text-main);
 }
+.retro-window:hover {
+  box-shadow: var(--shadow-md);
+}
 
-/* Barra de Título de Ventana Retro */
+/* Header estilizado */
 .retro-window-header {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #ffffff;
-  padding: 8px 14px;
+  padding: 10px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 700;
-  font-size: 0.88rem;
-  letter-spacing: 0.5px;
-  border-bottom: 2px solid var(--window-border);
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: -0.2px;
+  border-bottom: 1px solid var(--window-border);
   user-select: none;
 }
 
 .retro-window-header-magenta {
-  background: linear-gradient(135deg, #c026d3 0%, #9333ea 100%);
+  background: linear-gradient(135deg, #9333ea 0%, #7e22ce 100%);
 }
 
 .retro-window-header-green {
@@ -162,25 +251,11 @@ a:hover {
 }
 
 .retro-window-controls {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+  display: none !important;
 }
 
 .retro-window-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  font-size: 11px;
-  font-family: monospace, monospace;
-  line-height: 1;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 3px;
-  color: #ffffff;
-  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.2);
+  display: none !important;
 }
 
 .retro-window-body {
@@ -189,14 +264,11 @@ a:hover {
   color: var(--text-main);
 }
 
-/* =========================================================
-   TÍTULOS Y SUBTÍTULOS RETRO
-   ========================================================= */
-
+/* Títulos y Subtítulos */
 .retro-page-title {
   font-size: 1.45rem;
-  font-weight: 800;
-  letter-spacing: -0.4px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text-heading);
   margin: 0;
   display: flex;
@@ -211,46 +283,43 @@ a:hover {
   margin-bottom: 0;
 }
 
-/* =========================================================
-   BOTONES RETRO (Físicos, Táctiles con relieve)
-   ========================================================= */
-
+/* Botones Retro refactorizados a Clean Buttons */
 .btn-retro {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 0.55rem 1.1rem;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 0.92rem;
+  font-weight: 600;
   font-family: inherit;
-  border: 2px solid var(--window-border);
-  border-radius: 8px;
-  box-shadow: 2px 2px 0px var(--window-shadow);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
   cursor: pointer;
   text-decoration: none;
-  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease, background-color 0.15s ease;
+  transition: all 0.15s ease;
   white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
 }
 
 .btn-retro:hover:not(:disabled) {
-  filter: brightness(1.08);
+  box-shadow: var(--shadow-sm);
+  filter: brightness(1.05);
 }
 
 .btn-retro:active:not(:disabled) {
-  transform: translate(2px, 2px);
-  box-shadow: 0px 0px 0px var(--window-shadow);
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 .btn-retro:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: not-allowed;
   transform: none;
-  box-shadow: 2px 2px 0px var(--window-shadow);
+  box-shadow: none;
 }
 
-/* Variantes de Color */
 .btn-retro-primary {
   background-color: #2563eb;
   color: #ffffff !important;
@@ -262,7 +331,7 @@ a:hover {
 }
 
 .btn-retro-magenta {
-  background-color: #c026d3;
+  background-color: #8b5cf6;
   color: #ffffff !important;
 }
 
@@ -290,134 +359,155 @@ a:hover {
   background-color: var(--retro-btn-outline-hover);
 }
 
-/* =========================================================
-   BADGES Y ETIQUETAS RETRO
-   ========================================================= */
-
-.retro-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.76rem;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1.5px solid var(--window-border);
-  box-shadow: 1.5px 1.5px 0px var(--window-shadow);
-  letter-spacing: 0.2px;
-}
-
-.retro-badge-high {
-  background-color: #fef08a; /* Ámbar retro */
-  color: #854d0e;
-}
-
-.retro-badge-medium {
-  background-color: #bae6fd; /* Cian retro */
-  color: #0369a1;
-}
-
-.retro-badge-low {
-  background-color: #bbf7d0; /* Menta / verde retro */
-  color: #15803d;
-}
-
-.retro-badge-todo {
-  background-color: var(--retro-badge-todo-bg);
-  color: var(--retro-badge-todo-text);
-}
-
-.retro-badge-progress {
-  background-color: #fed7aa;
-  color: #9a3412;
-}
-
-.retro-badge-done {
-  background-color: #cbd5e1;
-  color: #475569;
-}
-
-.retro-badge-danger {
-  background-color: #fecaca;
-  color: #991b1b;
-}
-
+/* Badges y Etiquetas */
+.retro-badge,
 .badge-retro {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.76rem;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1.5px solid var(--window-border);
-  box-shadow: 1.5px 1.5px 0px var(--window-shadow);
-  letter-spacing: 0.2px;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  box-shadow: none;
+  letter-spacing: 0.1px;
+}
+
+.retro-badge-high {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+[data-theme="dark"] .retro-badge-high {
+  background-color: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.retro-badge-medium {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+[data-theme="dark"] .retro-badge-medium {
+  background-color: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.retro-badge-low {
+  background-color: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+[data-theme="dark"] .retro-badge-low {
+  background-color: rgba(16, 185, 129, 0.18);
+  color: #86efac;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.retro-badge-todo {
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+  border-color: var(--border-default);
+}
+
+.retro-badge-progress {
+  background-color: #ffedd5;
+  color: #c2410c;
+  border-color: #fed7aa;
+}
+[data-theme="dark"] .retro-badge-progress {
+  background-color: rgba(249, 115, 22, 0.18);
+  color: #fdba74;
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+.retro-badge-done {
+  background-color: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+[data-theme="dark"] .retro-badge-done {
+  background-color: #1e293b;
+  color: #94a3b8;
+  border-color: #334155;
+}
+
+.retro-badge-danger {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+[data-theme="dark"] .retro-badge-danger {
+  background-color: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .retro-checkbox-container {
   padding: 8px 12px;
   background: var(--compare-box-bg, #f8fafc);
-  border: 1.5px dashed var(--window-border);
-  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
 }
 
 .retro-checkbox {
-  width: 1.2rem;
-  height: 1.2rem;
-  border: 2px solid var(--window-border) !important;
-  border-radius: 3px !important;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 1px solid var(--border-default) !important;
+  border-radius: var(--radius-xs) !important;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 .retro-checkbox:checked {
-  background-color: #2563eb !important;
-  border-color: var(--window-border) !important;
+  background-color: var(--primary-500) !important;
+  border-color: var(--primary-500) !important;
 }
 
 /* Hashtag Tags */
 .retro-tags-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
 }
 
 .retro-tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   font-size: 0.75rem;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 4px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
   background-color: #f5f3ff;
   color: #7c3aed;
-  border: 1px solid #c4b5fd;
+  border: 1px solid #ddd6fe;
 }
 [data-theme="dark"] .retro-tag {
-  background-color: rgba(192, 38, 211, 0.15);
-  color: #f0abfc;
-  border: 1px solid #a21caf;
+  background-color: rgba(139, 92, 246, 0.15);
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
-/* =========================================================
-   INPUTS Y CONTROLES TÁCTILES ERGONÓMICOS (Min 44px)
-   ========================================================= */
-
+/* Inputs y Selects */
 .retro-input,
 .retro-select {
-  min-height: 44px;
-  font-size: 16px; /* Previene auto-zoom en Safari iOS */
+  min-height: 42px;
+  font-size: 0.95rem;
   background-color: var(--input-bg) !important;
   color: var(--input-text) !important;
-  border: 2px solid var(--input-border) !important;
-  border-radius: 8px !important;
+  border: 1px solid var(--input-border) !important;
+  border-radius: var(--radius-md) !important;
   padding: 8px 12px;
-  box-shadow: 2px 2px 0px var(--input-shadow);
-  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .retro-input:focus,
 .retro-select:focus {
-  border-color: #2563eb !important;
-  box-shadow: 2px 2px 0px #2563eb !important;
+  border-color: var(--primary-500) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
   outline: none;
 }
 
@@ -425,8 +515,8 @@ textarea.retro-input,
 textarea.form-control {
   background-color: var(--input-bg) !important;
   color: var(--input-text) !important;
-  border: 2px solid var(--input-border) !important;
-  border-radius: 8px !important;
+  border: 1px solid var(--input-border) !important;
+  border-radius: var(--radius-md) !important;
 }
 
 /* Tarjeta de Tarea Individual */
@@ -434,7 +524,7 @@ textarea.form-control {
   display: flex;
   flex-direction: column;
   height: 100%;
-  border-color: var(--window-border);
+  border: 1px solid var(--window-border);
   background: var(--window-bg);
 }
 
@@ -445,8 +535,9 @@ textarea.form-control {
 }
 
 .retro-task-title {
-  font-size: 1.08rem;
-  line-height: 1.35;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
   color: var(--text-heading);
 }
 
@@ -455,9 +546,8 @@ textarea.form-control {
   padding-top: 14px;
 }
 
-/* Tarjeta completada (DONE) */
 .retro-task-card.task-done {
-  opacity: 0.8;
+  opacity: 0.85;
   background-color: var(--task-done-bg);
 }
 
@@ -466,7 +556,7 @@ textarea.form-control {
   color: var(--text-muted);
 }
 
-/* Empty State Ilustrado */
+/* Empty State */
 .retro-empty-state {
   display: flex;
   flex-direction: column;
@@ -477,69 +567,63 @@ textarea.form-control {
 }
 
 .retro-empty-icon {
-  font-size: 3.5rem;
+  font-size: 3rem;
   line-height: 1;
-  filter: drop-shadow(2px 2px 0px var(--window-shadow));
+  color: var(--text-muted);
+  margin-bottom: 12px;
 }
 
-/* =========================================================
-   GADGETS RETRO (DASHBOARD METRICS)
-   ========================================================= */
-
+/* Dashboard Gadgets */
 .retro-gadget-display {
-  font-family: 'Courier New', Courier, monospace, monospace;
-  font-size: 2.8rem;
-  font-weight: 900;
-  line-height: 1;
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1.1;
   margin-top: 6px;
-  letter-spacing: -1px;
+  letter-spacing: -0.03em;
+  color: var(--text-heading);
 }
 
 .retro-gadget-label {
   font-size: 0.82rem;
-  letter-spacing: 0.8px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
-/* =========================================================
-   EXPLORADOR DE HOGARES (ROOMS.DIR)
-   ========================================================= */
-
+/* Explorador de Hogares */
 .retro-folder-card {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
   background-color: var(--folder-bg);
-  border: 2px solid var(--folder-border);
-  border-radius: 8px;
-  box-shadow: 2px 2px 0px var(--window-shadow);
+  border: 1px solid var(--folder-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   text-decoration: none;
   color: var(--text-main);
-  transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   min-height: 48px;
 }
 
 .retro-folder-card:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0px var(--window-shadow);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
   color: var(--text-main);
-  filter: brightness(1.03);
 }
 
 .retro-folder-card:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0px 0px 0px var(--window-shadow);
+  transform: translateY(0);
 }
 
 .retro-folder-card.selected {
-  border-color: #2563eb;
-  background-color: rgba(37, 99, 235, 0.08);
+  border-color: var(--primary-500);
+  background-color: var(--primary-50);
 }
 
 .retro-folder-icon {
-  font-size: 1.8rem;
+  font-size: 1.6rem;
   line-height: 1;
 }
 
@@ -550,69 +634,63 @@ textarea.form-control {
 }
 
 .retro-folder-name {
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.98rem;
   color: var(--text-heading);
 }
 
-/* Banner de Sugerencia IA */
+/* Banner de Alerta IA */
 .retro-ai-alert {
   background-color: var(--ai-alert-bg);
-  border: 2px solid var(--ai-alert-border);
-  border-radius: 8px;
+  border: 1px solid var(--ai-alert-border);
+  border-radius: var(--radius-lg);
   color: var(--ai-alert-text);
-  box-shadow: 2px 2px 0px var(--window-shadow);
+  box-shadow: var(--shadow-sm);
 }
 
-/* =========================================================
-   CLUSTERS Y AGRUPACIÓN IA (AI_CLUSTERING.SYS)
-   ========================================================= */
-
+/* Clústeres IA */
 .retro-cluster-item {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
   background-color: var(--compare-box-bg);
-  border: 1.5px solid var(--window-border);
-  border-radius: 8px;
+  border: 1px solid var(--window-border);
+  border-radius: var(--radius-md);
   color: var(--text-main);
 }
 
 .retro-cluster-bullet {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   line-height: 1;
 }
 
 .retro-cluster-task-title {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-heading);
-  font-size: 0.98rem;
+  font-size: 0.95rem;
   flex-grow: 1;
 }
 
-/* =========================================================
-   OPTIMIZADOR DE TÍTULOS (AI_REWRITE.EXE)
-   ========================================================= */
-
+/* Optimizador de Títulos */
 .retro-compare-card {
   background-color: var(--window-bg);
-  border: 2px solid var(--window-border);
-  border-radius: 8px;
-  box-shadow: 2px 2px 0px var(--window-shadow);
+  border: 1px solid var(--window-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .retro-compare-box {
-  padding: 12px 14px;
-  border-radius: 6px;
-  border: 1.5px solid var(--window-border);
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--window-border);
   background-color: var(--compare-box-bg);
   height: 100%;
 }
 
 .retro-compare-label {
-  font-size: 0.76rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   display: block;
@@ -620,14 +698,14 @@ textarea.form-control {
 }
 
 .retro-compare-text {
-  font-size: 1rem;
+  font-size: 0.98rem;
   color: var(--text-heading);
 }
 
 .retro-compare-arrow {
-  font-size: 1.6rem;
+  font-size: 1.4rem;
   font-weight: bold;
-  color: #2563eb;
+  color: var(--primary-500);
 }
 
 .retro-compare-reason {
@@ -637,61 +715,54 @@ textarea.form-control {
   color: var(--text-muted);
 }
 
-/* =========================================================
-   REGISTRO DEL SISTEMA / HISTORIAL (TASK_AUDIT.LOG)
-   ========================================================= */
-
+/* Registro de Auditoría / Historial */
 .retro-log-entry {
   background-color: var(--log-entry-bg);
-  border: 1.5px solid var(--log-entry-border);
-  border-radius: 8px;
-  box-shadow: 1.5px 1.5px 0px var(--window-shadow);
-  transition: transform 0.08s ease;
+  border: 1px solid var(--log-entry-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
 
 .retro-log-entry:hover {
   transform: translateX(2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .retro-log-title {
   color: var(--text-heading);
-  font-size: 0.98rem;
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .retro-log-timestamp {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
 }
 
 .retro-log-author {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-muted);
 }
 
-/* =========================================================
-   ADMINISTRADOR DE ETIQUETAS (TAG_MANAGER.SYS)
-   ========================================================= */
-
+/* Administrador de Etiquetas */
 .retro-tag-row {
   background-color: var(--tag-row-bg);
-  border: 1.5px solid var(--window-border);
-  border-radius: 8px;
-  box-shadow: 1.5px 1.5px 0px var(--window-shadow);
+  border: 1px solid var(--window-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
 }
 
-/* =========================================================
-   PERFIL DE ADMINISTRADOR (USER_PROFILE.SYS)
-   ========================================================= */
-
+/* Perfil de Usuario */
 .retro-admin-card {
   display: flex;
   gap: 20px;
   align-items: center;
-  padding: 18px;
+  padding: 20px;
   background-color: var(--compare-box-bg);
-  border: 2px solid var(--window-border);
-  border-radius: 8px;
+  border: 1px solid var(--window-border);
+  border-radius: var(--radius-lg);
   margin-bottom: 20px;
 }
 
@@ -705,14 +776,14 @@ textarea.form-control {
 .retro-admin-avatar {
   width: 76px;
   height: 76px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #2563eb, #c026d3);
-  border: 2.5px solid var(--window-border);
-  box-shadow: 2px 2px 0px var(--window-shadow);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, var(--primary-500), var(--ai-500));
+  border: 1px solid var(--window-border);
+  box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.5rem;
+  font-size: 2.2rem;
   color: white;
   flex-shrink: 0;
 }
@@ -720,10 +791,9 @@ textarea.form-control {
 .retro-field-display {
   padding: 10px 14px;
   background-color: var(--input-bg);
-  border: 1.5px solid var(--input-border);
-  border-radius: 6px;
-  font-family: 'Courier New', Courier, monospace, monospace;
-  font-weight: 700;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  font-weight: 600;
   color: var(--text-main);
   font-size: 0.95rem;
 }
@@ -731,33 +801,30 @@ textarea.form-control {
 .retro-stat-box {
   padding: 14px;
   background-color: var(--compare-box-bg);
-  border: 1.5px solid var(--window-border);
-  border-radius: 8px;
+  border: 1px solid var(--window-border);
+  border-radius: var(--radius-md);
   text-align: center;
 }
 
-/* =========================================================
-   BOTONES Y SWITCHES DE TEMA (LIGHT / DARK)
-   ========================================================= */
-
+/* Theme Toggle Buttons */
 .theme-toggle-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 38px;
   height: 38px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.15);
-  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   color: #ffffff;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   cursor: pointer;
   transition: background 0.15s ease, transform 0.1s ease;
   user-select: none;
 }
 
 .theme-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.25);
   transform: scale(1.05);
 }
 
@@ -765,27 +832,25 @@ textarea.form-control {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  border: 1.5px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.95);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   width: 100%;
   box-sizing: border-box;
   text-align: left;
 }
 
 .theme-toggle-sidebar-btn:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
-  transform: translateX(2px);
 }
 
-/* Switcher interactivo de tema para el Perfil */
 .theme-switch-group {
   display: flex;
   gap: 10px;
@@ -798,21 +863,21 @@ textarea.form-control {
   justify-content: center;
   gap: 8px;
   padding: 10px 16px;
-  border: 2px solid var(--window-border);
-  border-radius: 8px;
+  border: 1px solid var(--window-border);
+  border-radius: var(--radius-md);
   background-color: var(--window-bg);
   color: var(--text-main);
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
-  min-height: 44px;
+  min-height: 42px;
 }
 
 .theme-switch-btn.active {
-  background-color: #2563eb;
+  background-color: var(--primary-500);
   color: #ffffff;
-  border-color: var(--window-border);
-  box-shadow: 2px 2px 0px var(--window-shadow);
+  border-color: var(--primary-500);
+  box-shadow: var(--shadow-sm);
 }
 
 /* =========================================================
@@ -829,7 +894,7 @@ textarea.form-control {
 [data-theme="dark"] .form-control:focus,
 [data-theme="dark"] .form-select:focus {
   background-color: var(--input-bg);
-  border-color: #38bdf8;
+  border-color: var(--primary-500);
   color: var(--input-text);
 }
 
@@ -862,8 +927,9 @@ textarea.form-control {
 
 [data-theme="dark"] div[class*="-menu"] {
   background-color: var(--window-bg) !important;
-  border: 2px solid var(--window-border) !important;
-  box-shadow: 4px 4px 0px var(--window-shadow) !important;
+  border: 1px solid var(--window-border) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border-radius: var(--radius-md);
 }
 
 [data-theme="dark"] div[class*="-option"] {
@@ -873,20 +939,648 @@ textarea.form-control {
 
 [data-theme="dark"] div[class*="-option"]:hover,
 [data-theme="dark"] div[class*="-option"][class*="--is-focused"] {
-  background-color: #334155 !important;
+  background-color: #1e293b !important;
   color: #ffffff !important;
 }
 
 [data-theme="dark"] div[class*="-option"][class*="--is-selected"] {
-  background-color: #2563eb !important;
+  background-color: var(--primary-500) !important;
   color: #ffffff !important;
 }
 
 [data-theme="dark"] div[class*="-multiValue"] {
-  background-color: #334155 !important;
-  border: 1px solid #475569 !important;
+  background-color: #1e293b !important;
+  border: 1px solid #334155 !important;
 }
 
 [data-theme="dark"] div[class*="-multiValue"] div {
   color: #f8fafc !important;
+}
+
+/* =========================================================
+   SISTEMA DE COMPONENTES ATÓMICOS UI (CLEAN SAAS)
+   ========================================================= */
+
+/* --- 1. UI BUTTONS --- */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.ui-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+.ui-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Button Sizes */
+.ui-btn-sm {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 0.82rem;
+  border-radius: var(--radius-sm);
+}
+
+.ui-btn-md {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 0.88rem;
+  border-radius: var(--radius-md);
+}
+
+.ui-btn-lg {
+  height: 44px;
+  padding: 0 20px;
+  font-size: 0.95rem;
+  border-radius: var(--radius-lg);
+}
+
+/* Button Variants */
+.ui-btn-primary {
+  background-color: var(--primary-500);
+  color: #ffffff;
+  box-shadow: var(--shadow-xs);
+}
+.ui-btn-primary:hover:not(:disabled) {
+  background-color: var(--primary-600);
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-btn-secondary {
+  background-color: var(--bg-subtle);
+  color: var(--text-main);
+  border-color: var(--border-default);
+}
+.ui-btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+}
+
+.ui-btn-outline {
+  background-color: transparent;
+  color: var(--text-main);
+  border-color: var(--border-default);
+}
+.ui-btn-outline:hover:not(:disabled) {
+  background-color: var(--bg-subtle);
+  border-color: var(--border-focus);
+}
+
+.ui-btn-ghost {
+  background-color: transparent;
+  color: var(--text-main);
+  border-color: transparent;
+}
+.ui-btn-ghost:hover:not(:disabled) {
+  background-color: var(--bg-subtle);
+}
+
+.ui-btn-danger {
+  background-color: var(--danger-500);
+  color: #ffffff;
+  box-shadow: var(--shadow-xs);
+}
+.ui-btn-danger:hover:not(:disabled) {
+  background-color: var(--danger-600);
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-btn-success {
+  background-color: var(--success-500);
+  color: #ffffff;
+  box-shadow: var(--shadow-xs);
+}
+.ui-btn-success:hover:not(:disabled) {
+  background-color: var(--success-600);
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-btn-ai {
+  background: linear-gradient(135deg, var(--ai-500) 0%, var(--primary-500) 100%);
+  color: #ffffff;
+  box-shadow: var(--shadow-xs);
+}
+.ui-btn-ai:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-btn-spinner {
+  animation: ui-spin 1s linear infinite;
+}
+
+@keyframes ui-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ui-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- 2. UI CARDS --- */
+.ui-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  color: var(--text-main);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.ui-card-header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.ui-card-header-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ui-card-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.ui-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-heading);
+  margin: 0;
+}
+
+.ui-card-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+}
+
+.ui-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ui-card-body {
+  padding: 18px;
+}
+
+.ui-card-footer {
+  padding: 12px 18px;
+  background-color: var(--bg-subtle);
+  border-top: 1px solid var(--border-default);
+}
+
+/* Card Header Accent Variants */
+.ui-card-primary .ui-card-header {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+}
+.ui-card-primary .ui-card-title,
+.ui-card-primary .ui-card-subtitle {
+  color: #ffffff;
+}
+
+.ui-card-magenta .ui-card-header {
+  background: linear-gradient(135deg, #9333ea 0%, #7e22ce 100%);
+  color: #ffffff;
+}
+.ui-card-magenta .ui-card-title,
+.ui-card-magenta .ui-card-subtitle {
+  color: #ffffff;
+}
+
+.ui-card-green .ui-card-header {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: #ffffff;
+}
+.ui-card-green .ui-card-title,
+.ui-card-green .ui-card-subtitle {
+  color: #ffffff;
+}
+
+.ui-card-amber .ui-card-header {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  color: #ffffff;
+}
+.ui-card-amber .ui-card-title,
+.ui-card-amber .ui-card-subtitle {
+  color: #ffffff;
+}
+
+.ui-card-admin .ui-card-header {
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+  color: #ffffff;
+}
+.ui-card-admin .ui-card-title,
+.ui-card-admin .ui-card-subtitle {
+  color: #ffffff;
+}
+
+/* --- 3. UI BADGES --- */
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit;
+  font-weight: 500;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ui-badge-sm {
+  font-size: 0.72rem;
+  padding: 1px 7px;
+}
+
+.ui-badge-md {
+  font-size: 0.78rem;
+  padding: 2px 9px;
+}
+
+.ui-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.ui-badge-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ui-badge-default {
+  background-color: var(--bg-subtle);
+  color: var(--text-main);
+  border-color: var(--border-default);
+}
+
+.ui-badge-primary {
+  background-color: var(--primary-50);
+  color: var(--primary-600);
+}
+[data-theme="dark"] .ui-badge-primary {
+  color: #93c5fd;
+}
+
+.ui-badge-secondary {
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+.ui-badge-success {
+  background-color: var(--success-50);
+  color: var(--success-600);
+}
+[data-theme="dark"] .ui-badge-success {
+  color: #86efac;
+}
+
+.ui-badge-warning {
+  background-color: var(--warning-50);
+  color: var(--warning-600);
+}
+[data-theme="dark"] .ui-badge-warning {
+  color: #fdba74;
+}
+
+.ui-badge-danger {
+  background-color: var(--danger-50);
+  color: var(--danger-600);
+}
+[data-theme="dark"] .ui-badge-danger {
+  color: #fca5a5;
+}
+
+.ui-badge-info {
+  background-color: var(--primary-50);
+  color: var(--primary-600);
+}
+[data-theme="dark"] .ui-badge-info {
+  color: #93c5fd;
+}
+
+.ui-badge-ai {
+  background-color: var(--ai-50);
+  color: var(--ai-600);
+}
+[data-theme="dark"] .ui-badge-ai {
+  color: #d8b4fe;
+}
+
+.ui-badge-outline {
+  background-color: transparent;
+  color: var(--text-main);
+  border-color: var(--border-default);
+}
+
+/* --- 4. UI INPUTS --- */
+.ui-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.ui-input-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-heading);
+}
+
+.ui-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.ui-input {
+  width: 100%;
+  height: 40px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  background-color: var(--input-bg);
+  color: var(--text-main);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.ui-input:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.ui-input:disabled {
+  opacity: 0.65;
+  background-color: var(--bg-subtle) !important;
+  cursor: not-allowed;
+}
+
+.ui-input-wrapper.has-left-icon .ui-input {
+  padding-left: 38px;
+}
+
+.ui-input-wrapper.has-right-icon .ui-input {
+  padding-right: 38px;
+}
+
+.ui-input-icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.ui-input-left-icon {
+  left: 12px;
+}
+
+.ui-input-right-icon {
+  right: 12px;
+}
+
+.ui-input-error {
+  border-color: var(--danger-500) !important;
+}
+
+.ui-input-error:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18) !important;
+}
+
+.ui-input-error-msg {
+  font-size: 0.8rem;
+  color: var(--danger-500);
+  margin: 2px 0 0 0;
+}
+
+.ui-input-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+}
+
+/* --- 5. UI TOASTS --- */
+.ui-toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 380px;
+  width: calc(100% - 40px);
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .ui-toast-container {
+    bottom: 76px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+    max-width: none;
+  }
+}
+
+.ui-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: ui-toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--text-main);
+  min-width: 280px;
+}
+
+@keyframes ui-toast-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.ui-toast-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ui-toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-toast-title {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-heading);
+  margin-bottom: 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ui-toast-message {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ui-toast-action {
+  margin-top: 6px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ui-toast-action:hover {
+  background: var(--bg-hover);
+}
+
+.ui-toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.ui-toast-close:hover {
+  color: var(--text-main);
+}
+
+/* Toast border accents */
+.ui-toast-success {
+  border-left: 4px solid var(--success-500);
+}
+
+.ui-toast-error {
+  border-left: 4px solid var(--danger-500);
+}
+
+.ui-toast-warning {
+  border-left: 4px solid var(--warning-500);
+}
+
+.ui-toast-info {
+  border-left: 4px solid var(--primary-500);
+}
+
+/* --- 6. UI SKELETONS --- */
+.ui-skeleton {
+  background-color: var(--bg-subtle);
+  position: relative;
+  overflow: hidden;
+}
+
+.ui-skeleton::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 100%
+  );
+  animation: ui-shimmer 1.6s infinite;
+}
+
+[data-theme="dark"] .ui-skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 100%
+  );
+}
+
+@keyframes ui-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.ui-skeleton-text {
+  height: 14px;
+  border-radius: var(--radius-xs);
+  margin-bottom: 6px;
+}
+
+.ui-skeleton-circular {
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ui-skeleton-rounded {
+  border-radius: var(--radius-md);
+}
+
+.ui-skeleton-rectangular {
+  border-radius: var(--radius-xs);
 }

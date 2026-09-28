@@ -37,6 +37,8 @@ export interface RoomMember {
 export interface Room {
   id: string;
   nombre: string;
+  codigo_invitacion?: string | null;
+  rol_usuario?: string | null;
   owner_id?: string;
   owner?: string;
   parent_id?: string | null;

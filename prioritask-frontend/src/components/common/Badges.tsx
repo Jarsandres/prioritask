@@ -1,5 +1,45 @@
 /* eslint-disable react-refresh/only-export-components */
+import type { ReactNode } from "react";
+import {
+  LuSparkles,
+  LuShoppingCart,
+  LuWrench,
+  LuFolder,
+  LuFlame,
+  LuClock,
+  LuCircleCheck,
+  LuCheck,
+  LuRepeat,
+} from "react-icons/lu";
 import type { TaskStatus } from "../../types/task";
+
+export interface CategoryIconProps {
+  category?: string;
+  className?: string;
+  size?: number;
+}
+
+export const CategoryIcon = ({
+  category,
+  className = "",
+  size = 14,
+}: CategoryIconProps) => {
+  switch (category?.toUpperCase()) {
+    case "LIMPIEZA":
+      return <LuSparkles className={className} size={size} aria-hidden="true" />;
+    case "COMPRA":
+      return <LuShoppingCart className={className} size={size} aria-hidden="true" />;
+    case "MANTENIMIENTO":
+      return <LuWrench className={className} size={size} aria-hidden="true" />;
+    case "OTRO":
+    default:
+      return <LuFolder className={className} size={size} aria-hidden="true" />;
+  }
+};
+
+export const getCategoryIcon = (cat?: string): ReactNode => {
+  return <CategoryIcon category={cat} />;
+};
 
 export interface PriorityBadgeProps {
   peso: number;
@@ -10,20 +50,20 @@ export const PriorityBadge = ({ peso, className = "" }: PriorityBadgeProps) => {
   if (peso >= 4) {
     return (
       <span className={`retro-badge retro-badge-high ${className}`.trim()}>
-        ⚡ Prioridad Alta
+        <LuFlame size={13} aria-hidden="true" /> Prioridad Alta
       </span>
     );
   }
   if (peso >= 2) {
     return (
       <span className={`retro-badge retro-badge-medium ${className}`.trim()}>
-        🔷 Prioridad Media
+        <LuClock size={13} aria-hidden="true" /> Prioridad Media
       </span>
     );
   }
   return (
     <span className={`retro-badge retro-badge-low ${className}`.trim()}>
-      🟢 Prioridad Baja
+      <LuCircleCheck size={13} aria-hidden="true" /> Prioridad Baja
     </span>
   );
 };
@@ -44,13 +84,13 @@ export const StatusBadge = ({ status, className = "" }: StatusBadgeProps) => {
     case "IN_PROGRESS":
       return (
         <span className={`retro-badge retro-badge-progress ${className}`.trim()}>
-          En progreso
+          <LuClock size={12} aria-hidden="true" /> En progreso
         </span>
       );
     case "DONE":
       return (
         <span className={`retro-badge retro-badge-done ${className}`.trim()}>
-          ✅ Hecha
+          <LuCheck size={12} aria-hidden="true" /> Hecha
         </span>
       );
     default:
@@ -62,22 +102,15 @@ export const StatusBadge = ({ status, className = "" }: StatusBadgeProps) => {
   }
 };
 
-export const RecurringBadge = () => (
-  <span className="badge-retro text-dark bg-warning-subtle border border-warning" title="Rutina periódica recurrente">
-    <span>🔄</span> <span>RUTINA</span>
+export interface RecurringBadgeProps {
+  className?: string;
+}
+
+export const RecurringBadge = ({ className = "" }: RecurringBadgeProps) => (
+  <span
+    className={`retro-badge retro-badge-progress ${className}`.trim()}
+    title="Rutina periódica recurrente"
+  >
+    <LuRepeat size={12} aria-hidden="true" /> <span>Rutina</span>
   </span>
 );
-
-export const getCategoryIcon = (cat?: string): string => {
-  switch (cat?.toUpperCase()) {
-    case "LIMPIEZA":
-      return "🧹";
-    case "COMPRA":
-      return "🛒";
-    case "MANTENIMIENTO":
-      return "🔧";
-    case "OTRO":
-    default:
-      return "📁";
-  }
-};

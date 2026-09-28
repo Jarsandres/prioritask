@@ -1,125 +1,215 @@
+/* Sidebar Minimalista Clean SaaS */
 .sidebar {
   width: 220px;
-  background-color: var(--sidebar-bg, #2563eb);
-  color: var(--sidebar-text, white);
+  background-color: var(--bg-surface);
+  color: var(--text-main);
   height: 100vh;
   position: fixed;
   left: 0;
   top: 0;
   display: flex;
   flex-direction: column;
-  padding: 20px 15px;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-  border-right: 2px solid var(--window-border, #1e293b);
+  padding: 16px 12px;
+  border-right: 1px solid var(--border-default);
   font-family: 'Inter', sans-serif;
-  z-index: 1000;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease;
+  z-index: 950;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, border-color 0.2s ease;
   box-sizing: border-box;
+}
+
+/* Estado Colapsado en Desktop */
+.sidebar.collapsed {
+  width: 64px;
+  padding: 16px 8px;
 }
 
 .sidebar-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
+  height: 40px;
+  margin-bottom: 20px;
+  padding: 0 4px;
+  gap: 8px;
+}
+
+.sidebar.collapsed .sidebar-header-row {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
 }
 
 .logo {
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 700;
   margin: 0;
-  color: #ffffff;
-  letter-spacing: -0.5px;
+  color: var(--text-heading);
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+}
+
+.collapse-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm, 6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.collapse-toggle-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-heading);
 }
 
 .close-drawer-btn {
   display: none;
   background: transparent;
   border: none;
-  color: white;
-  font-size: 24px;
+  color: var(--text-muted);
+  font-size: 20px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 4px;
+  border-radius: var(--radius-sm, 6px);
 }
 
 .close-drawer-btn:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: var(--bg-hover);
+  color: var(--text-heading);
 }
 
+/* Navegación */
 .nav {
   display: flex;
   flex-direction: column;
   height: 100%;
-  gap: 8px;
+  gap: 4px;
   list-style: none;
   padding: 0;
   margin: 0;
   flex-grow: 1;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .nav li {
   display: flex;
+  width: 100%;
 }
 
 .nav a {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 8px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md, 8px);
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-muted);
   font-weight: 500;
-  font-size: 15px;
-  transition: all 0.2s ease;
+  font-size: 14px;
+  transition: all 0.15s ease;
   width: 100%;
   box-sizing: border-box;
+  position: relative;
+  white-space: nowrap;
 }
 
 .nav a:hover {
-  background-color: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-  transform: translateX(3px);
+  background-color: var(--bg-hover);
+  color: var(--text-heading);
 }
 
+/* Estilo activo para NavLink */
 .nav a.active {
-  background-color: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
+  background-color: var(--primary-50);
+  color: var(--primary-600);
   font-weight: 600;
-  box-shadow: inset 3px 0 0 white;
 }
 
+.nav a.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background-color: var(--primary-500);
+}
+
+/* Comportamiento colapsado: iconos centrados y textos ocultos */
+.sidebar.collapsed .nav a {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar.collapsed .nav a.active::before {
+  top: 4px;
+  bottom: 4px;
+}
+
+.sidebar.collapsed .nav-label {
+  display: none !important;
+}
+
+.sidebar.collapsed .sidebar-brand {
+  display: none;
+}
+
+/* Sección inferior */
 .nav-bottom {
   margin-top: auto;
-  padding-top: 15px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 12px;
+  border-top: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  width: 100%;
 }
 
+.theme-toggle-sidebar-btn,
 .logout-btn {
   background: transparent;
-  color: white;
+  color: var(--text-muted);
   border: none;
   text-align: left;
-  padding: 12px 14px;
-  border-radius: 8px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md, 8px);
   font-weight: 500;
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: all 0.15s ease;
   width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
   box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.theme-toggle-sidebar-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-heading);
 }
 
 .logout-btn:hover {
-  background-color: rgba(239, 68, 68, 0.3); /* Rojo semitransparente para cerrar sesión */
+  background-color: var(--danger-50);
+  color: var(--danger-500);
+}
+
+.sidebar.collapsed .theme-toggle-sidebar-btn,
+.sidebar.collapsed .logout-btn {
+  justify-content: center;
+  padding: 10px 0;
 }
 
 /* Telón de fondo (Backdrop) para móvil */
@@ -129,14 +219,36 @@
 
 /* Estilos Adaptativos Móviles (<= 768px) */
 @media (max-width: 768px) {
-  .sidebar {
-    transform: translateX(-100%); /* Oculto fuera de pantalla por defecto */
+  .sidebar,
+  .sidebar.collapsed {
+    transform: translateX(-100%);
     width: 260px;
-    box-shadow: 4px 0 25px rgba(0, 0, 0, 0.25);
+    padding: 20px 16px;
+    box-shadow: var(--shadow-xl);
+    z-index: 1100;
   }
 
   .sidebar.mobile-open {
-    transform: translateX(0); /* Deslizar hacia adentro */
+    transform: translateX(0);
+  }
+
+  .sidebar.collapsed .nav-label {
+    display: inline !important;
+  }
+
+  .sidebar.collapsed .sidebar-brand {
+    display: flex;
+  }
+
+  .sidebar.collapsed .nav a,
+  .sidebar.collapsed .theme-toggle-sidebar-btn,
+  .sidebar.collapsed .logout-btn {
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  .collapse-toggle-btn {
+    display: none;
   }
 
   .close-drawer-btn {
@@ -150,9 +262,10 @@
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-color: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(3px);
-    z-index: 999;
+    background-color: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 1050;
     animation: fadeIn 0.2s ease;
   }
 }
