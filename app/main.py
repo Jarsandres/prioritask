@@ -1,15 +1,70 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
+from sqlmodel import select
 
 from app.api.v1 import api_router
 from app.core.config import settings
+from app.db.session import async_session
+from app.models.task import Task
 
 logger = logging.getLogger(__name__)
+
+
+async def _run_recurrence_advance() -> None:
+    """Open a session and advance all overdue recurring tasks."""
+    from app.services.recurrence import advance_recurring_task
+
+    async with async_session() as session:
+        now = datetime.now(UTC)
+        result = await session.exec(
+            select(Task)
+            .options(selectinload(Task.recurrence_rule))  # type: ignore[arg-type]
+            .where(
+                Task.is_recurring == True,
+                Task.completed == False,
+                Task.due_date <= now,
+                Task.deleted_at.is_(None),
+            )
+        )
+        tasks = result.all()
+        for task in tasks:
+            try:
+                await advance_recurring_task(task, session)
+            except Exception:
+                logger.exception("Error advancing recurring task %s", task.id)
+
+
+async def _recurrence_scheduler() -> None:
+    """Background loop that runs recurrence advance every configured interval."""
+    interval = settings.RECURRENCE_SCHEDULER_INTERVAL_SECONDS
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await _run_recurrence_advance()
+        except Exception:
+            logger.exception("Error in recurrence scheduler cycle")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan: start and cancel the recurrence scheduler."""
+    task = asyncio.create_task(_recurrence_scheduler())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
 
 tags_metadata = [
     {
@@ -51,6 +106,7 @@ app = FastAPI(
         "name": "MIT License",
         "url": "https://opensource.org/licenses/MIT",
     },
+    lifespan=lifespan,
 )
 
 

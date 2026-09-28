@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./prioritask.db"
     JWT_SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    RECURRENCE_SCHEDULER_INTERVAL_SECONDS: int = 3600
     CORS_ORIGINS: list[str] | str = ["http://localhost:5173", "http://localhost:5174"]
 
     @field_validator("DATABASE_URL", mode="after")

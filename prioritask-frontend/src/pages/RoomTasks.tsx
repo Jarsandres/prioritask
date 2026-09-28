@@ -115,6 +115,15 @@ const RoomTasks = () => {
     await handleStatusChange(taskId, nextStatus);
   };
 
+  const handleAdvanceTask = async (taskId: string) => {
+    try {
+      await api.post(`/tasks/${taskId}/advance`);
+      notifyUpdate();
+    } catch (err: unknown) {
+      console.error("Error al avanzar la tarea recurrente:", err);
+    }
+  };
+
   const promptDelete = (tarea: Task) => {
     setActionError(null);
     setTaskToDelete(tarea);
@@ -258,6 +267,7 @@ const RoomTasks = () => {
                 onComplete={handleToggleComplete}
                 onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
                 onDelete={promptDelete}
+                onAdvance={handleAdvanceTask}
                 isCompleting={completingId === task.id}
                 isDeleting={deletingId === task.id}
               />

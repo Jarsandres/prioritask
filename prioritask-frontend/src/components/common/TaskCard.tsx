@@ -22,6 +22,7 @@ export interface TaskCardProps {
   onComplete?: (taskId: string) => void | Promise<void>;
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
+  onAdvance?: (taskId: string) => Promise<void>;
   isCompleting?: boolean;
   isDeleting?: boolean;
   className?: string;
@@ -34,6 +35,7 @@ export const TaskCard = ({
   onComplete,
   onEdit,
   onDelete,
+  onAdvance,
   isCompleting = false,
   isDeleting = false,
   className = "",
@@ -41,6 +43,7 @@ export const TaskCard = ({
   onDragStart,
 }: TaskCardProps) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isAdvancing, setIsAdvancing] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const isDone = task.estado === "DONE";
 
@@ -189,6 +192,31 @@ export const TaskCard = ({
           </div>
         )}
       </div>
+
+      {/* Botón Avanzar Rutina — solo visible en tareas recurrentes no completadas */}
+      {task.is_recurring && onAdvance && task.estado !== "DONE" && (
+        <div className="ui-task-advance-row">
+          <button
+            type="button"
+            className="btn-retro btn-retro-outline btn-sm"
+            onClick={async () => {
+              setIsAdvancing(true);
+              try {
+                await onAdvance(task.id);
+              } finally {
+                setIsAdvancing(false);
+              }
+            }}
+            disabled={isAdvancing || isCompleting || isDeleting}
+            title="Completar esta ocurrencia y generar la siguiente"
+          >
+            <span>{isAdvancing ? "⏳" : "🔄"}</span>
+            <span className="ms-1">
+              {isAdvancing ? "Avanzando..." : "Avanzar"}
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

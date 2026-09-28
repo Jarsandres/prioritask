@@ -26,6 +26,7 @@ from app.schemas.task import (
     TaskUpdate,
 )
 from app.services.auth import get_current_user
+from app.services.recurrence import advance_recurring_task
 from app.services.task_assignment import TaskAssignmentService
 
 router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
@@ -625,6 +626,57 @@ async def patch_task_status(
         raise
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
+
+
+@router.post(
+    "/{task_id}/advance",
+    response_model=TaskRead,
+    status_code=200,
+    summary="Avanzar tarea recurrente",
+    description="Avanza manualmente una tarea recurrente a su siguiente ocurrencia.",
+)
+async def advance_task(
+    task_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: Usuario = Depends(get_current_user),
+):
+    result = await session.exec(
+        select(Task)
+        .options(selectinload(Task.recurrence_rule))  # type: ignore[arg-type]
+        .where(
+            Task.id == task_id,
+            Task.deleted_at.is_(None),
+        )
+    )
+    task = result.one_or_none()
+
+    if not task or task.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada")
+
+    if not task.is_recurring:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La tarea no es recurrente",
+        )
+
+    if task.recurrence_rule is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La tarea no tiene una regla de recurrencia configurada",
+        )
+
+    new_task = await advance_recurring_task(task, session)
+
+    if new_task is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No se pudo avanzar la tarea recurrente (posiblemente superó su fecha de fin)",
+        )
+
+    await session.commit()
+    await session.refresh(new_task)
+    return new_task
+
 
 @router.delete("/{task_id}/assignees/{user_id}", status_code=204, summary="Eliminar asignación de tarea", description="Elimina la asignación de una tarea a un usuario específico.")
 async def remove_task_assignment(
