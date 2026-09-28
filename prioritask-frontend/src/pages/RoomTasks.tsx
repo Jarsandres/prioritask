@@ -7,7 +7,8 @@ import RetroWindow from "../components/common/RetroWindow";
 import EmptyState from "../components/common/EmptyState";
 import TaskCard from "../components/common/TaskCard";
 import ConfirmModal from "../components/ConfirmModal";
-import type { Task } from "../types/task";
+import RoomMembersModal from "../components/RoomMembersModal";
+import type { Task, Room } from "../types/task";
 
 // FE-010: Tipado con interfaz Task del módulo compartido
 
@@ -19,6 +20,8 @@ const RoomTasks = () => {
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [roomName, setRoomName] = useState<string>("");
+  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
+  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -46,13 +49,16 @@ const RoomTasks = () => {
             params: { limit: 100 },
             signal: controller.signal,
           }),
-          api.get<{ id: string; nombre: string }[]>("/rooms", {
+          api.get<Room[]>("/rooms", {
             signal: controller.signal,
           }),
         ]);
         setTasks(tasksRes.data);
-        const currentRoom = roomsRes.data.find((r) => r.id === roomId);
-        if (currentRoom) setRoomName(currentRoom.nombre);
+        const foundRoom = roomsRes.data.find((r) => r.id === roomId);
+        if (foundRoom) {
+          setCurrentRoom(foundRoom);
+          setRoomName(foundRoom.nombre);
+        }
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "CanceledError") return;
         console.error(err);
@@ -109,6 +115,19 @@ const RoomTasks = () => {
     }
   };
 
+  const handleMembersChanged = async () => {
+    notifyUpdate();
+    try {
+      const res = await api.get<Room[]>("/rooms");
+      const stillMember = res.data.some((r) => r.id === roomId);
+      if (!stillMember) {
+        navigate("/dashboard");
+      }
+    } catch {
+      navigate("/dashboard");
+    }
+  };
+
   return (
     <div className="container-fluid py-2">
       {/* Cabecera y botón de navegación */}
@@ -121,7 +140,15 @@ const RoomTasks = () => {
             {roomName ? `Hogar activo: ${roomName}` : "Listado de tareas asignadas al hogar"}
           </p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 flex-wrap">
+          <button
+            type="button"
+            className="btn-retro btn-retro-outline"
+            style={{ minHeight: "40px" }}
+            onClick={() => setIsMembersModalOpen(true)}
+          >
+            <span>👥</span> <span>Convivientes</span>
+          </button>
           <Link
             to="/dashboard"
             className="btn-retro btn-retro-outline"
@@ -208,6 +235,21 @@ const RoomTasks = () => {
         onConfirm={handleConfirmDelete}
         onCancel={() => setTaskToDelete(null)}
       />
+
+      {/* Modal de Convivientes del Hogar */}
+      {roomId && (
+        <RoomMembersModal
+          roomId={roomId}
+          roomName={roomName}
+          isOwner={Boolean(currentRoom?.is_owner)}
+          myRole={currentRoom?.my_role ?? null}
+          isOpen={isMembersModalOpen}
+          onClose={() => setIsMembersModalOpen(false)}
+          onMembersChanged={handleMembersChanged}
+          ownerId={currentRoom?.owner_id}
+          ownerEmail={currentRoom?.owner}
+        />
+      )}
     </div>
   );
 };

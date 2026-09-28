@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.rate_limit import rate_limiter
 from app.db.session import get_session
 from app.main import app
 from app.models.enums import CategoriaTarea
@@ -52,9 +53,11 @@ app.dependency_overrides[get_session] = override_get_session
 # ---------------------------------------------------------------------------
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def reset_test_db():
+    rate_limiter.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
     yield
+    rate_limiter.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
 

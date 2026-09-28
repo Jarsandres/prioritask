@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -101,3 +102,105 @@ async def test_suggest_priority_unauthenticated(async_client):
         },
     )
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_ai_health_endpoint(async_client):
+    _user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await async_client.get(
+        "/api/v1/tasks/ai/health",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "status" in data
+    assert data["status"] in ["healthy", "degraded"]
+    assert "circuit_state" in data
+    assert data["circuit_state"] in ["CLOSED", "OPEN", "HALF_OPEN"]
+    assert "failure_count" in data
+    assert "success_count" in data
+    assert "model" in data
+    assert "cache_stats" in data
+    assert "hits" in data["cache_stats"]
+    assert "misses" in data["cache_stats"]
+    assert "size" in data["cache_stats"]
+
+
+@pytest.mark.asyncio
+async def test_ai_health_unauthenticated(async_client):
+    response = await async_client.get("/api/v1/tasks/ai/health")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_prioritize_tasks_contextual_multivariable(async_client):
+    _user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    imminent_due = (datetime.now(UTC) + timedelta(hours=4)).isoformat()
+    await create_task(
+        async_client,
+        token,
+        {
+            "titulo": "Preparar presentación del proyecto",
+            "categoria": "OTRO",
+            "due_date": imminent_due,
+            "is_recurring": True,
+        },
+    )
+
+    response = await async_client.post(
+        "/api/v1/tasks/ai/prioritize",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) >= 1
+    tarea = next(t for t in data if t["titulo"] == "Preparar presentación del proyecto")
+    assert tarea["prioridad"] == "alta"
+    assert "fecha límite inminente (<24h)" in tarea["motivo"].lower()
+    assert "recurrente" in tarea["motivo"].lower()
+
+
+@pytest.mark.asyncio
+async def test_prioritize_tasks_filtering_by_task_ids(async_client):
+    _user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    t1 = await create_task(async_client, token, {"titulo": "Tarea 1 a priorizar", "categoria": "OTRO"})
+    t2 = await create_task(async_client, token, {"titulo": "Tarea 2 a priorizar", "categoria": "OTRO"})
+    await create_task(async_client, token, {"titulo": "Tarea 3 que no se debe incluir", "categoria": "OTRO"})
+
+    response = await async_client.post(
+        "/api/v1/tasks/ai/prioritize",
+        headers=headers,
+        json={"task_ids": [t1["id"], t2["id"]]},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    returned_ids = {t["id"] for t in data}
+    assert returned_ids == {t1["id"], t2["id"]}
+
+
+@pytest.mark.asyncio
+async def test_suggest_priority_contextual_due_date(async_client):
+    _user, token = await create_user_and_token(async_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await async_client.post(
+        "/api/v1/tasks/ai/suggest",
+        headers=headers,
+        json={
+            "titulo": "Organizar papeles del banco",
+            "descripcion": "Revisión mensual",
+            "due_date": (datetime.now(UTC) + timedelta(hours=8)).isoformat(),
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["prioridad"] == "alta"
+    assert "fecha límite inminente (<24h)" in data["motivo"].lower()
+

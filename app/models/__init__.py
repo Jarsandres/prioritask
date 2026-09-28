@@ -1,4 +1,11 @@
-from .enums import CategoriaTarea, EstadoTarea, RoomMemberRole, UserRole
+from .enums import (
+    CategoriaTarea,
+    EstadoTarea,
+    RecurrenceFrequency,
+    RoomMemberRole,
+    UserRole,
+)
+from .recurrence_rule import RecurrenceRule
 from .room import Room
 from .room_member import RoomMember
 from .tag import Tag
@@ -10,6 +17,8 @@ from .user import Usuario
 __all__ = [
     "CategoriaTarea",
     "EstadoTarea",
+    "RecurrenceFrequency",
+    "RecurrenceRule",
     "Room",
     "RoomMember",
     "RoomMemberRole",

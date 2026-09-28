@@ -6,6 +6,8 @@ import { useTaskUpdate } from "../context/TaskUpdateContext";
 import { useRoom } from "../context/RoomContext";
 import RetroWindow from "../components/common/RetroWindow";
 import EmptyState from "../components/common/EmptyState";
+import AIHealthBadge from "../components/common/AIHealthBadge";
+import RoomMembersModal from "../components/RoomMembersModal";
 import type { Task, Room } from "../types/task";
 
 // FE-010: Tipado estricto con interfaces del módulo compartido
@@ -14,7 +16,8 @@ const Dashboard = () => {
   const [tareas, setTareas] = useState<Task[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
-  const { version } = useTaskUpdate();
+  const [selectedMemberModalRoom, setSelectedMemberModalRoom] = useState<Room | null>(null);
+  const { version, notifyUpdate } = useTaskUpdate();
   const { roomId, setRoomId } = useRoom();
   const navigate = useNavigate();
 
@@ -118,7 +121,8 @@ const Dashboard = () => {
             Métricas de productividad y explorador de hogares
           </p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <AIHealthBadge />
           <Link
             to="/tasks/create"
             className="btn-retro btn-retro-primary"
@@ -223,35 +227,103 @@ const Dashboard = () => {
           <div className="row g-3">
             {rooms.map((room) => {
               const isSelected = room.id === roomId;
+              const memberCount = room.members?.length || 1;
               return (
                 <div key={room.id} className="col-12 col-sm-6 col-lg-4">
-                  <Link
-                    to={`/rooms/${room.id}/tasks`}
-                    onClick={() => setRoomId(room.id)}
-                    className={`retro-folder-card ${isSelected ? "selected" : ""}`}
+                  <div
+                    className={`retro-folder-card d-flex flex-column justify-content-between p-3 h-100 ${
+                      isSelected ? "selected" : ""
+                    }`}
                   >
-                    <div className="retro-folder-icon">📁</div>
-                    <div className="retro-folder-info flex-grow-1">
-                      <span className="retro-folder-name">{room.nombre}</span>
-                      <div className="d-flex align-items-center gap-2 mt-1">
-                        <span className="retro-badge retro-badge-medium">
-                          {room.count ?? 0} tareas
-                        </span>
-                        {isSelected && (
-                          <span className="retro-badge retro-badge-high">
-                            ACTIVO
-                          </span>
-                        )}
+                    <Link
+                      to={`/rooms/${room.id}/tasks`}
+                      onClick={() => setRoomId(room.id)}
+                      className="text-decoration-none text-reset flex-grow-1"
+                    >
+                      <div className="d-flex align-items-start gap-3">
+                        <div className="retro-folder-icon">📁</div>
+                        <div className="retro-folder-info flex-grow-1">
+                          <div className="d-flex justify-content-between align-items-center">
+                            <span className="retro-folder-name text-truncate">
+                              {room.nombre}
+                            </span>
+                            {isSelected && (
+                              <span
+                                className="retro-badge retro-badge-high"
+                                style={{ fontSize: "0.68rem" }}
+                              >
+                                ACTIVO
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="d-flex flex-wrap align-items-center gap-1 mt-2">
+                            {room.is_owner ? (
+                              <span className="retro-badge retro-badge-high">
+                                👑 Propietario
+                              </span>
+                            ) : (
+                              <span className="retro-badge retro-badge-todo">
+                                👥 Conviviente ({room.my_role || "MEMBER"})
+                              </span>
+                            )}
+                            <span className="retro-badge retro-badge-medium">
+                              {room.count ?? 0} tareas
+                            </span>
+                            <span className="badge-retro text-muted">
+                              👥 {memberCount} conviviente(s)
+                            </span>
+                          </div>
+                        </div>
                       </div>
+                    </Link>
+
+                    <div className="d-flex justify-content-between align-items-center pt-2 mt-2 border-top border-1">
+                      <Link
+                        to={`/rooms/${room.id}/tasks`}
+                        onClick={() => setRoomId(room.id)}
+                        className="small fw-bold text-primary"
+                      >
+                        Ver tareas ➔
+                      </Link>
+                      <button
+                        type="button"
+                        className="btn-retro btn-retro-outline py-1 px-2 small"
+                        style={{ minHeight: "32px", fontSize: "0.8rem" }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedMemberModalRoom(room);
+                        }}
+                        title="Ver y administrar convivientes"
+                      >
+                        👥 Convivientes
+                      </button>
                     </div>
-                    <span className="text-muted fs-5">➔</span>
-                  </Link>
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
       </RetroWindow>
+
+      {/* Modal de Convivientes */}
+      {selectedMemberModalRoom && (
+        <RoomMembersModal
+          roomId={selectedMemberModalRoom.id}
+          roomName={selectedMemberModalRoom.nombre}
+          isOwner={Boolean(selectedMemberModalRoom.is_owner)}
+          myRole={selectedMemberModalRoom.my_role ?? null}
+          isOpen={Boolean(selectedMemberModalRoom)}
+          onClose={() => setSelectedMemberModalRoom(null)}
+          onMembersChanged={() => {
+            notifyUpdate();
+          }}
+          ownerId={selectedMemberModalRoom.owner_id}
+          ownerEmail={selectedMemberModalRoom.owner}
+        />
+      )}
     </div>
   );
 };

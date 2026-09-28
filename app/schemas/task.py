@@ -1,5 +1,6 @@
 import os
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -17,6 +18,7 @@ class TaskCreate(BaseModel):
     peso: float = Field(default=1.0, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
     due_date: datetime | None = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
+    is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
 
 class TaskRead(BaseModel):
     id: UUID = Field(description="Identificador único de la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
@@ -30,6 +32,7 @@ class TaskRead(BaseModel):
     user_id: UUID = Field(description="Identificador del usuario asociado a la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     deleted_at: datetime | None = Field(default=None, description="Fecha de eliminación de la tarea, si aplica.", json_schema_extra={"example": None})
+    is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
     tags: list[TagRead] = Field(default_factory=list, description="Etiquetas asociadas a la tarea")
 
     @field_validator("due_date", mode="before")
@@ -56,6 +59,7 @@ class TaskUpdate(BaseModel):
     peso: float | None = Field(None, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
     due_date: datetime | None = Field(None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
+    is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):
@@ -123,3 +127,15 @@ class PrioritySuggestRequest(BaseModel):
 class PrioritySuggestion(BaseModel):
     prioridad: str
     motivo: str
+
+
+class AIHealthResponse(BaseModel):
+    status: str = Field(description="Estado de salud general ('healthy' o 'degraded')", json_schema_extra={"example": "healthy"})
+    circuit_state: str = Field(description="Estado del Circuit Breaker ('CLOSED', 'OPEN', 'HALF_OPEN')", json_schema_extra={"example": "CLOSED"})
+    failure_count: int = Field(description="Número de fallos registrados", json_schema_extra={"example": 0})
+    success_count: int = Field(description="Número de llamadas exitosas registradas", json_schema_extra={"example": 10})
+    last_failure: datetime | None = Field(default=None, description="Timestamp del último fallo", json_schema_extra={"example": None})
+    model: str = Field(description="Modelo configurado de IA", json_schema_extra={"example": "qwen2.5:7b"})
+    cache_stats: dict[str, Any] = Field(description="Estadísticas de la caché en memoria", json_schema_extra={"example": {"hits": 5, "misses": 2, "size": 3}})
+
+    model_config = ConfigDict(from_attributes=True)

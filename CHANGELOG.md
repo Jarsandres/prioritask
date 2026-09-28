@@ -3,6 +3,139 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## 🚀 Versión 1.0.0-rc1 (Hardening, CI/CD y Preparación para Producción — Sprint 5) — [2026-09-28]
+
+### 🔄 CI/CD & Automatización de Calidad (DevOps & CI/CD)
+- **[BE-OPS-001] Pipeline Dual en GitHub Actions (`.github/workflows/ci.yml`)**:
+  - Implementación de pipeline automatizado con jobs independientes y paralelos:
+    - **Backend Quality Gate**: Checkout, configuración de Python 3.12, instalación de dependencias, linting estricto con Ruff (`ruff check app/`), y ejecución de suite de pruebas con `pytest` y validación de cobertura (`--cov=app --cov-fail-under=65`).
+    - **Frontend Quality Gate**: Checkout, configuración de Node.js 20 con caché de npm, instalación limpia (`npm ci`), análisis de linter (`npm run lint`) y compilación de producción con Vite (`npm run build`).
+
+### 🛡️ Hardening, Seguridad y Resiliencia (Security & Rate Limiting)
+- **[BE-SEC-030] Rate Limiter en Memoria por Ventana Deslizante (`app/core/rate_limit.py`)**:
+  - Implementación de `InMemoryRateLimiter` thread-safe con almacenamiento en deque de marcas temporales y limpieza automática de ventanas expiradas.
+  - Dependencia inyectable `rate_limit(max_requests, window_seconds)` con identificación por IP cliente (respetando cabeceras `X-Forwarded-For`).
+  - Protección activa en endpoints críticos contra fuerza bruta y sobrecarga: `/api/v1/auth/login` (5 req/min), `/api/v1/auth/register` (3 req/min) y endpoints de inferencia IA `/api/v1/tasks/ai/*` (10 req/min).
+  - Respuestas estandarizadas `429 Too Many Requests` con cabecera `Retry-After` determinando el tiempo restante de bloqueo.
+
+### 📜 Auditoría y Trazabilidad de Tareas (Audit & Task History)
+- **[BE-AUD-001] Extensión de Auditoría en Ciclo de Vida de Tareas (`app/models/enums.py`, `app/api/v1/endpoints/tasks.py`, `app/services/recurrence.py`)**:
+  - Nuevas acciones en `TaskAction`: `CREATED` y `RECURRENCE_ADVANCED`.
+  - Registro inmediato en `TaskHistory` al crear cualquier tarea (`POST /tasks/`), documentando el estado inicial, prioridad, fecha límite y autor del evento.
+  - Registro de auditoría `RECURRENCE_ADVANCED` en `advance_recurring_task` ante la compleción de tareas recurrentes, detallando la fecha límite recalculada y el reinicio de estado.
+
+### 📖 Documentación OpenAPI & Swagger UI Interactivo (API Documentation)
+- **[BE-DOC-001] Enriquecimiento de OpenAPI y Soporte Bearer JWT (`app/main.py`)**:
+  - Configuración explícita de `openapi_tags` con descripciones semánticas para agrupar módulos (`Authentication`, `Tasks`, `Task AI Assistant`, `Rooms & Colaboración`, `Tags`, `Task Assignment`).
+  - Configuración del esquema de seguridad `HTTPBearer` en OpenAPI schema, habilitando el botón interactivo **Authorize** en `/docs` para probar endpoints protegidos directamente con tokens JWT Bearer.
+
+### 🟢 Quality Gate & Verificación de Entrega
+- **[BE-QA-005] Suite Integral de Pruebas y Cobertura Global**:
+  - 172 pruebas automatizadas en verde (100% pass rate) en suites unitarias y de integración.
+  - Cobertura global de código: **70%** (superando el umbral mínimo obligatorio de `fail_under = 65%`).
+  - Linter Ruff: **0 errores y 0 advertencias** en `app/` y `tests/`.
+  - Build de Vite frontend exitoso en 3.07s y ESLint 100% limpio.
+  - Auditoría de seguridad, trazabilidad y hardening: **APROBADA**.
+
+---
+
+## 🚀 Versión 0.6.0-alpha (Sincronización e Integración Frontend — Sprint 4) — [2026-09-28]
+
+### 🖥️ Sincronización de Contratos y Tipos Frontend (Frontend Contracts & Types)
+- **[FE-SYNC-001] Alineación de Tipos TypeScript (`src/types/index.ts`)**:
+  - Sincronización estricta de interfaces TypeScript con los esquemas Pydantic/SQLModel del backend:
+    - `RoomMember`: modelo de convivencia con `user_id`, `room_id`, `role` (`ADMIN` | `MEMBER`), `joined_at` y `email`.
+    - `Room`: extensión con `members: RoomMember[]`, `current_user_role` y metadatos de convivencia.
+    - `Task.is_recurring`: flag booleano para identificar y gestionar tareas recurrentes.
+    - `AIHealthStatus`: interfaz de telemetría y diagnóstico del motor de IA (`status`, `circuit_breaker`, `model`, `details`).
+
+### 🎨 Componentes Visuales y Experiencia de Usuario (UI & Components)
+- **[FE-UI-010] Gestión Interactiva de Convivientes (`src/components/RoomMembersModal.tsx`)**:
+  - Modal interactivo con estética visual retro/pixel-art para administración de miembros del hogar.
+  - Controles de gobernanza y RBAC: invitación de nuevos miembros con rol (`ADMIN` / `MEMBER`), revocación de acceso y prevención de desgobierno (restricción que impide remover al último administrador o auto-eliminación descontrolada).
+- **[FE-UI-011] Selector de Hogares y Contexto Compartido (`src/pages/Dashboard.tsx`)**:
+  - Selector enriquecido de hogares con soporte para habitaciones compartidas y badges de rol activo (`ADMIN` / `MEMBER`).
+- **[FE-UI-012] Soporte Integral de Tareas Recurrentes (`src/components/RecurringBadge.tsx`, `TaskCard.tsx`, `TaskForm.tsx`)**:
+  - Componente `RecurringBadge` con icono e indicación visual de recurrencia en `TaskCard`.
+  - Toggle de recurrencia (`is_recurring`) en formulario de creación y edición (`TaskForm`).
+- **[FE-UI-013] Monitor de Salud del Motor de IA en Tiempo Real (`src/components/AIHealthBadge.tsx`)**:
+  - Badge de monitoreo en vivo consumiendo `GET /api/v1/tasks/ai/health`.
+  - Indicadores visuales de estado del circuito (`CLOSED` / verde, `OPEN` / rojo, `HALF_OPEN` / amarillo) y latencia/disponibilidad de Ollama.
+
+### 🟢 Quality Gate & Verificación de Entrega
+- **[FE-QA-001] Build y Linter Frontend**:
+  - Compilación de producción con Vite (`npm run build`) 100% limpia sin errores ni advertencias de tipos.
+  - ESLint ejecutado con 0 errores y 0 warnings.
+- **[BE-QA-004] Quality Gate Backend Consolidado**:
+  - 164 pruebas automatizadas en verde (100% pass rate).
+  - Cobertura global de código: **70%** (superando el umbral `fail_under = 65%`).
+  - Linter Ruff: **0 errores y 0 advertencias** en `app/` y `tests/`.
+  - Auditoría de seguridad y políticas CORS (CWE-942): **APROBADA**.
+
+---
+
+## 🚀 Versión 0.5.0-alpha (IA Resiliente y Contextual — Sprint 3) — [2026-09-28]
+
+### 🤖 Resiliencia de Inferencia IA y Telemetría (AI & Resilience)
+- **[BE-AI-010] Patrón Circuit Breaker para Cliente Ollama (`app/services/AI/circuit_breaker.py`)**:
+  - Implementación del `CircuitBreaker` con corte inmediato en modo degradado (< 5ms) ante fallos acumulativos en el servicio Ollama.
+  - Protección de concurrencia y prevención de sobrecarga ante indisponibilidad o latencia excesiva del motor de IA local.
+- **[BE-AI-011] Telemetría y Endpoint de Salud de IA (`app/api/v1/endpoints/tasks_ai.py`)**:
+  - Endpoint `GET /api/v1/tasks/ai/health` protegido mediante JWT (`Depends(get_current_user)`).
+  - Telemetría en tiempo real: estado del circuito (`CLOSED`, `OPEN`, `HALF_OPEN`), recuento de fallos/éxitos y diagnóstico del motor Ollama.
+- **[BE-AI-012] Caché Semántica en Memoria con TTL (`app/services/AI/cache.py`)**:
+  - Implementación de `AICache` thread-safe con TTL configurable (5 minutos por defecto) y límite acotado de memoria (`maxsize=1000`).
+  - Reducción drástica del cómputo redundante en sugerencias y clasificaciones idénticas con política de desalojo controlada.
+
+### ⚙️ Servicios y Lógica de Negocio (Business Logic & Services)
+- **[BE-SRV-030] Motor de Priorización Contextual Multivariable (`app/services/AI/priority_classifier.py`)**:
+  - Función de priorización contextual `evaluar_prioridad_contextual` integrando señales deterministas del sistema: fechas límite (`due_date`), recurrencia (`is_recurring`), colaboradores/asignaciones y ponderación de pesos (`peso`).
+  - Fusión de inferencia semántica con heurísticas de negocio, generando explicaciones detalladas y trazables en el atributo `motivo`.
+  - Mecanismos de degradación elegante y fallback determinista garantizados si el circuito está abierto o el modelo local no responde.
+
+### 🟢 Quality Gate & Suites de Pruebas
+- **[BE-TEST-030] Suite Integral de Pruebas y Cobertura**:
+  - 164 pruebas automatizadas ejecutadas y pasando exitosamente (100% pass rate).
+  - Cobertura global de código: **70%** (superando el umbral mínimo obligatorio de `fail_under = 65%`).
+  - Linter Ruff: **0 errores y 0 advertencias** en `app/` y `tests/`.
+  - Auditoría de seguridad y resiliencia: **APROBADA**.
+
+---
+
+## 🚀 Versión 0.4.0-alpha (Motor de Rutinas y Membresía de Hogares — Sprint 2) — [2026-09-28]
+
+### 🔴 Control de Acceso, Endpoints y Seguridad (Security & Endpoints)
+- **[BE-API-020] Endpoints de Gestión de Miembros (`/rooms/{room_id}/members`)**:
+  - `GET /rooms/{room_id}/members`: Listado de convivientes del hogar con protección IDOR (acceso restringido a propietarios y convivientes activos).
+  - `POST /rooms/{room_id}/members`: Incorporación de convivientes con asignación de rol (`ADMIN` / `MEMBER`), restringida estrictamente a propietarios y administradores del hogar mediante RBAC.
+  - `DELETE /rooms/{room_id}/members/{user_id}`: Revocación y salida de miembros con validación RBAC y salvaguarda contra auto-eliminación o remoción indebida del propietario.
+- **[BE-API-021] Refactorización de Visibilidad de Hogares (`GET /rooms`)**:
+  - `GET /rooms` refactorizado para devolver tanto hogares en propiedad como hogares donde el usuario es miembro activo con esquema `RoomReadWithMembers`.
+  - Visibilidad enriquecida con lista completa de compañeros de convivencia (`members`) y el rol contextual del usuario autenticado (`current_user_role`).
+
+### 🟡 Base de Datos y Modelo de Datos (Database & Models)
+- **[BE-DB-020] Modelo `RecurrenceRule` (`app/models/recurrence_rule.py`)**:
+  - Creado el modelo `RecurrenceRule(SQLModel, table=True)` con `__tablename__ = "recurrencerule"`.
+  - Soporte de configuración de frecuencias (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`), intervalos de repetición, días de la semana y fecha de término (`end_date`).
+  - Integración relacional directa con el modelo `Task` (`task_id`).
+
+### ⚙️ Servicios y Lógica de Negocio (Business Logic & Services)
+- **[BE-SRV-020] Servicio de Cálculo y Avance de Tareas Recurrentes (`app/services/recurrence.py`)**:
+  - Motor de cálculo temporal determinista (`calculate_next_occurrence`) respetando `datetime` UTC y granularidades diarias, semanales y mensuales.
+  - Avance automático de tareas recurrentes (`advance_recurring_task`): ante completitud (`DONE`), preserva el historial de ejecución, resetea el estado a `PENDING` y calcula la siguiente fecha límite (`due_date`).
+
+### 🔵 Migraciones Alembic
+- **[BE-MIG-003] Migración `3f641387ca16_add_recurrence_rule_model.py`**:
+  - Generación de tabla `recurrencerule` con índices, restricciones de integridad y foreign keys.
+  - Diseñada y ejecutada sin operaciones destructivas (`0 DROPs`) y totalmente compatible con batch operations en SQLite.
+
+### 🟢 Quality Gate & Suites de Pruebas
+- **[BE-TEST-020] Suite Integral de Pruebas y Cobertura**:
+  - 144 tests ejecutados y pasando exitosamente (100% pass rate).
+  - Cobertura global de código: **65%** (alcanzando el umbral de `fail_under = 65` en `pyproject.toml`).
+  - Linter Ruff: **0 errores y 0 advertencias** en `app/` y `tests/`.
+  - Auditoría de seguridad: **APROBADA** con verificación exhaustiva contra vectores IDOR y fallas de escalada de privilegios RBAC.
+
 ---
 
 ## 🚀 Versión 0.3.0-alpha (Sistema Colaborativo de Hogares — Core DB Sprint) — [2026-09-26]

@@ -6,6 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from starlette import status
 from starlette.status import HTTP_401_UNAUTHORIZED
 
+from app.core.rate_limit import rate_limit
 from app.db.session import get_session
 from app.models.user import Usuario
 from app.schemas.user import (
@@ -18,14 +19,21 @@ from app.schemas.user import (
 from app.services import auth as auth_srv
 from app.services.auth import SECRET_KEY, get_current_user
 
-router = APIRouter(prefix="/auth", tags=["Autenticación"])
+router = APIRouter(prefix="/auth", tags=["Autenticación y Sesiones"])
 
 @router.get("/me", response_model=UsuarioRead, summary="Obtener información del usuario", description="Devuelve la información del usuario autenticado.")
 async def get_me(current_user: Usuario = Depends(get_current_user)):
     return current_user
 
 
-@router.post("/register", response_model=UsuarioRead, status_code=201, summary="Registrar usuario", description="Crea un nuevo usuario en el sistema.")
+@router.post(
+    "/register",
+    response_model=UsuarioRead,
+    status_code=201,
+    summary="Registrar usuario",
+    description="Crea un nuevo usuario en el sistema.",
+    dependencies=[Depends(rate_limit(max_requests=5, window_seconds=60))],
+)
 async def register(payload: UsuarioCreate, session: AsyncSession = Depends(get_session)):
     # Verificar si el usuario ya existe
     existing_user = await session.scalar(
@@ -37,7 +45,13 @@ async def register(payload: UsuarioCreate, session: AsyncSession = Depends(get_s
     user = await auth_srv.create_user(payload, session)
     return user
 
-@router.post("/login", response_model=TokenResponse, summary="Iniciar sesión", description="Autentica al usuario y devuelve tokens de acceso y de refresco.")
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="Iniciar sesión",
+    description="Autentica al usuario y devuelve tokens de acceso y de refresco.",
+    dependencies=[Depends(rate_limit(max_requests=10, window_seconds=60))],
+)
 async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_session)):
     user = await session.scalar(
         select(Usuario).where(Usuario.email == payload.email)

@@ -23,6 +23,7 @@ const TaskForm = () => {
   const [peso, setPeso] = useState(1);
   const [dueDate, setDueDate] = useState("");
   const [estado, setEstado] = useState("TODO");
+  const [isRecurring, setIsRecurring] = useState(false);
   const [error, setError] = useState("");
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<{ value: string; label: string }[]>([]);
@@ -82,6 +83,7 @@ const TaskForm = () => {
           setPeso(peso);
           setDueDate(due_date ?? "");
           setEstado(estado);
+          setIsRecurring(Boolean(response.data.is_recurring));
 
           // FE-010: tipado con Tag en lugar de (t: any)
           const taskTags: string[] =
@@ -160,6 +162,7 @@ const TaskForm = () => {
       due_date: dueDate ? formatearFecha(dueDate) : undefined,
       estado,
       room_id: getCurrentRoomId() || undefined,
+      is_recurring: isRecurring,
     };
 
     try {
@@ -369,6 +372,21 @@ const TaskForm = () => {
               isDisabled={isSubmitting}
               styles={selectStyles}
             />
+          </div>
+
+          {/* S4-T2: Control retro para tarea recurrente */}
+          <div className="form-check retro-checkbox-container mb-3 d-flex align-items-center gap-2">
+            <input
+              id="task-recurring"
+              type="checkbox"
+              className="form-check-input retro-checkbox"
+              checked={isRecurring}
+              onChange={(e) => setIsRecurring(e.target.checked)}
+              disabled={isSubmitting}
+            />
+            <label htmlFor="task-recurring" className="form-check-label fw-bold small text-muted cursor-pointer mb-0">
+              🔄 TAREA RECURRENTE (RUTINA PERIÓDICA AUTOMÁTICA)
+            </label>
           </div>
 
           {/* FE-005: Botón submit táctil con altura min 48px */}

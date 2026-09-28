@@ -8,6 +8,7 @@ from sqlmodel import Field, Relationship, SQLModel
 from app.models.enums import CategoriaTarea, EstadoTarea
 
 if TYPE_CHECKING:
+    from .recurrence_rule import RecurrenceRule
     from .room import Room
     from .tag import Tag
     from .task_assignment import TaskAssignment
@@ -22,8 +23,8 @@ class Task(SQLModel, table=True):
             "user_id",
             "titulo",
             unique=True,
-            postgresql_where=sa.text("deleted_at IS NULL"),
-            sqlite_where=sa.text("deleted_at IS NULL"),
+            postgresql_where=sa.text("deleted_at IS NULL AND completed = false"),
+            sqlite_where=sa.text("deleted_at IS NULL AND completed = 0"),
         ),
     )
 
@@ -53,6 +54,10 @@ class Task(SQLModel, table=True):
     etiquetas: list["TaskTag"] = Relationship(
         back_populates="tarea",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    recurrence_rule: Optional["RecurrenceRule"] = Relationship(
+        back_populates="task",
+        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
     )
 
     @property

@@ -62,6 +62,12 @@ export const StatusBadge = ({ status, className = "" }: StatusBadgeProps) => {
   }
 };
 
+export const RecurringBadge = () => (
+  <span className="badge-retro text-dark bg-warning-subtle border border-warning" title="Rutina periódica recurrente">
+    <span>🔄</span> <span>RUTINA</span>
+  </span>
+);
+
 export const getCategoryIcon = (cat?: string): string => {
   switch (cat?.toUpperCase()) {
     case "LIMPIEZA":

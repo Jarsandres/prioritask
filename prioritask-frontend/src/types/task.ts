@@ -20,12 +20,39 @@ export interface Task {
   deleted_at?: string | null;
   room_id?: string | null;
   tags?: Tag[];
+  is_recurring?: boolean;
+}
+
+export type RoomRole = "ADMIN" | "MEMBER";
+
+export interface RoomMember {
+  user_id: string;
+  room_id: string;
+  role: RoomRole;
+  joined_at: string;
+  user_email?: string | null;
+  user_nombre?: string | null;
 }
 
 export interface Room {
   id: string;
   nombre: string;
+  owner_id?: string;
+  owner?: string;
+  parent_id?: string | null;
+  is_owner?: boolean;
+  my_role?: RoomRole | null;
+  members?: RoomMember[];
   count?: number;
+}
+
+export interface AIHealthStatus {
+  status: "healthy" | "degraded";
+  circuit_state: "CLOSED" | "OPEN" | "HALF_OPEN";
+  failure_count: number;
+  success_count: number;
+  model: string;
+  cache_stats?: { hits: number; misses: number; size: number };
 }
 
 export interface HistoryEntry {

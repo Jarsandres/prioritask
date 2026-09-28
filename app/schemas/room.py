@@ -2,6 +2,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.enums import RoomMemberRole
+from app.schemas.room_member import RoomMemberRead
+
 
 class RoomBase(BaseModel):
     nombre: str = Field(description="Nombre del hogar.",
@@ -22,6 +25,9 @@ class RoomRead(BaseModel):
     owner_id: UUID = Field(description="Identificador único del propietario.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174001"})
     owner: str = Field(description="Nombre del propietario.", json_schema_extra={"example": "Juan Pérez"})
     parent_id: UUID | None = Field(default=None, description="ID del hogar padre", json_schema_extra={"example": None})
+    members: list[RoomMemberRead] = Field(default_factory=list, description="Lista de convivientes del hogar.")
+    is_owner: bool = Field(default=False, description="Indica si el usuario actual es el propietario.")
+    my_role: RoomMemberRole | None = Field(default=None, description="Rol del usuario actual en el hogar.")
 
     model_config = ConfigDict(from_attributes=True)
 

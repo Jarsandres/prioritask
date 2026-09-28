@@ -1,11 +1,13 @@
-import re
-from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.rate_limit import rate_limit
 from app.db.session import get_session
+from app.models.enums import CategoriaTarea
 from app.models.task import Task
 from app.models.user import Usuario
 from app.schemas.responses import (
@@ -14,6 +16,7 @@ from app.schemas.responses import (
     REWRITTEN_TASK_EXAMPLE,
 )
 from app.schemas.task import (
+    AIHealthResponse,
     GroupedTasks,
     GroupedTasksResponse,
     PrioritizedTask,
@@ -21,9 +24,15 @@ from app.schemas.task import (
     PrioritySuggestRequest,
     RewrittenTask,
     TaskGroupRequest,
+    TaskPrioritizeRequest,
     TaskRewriteRequest,
 )
-from app.services.AI.priority_classifier import clasificar_prioridad
+from app.services.AI.cache import ai_cache
+from app.services.AI.circuit_breaker import circuit_breaker
+from app.services.AI.priority_classifier import (
+    PALABRAS_URGENCIA,
+    evaluar_prioridad_contextual,
+)
 from app.services.AI.reformulator import reformular_titulo_con_traduccion
 from app.services.AI.task_organizer import agrupar_tareas_por_similitud
 from app.services.auth import get_current_user
@@ -31,22 +40,16 @@ from app.services.auth import get_current_user
 router = APIRouter(prefix="/tasks/ai", tags=["Tareas con IA"])
 
 
-PALABRAS_URGENCIA = ["urgente", "hoy", "mañana", "prioritario", "inmediato", "rápido", "entregar", "última hora"]
-
 def contiene_palabra_clave(titulo: str) -> bool:
+    import re
     titulo_lower = titulo.lower()
-    return any(re.search(rf"\b{palabra}\b", titulo_lower) for palabra in PALABRAS_URGENCIA)
+    return any(re.search(rf"\b{re.escape(palabra)}\b", titulo_lower) for palabra in PALABRAS_URGENCIA)
+
 
 async def clasificar_prioridad_batch(tasks: list[Task]) -> list[PrioritizedTask]:
     resultado = []
     for task in tasks:
-        if contiene_palabra_clave(task.titulo):
-            prioridad = "alta"
-            motivo = "Palabra clave de urgencia detectada en el título."
-        else:
-            prioridad = await clasificar_prioridad(task.titulo)
-            motivo = "IA personalizada basada en entrenamiento en tareas reales."
-
+        prioridad, motivo = await evaluar_prioridad_contextual(task)
         resultado.append(PrioritizedTask(
             id=task.id,
             titulo=task.titulo,
@@ -57,20 +60,44 @@ async def clasificar_prioridad_batch(tasks: list[Task]) -> list[PrioritizedTask]
     return resultado
 
 
-@router.post("/prioritize", response_model=list[PrioritizedTask], summary="Priorizar tareas", description="Prioriza las tareas del usuario autenticado según criterios específicos.",
-              responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": PRIORITIZED_TASK_EXAMPLE}}}})
+@router.post(
+    "/prioritize",
+    response_model=list[PrioritizedTask],
+    summary="Priorizar tareas",
+    description="Prioriza las tareas del usuario autenticado según criterios específicos.",
+    responses={200: {"description": "Ejemplo de respuesta", "content": {"application/json": {"example": PRIORITIZED_TASK_EXAMPLE}}}},
+    dependencies=[Depends(rate_limit(max_requests=30, window_seconds=60))],
+)
 async def prioritize(
+        payload: TaskPrioritizeRequest | None = None,
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
-    result = await session.exec(
-        select(Task).where(
+    stmt = (
+        select(Task)
+        .options(selectinload(Task.colaboradores))
+        .where(
             Task.user_id == current_user.id,
             Task.deleted_at.is_(None)
         )
     )
+    if payload and payload.task_ids:
+        stmt = stmt.where(Task.id.in_(payload.task_ids))
+
+    result = await session.exec(stmt)
     tasks_list = result.all()
-    prioritized_tasks = await clasificar_prioridad_batch(tasks_list)
+
+    prioritized_tasks = []
+    for task in tasks_list:
+        prioridad, motivo = await evaluar_prioridad_contextual(task)
+        prioritized_tasks.append(
+            PrioritizedTask(
+                id=task.id,
+                titulo=task.titulo,
+                prioridad=prioridad,
+                motivo=motivo,
+            )
+        )
     return prioritized_tasks
 
 @router.post("/group", response_model=GroupedTasksResponse, summary="Agrupar tareas", description="Agrupa las tareas del usuario autenticado en categorías específicas.",
@@ -137,28 +164,42 @@ async def rewrite_tasks(
     response_model=PrioritySuggestion,
     summary="Sugerir prioridad de una tarea",
     description="Devuelve una prioridad sugerida para la tarea enviada.",
+    dependencies=[Depends(rate_limit(max_requests=30, window_seconds=60))],
 )
 async def suggest_priority(
     payload: PrioritySuggestRequest,
     current_user: Usuario = Depends(get_current_user),
 ) -> PrioritySuggestion:
-    texto = f"{payload.titulo} {payload.descripcion or ''}"
-    if contiene_palabra_clave(texto):
-        prioridad = "alta"
-        motivo = "Palabra clave de urgencia detectada."
-    elif payload.due_date:
-        limite = payload.due_date
-        ahora = datetime.now(UTC)
-        if limite.tzinfo is None:
-            limite = limite.replace(tzinfo=UTC)
-        if limite - ahora <= timedelta(days=1):
-            prioridad = "alta"
-            motivo = "La fecha límite está muy próxima."
-        else:
-            prioridad = await clasificar_prioridad(payload.titulo)
-            motivo = "IA personalizada basada en entrenamiento en tareas reales."
-    else:
-        prioridad = await clasificar_prioridad(payload.titulo)
-        motivo = "IA personalizada basada en entrenamiento en tareas reales."
+    task = Task(
+        id=uuid4(),
+        user_id=current_user.id,
+        room_id=uuid4(),
+        categoria=CategoriaTarea.OTRO,
+        titulo=payload.titulo,
+        descripcion=payload.descripcion,
+        due_date=payload.due_date,
+        peso=1.0,
+        is_recurring=False,
+        colaboradores=[],
+    )
+    prioridad, motivo = await evaluar_prioridad_contextual(task)
     return PrioritySuggestion(prioridad=prioridad, motivo=motivo)
+
+
+
+@router.get(
+    "/health",
+    response_model=AIHealthResponse,
+    summary="Estado de salud y telemetría de IA",
+    description="Retorna el estado del Circuit Breaker, métricas operativas y estadísticas de la caché en memoria.",
+)
+async def get_ai_health(
+    current_user: Usuario = Depends(get_current_user),
+) -> AIHealthResponse:
+    metrics = circuit_breaker.get_metrics()
+    cache_stats = await ai_cache.stats()
+    return AIHealthResponse(
+        **metrics,
+        cache_stats=cache_stats,
+    )
 

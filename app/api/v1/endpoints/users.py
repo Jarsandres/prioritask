@@ -7,7 +7,7 @@ from app.models.user import Usuario
 from app.schemas.user import UsuarioRead
 from app.services.auth import get_current_admin_user
 
-router = APIRouter(prefix="/users", tags=["Usuarios"])
+router = APIRouter(prefix="/users", tags=["Usuarios (Admin)"])
 
 @router.get("", response_model=list[UsuarioRead], summary="Lista de usuarios")
 async def list_users(

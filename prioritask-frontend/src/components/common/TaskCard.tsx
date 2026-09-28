@@ -1,5 +1,5 @@
 import type { Task } from "../../types/task";
-import { PriorityBadge, StatusBadge, getCategoryIcon } from "./Badges";
+import { PriorityBadge, StatusBadge, RecurringBadge, getCategoryIcon } from "./Badges";
 
 export interface TaskCardProps {
   task: Task;
@@ -48,6 +48,7 @@ export const TaskCard = ({
         <div className="d-flex flex-wrap gap-2 mb-2 align-items-center">
           <PriorityBadge peso={task.peso} />
           <StatusBadge status={task.estado} />
+          {task.is_recurring && <RecurringBadge />}
         </div>
 
         {/* Título de tarea */}

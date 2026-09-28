@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import SQLModel
 
 from app.core.config import settings  # tu DATABASE_URL
+from app.models.recurrence_rule import RecurrenceRule  # noqa: F401
 from app.models.room import Room  # noqa: F401
 from app.models.room_member import RoomMember  # noqa: F401
 from app.models.tag import Tag  # noqa: F401

@@ -22,3 +22,9 @@ class RoomMemberRole(str, Enum):
     ADMIN = "ADMIN"
     MEMBER = "MEMBER"
 
+
+class RecurrenceFrequency(str, Enum):
+    DAILY = "DAILY"
+    WEEKLY = "WEEKLY"
+    MONTHLY = "MONTHLY"
+

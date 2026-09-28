@@ -241,6 +241,7 @@ async def create_task(
         categoria=payload.categoria,
         peso=payload.peso,
         due_date=payload.due_date,
+        is_recurring=payload.is_recurring,
         user_id=current_user.id,
         room_id=room_id,
     )
@@ -253,13 +254,14 @@ async def create_task(
         await session.rollback()
         raise HTTPException(status_code=400, detail="Ya existe una tarea activa con este título para el usuario.")
 
-    history = TaskHistory(
+    history_entry = TaskHistory(
         task_id=new_task.id,
         user_id=current_user.id,
         action="CREATED",
+        changes="Tarea creada inicialmente",
     )
 
-    session.add(history)
+    session.add(history_entry)
     await session.commit()
     return new_task
 

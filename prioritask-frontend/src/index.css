@@ -342,6 +342,38 @@ a:hover {
   color: #991b1b;
 }
 
+.badge-retro {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1.5px solid var(--window-border);
+  box-shadow: 1.5px 1.5px 0px var(--window-shadow);
+  letter-spacing: 0.2px;
+}
+
+.retro-checkbox-container {
+  padding: 8px 12px;
+  background: var(--compare-box-bg, #f8fafc);
+  border: 1.5px dashed var(--window-border);
+  border-radius: 6px;
+}
+
+.retro-checkbox {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid var(--window-border) !important;
+  border-radius: 3px !important;
+  cursor: pointer;
+}
+.retro-checkbox:checked {
+  background-color: #2563eb !important;
+  border-color: var(--window-border) !important;
+}
+
 /* Hashtag Tags */
 .retro-tags-container {
   display: flex;

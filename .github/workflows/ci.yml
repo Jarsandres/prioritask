@@ -5,34 +5,56 @@ permissions:
 
 on:
   push:
-    branches: [main, develop,feature/*]
+    branches: [main, develop, "feature/*"]
   pull_request:
 
 jobs:
-  test:
+  backend-ci:
     runs-on: ubuntu-latest
     env:
       JWT_SECRET_KEY: ci-test-secret-key-for-testing-only-123456789
-
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
-      - name: Install cmake
-        run: |
-          pip install cmake
-
-      - name: Install deps
+      - name: Install dependencies
         run: |
           pip install -e .[dev]
 
       - name: Lint
         run: |
-          ruff check app
+          ruff check app/ tests/
 
-      - name: Test with coverage
+      - name: Tests
         run: |
           pytest --cov=app --cov-report=term-missing --cov-fail-under=65
+
+  frontend-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: prioritask-frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: prioritask-frontend
+        run: |
+          npm ci
+
+      - name: Lint
+        working-directory: prioritask-frontend
+        run: |
+          npm run lint
+
+      - name: Build
+        working-directory: prioritask-frontend
+        run: |
+          npm run build
