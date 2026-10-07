@@ -1,7 +1,14 @@
 {
+  "name": "Prioritask",
   "short_name": "Prioritask",
-  "name": "Prioritask – Tareas Inteligentes",
   "description": "Gestión inteligente de tareas con IA y sincronización en tiempo real.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1e293b",
+  "background_color": "#0f172a",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
       "src": "/vite.svg",
@@ -15,11 +22,5 @@
       "sizes": "512x512",
       "purpose": "any maskable"
     }
-  ],
-  "start_url": "/",
-  "background_color": "#f4f6f8",
-  "theme_color": "#337ab7",
-  "display": "standalone",
-  "orientation": "portrait-primary",
-  "categories": ["productivity", "utilities"]
+  ]
 }

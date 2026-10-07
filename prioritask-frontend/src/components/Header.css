@@ -395,3 +395,41 @@
 .header-menu-link.logout-link:hover {
   background-color: var(--danger-50);
 }
+
+/* Botón disparador de Command Palette en Header */
+.header-search-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-subtle, #f1f5f9);
+  border: 1px solid var(--border-default, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.header-search-btn:hover {
+  background-color: var(--bg-hover, #e2e8f0);
+  border-color: var(--primary-300, #93c5fd);
+  color: var(--text-main, #1e293b);
+}
+
+.header-search-kbd {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background-color: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border-default, #cbd5e1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--text-muted, #64748b);
+}
+
+[data-theme="dark"] .header-search-kbd {
+  background-color: #1e293b;
+  border-color: #475569;
+}
+

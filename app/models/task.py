@@ -8,8 +8,11 @@ from sqlmodel import Field, Relationship, SQLModel
 from app.models.enums import CategoriaTarea, EstadoTarea
 
 if TYPE_CHECKING:
+    from .attachment import TaskAttachment
+    from .comment import TaskComment
     from .recurrence_rule import RecurrenceRule
     from .room import Room
+    from .subtask import Subtask
     from .tag import Tag
     from .task_assignment import TaskAssignment
     from .task_tag import TaskTag
@@ -59,6 +62,18 @@ class Task(SQLModel, table=True):
         back_populates="task",
         sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
     )
+    subtasks: list["Subtask"] = Relationship(
+        back_populates="task",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    comments: list["TaskComment"] = Relationship(
+        back_populates="task",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    attachments: list["TaskAttachment"] = Relationship(
+        back_populates="task",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
 
     @property
     def tags(self) -> list["Tag"]:
@@ -68,12 +83,33 @@ class Task(SQLModel, table=True):
         return [tt.etiqueta for tt in self.etiquetas if tt.etiqueta]
 
     @property
+    def subtasks_count(self) -> int:
+        """Return count of active subtasks without triggering lazy load."""
+        if "subtasks" not in self.__dict__:
+            return 0
+        return sum(1 for s in self.subtasks if getattr(s, "deleted_at", None) is None)
+
+    @property
+    def subtasks_completed_count(self) -> int:
+        """Return count of completed active subtasks without triggering lazy load."""
+        if "subtasks" not in self.__dict__:
+            return 0
+        return sum(1 for s in self.subtasks if s.completada and getattr(s, "deleted_at", None) is None)
+
+    @property
     def owner_id(self) -> UUID:
         return self.user_id
 
     @owner_id.setter
     def owner_id(self, value: UUID):
         self.user_id = value
+
+    def __getattribute__(self, name: str):
+        if name in ("subtasks", "comments", "attachments"):
+            dict_ = object.__getattribute__(self, "__dict__")
+            if name not in dict_:
+                return []
+        return super().__getattribute__(name)
 
 
 class TaskHistory(SQLModel, table=True):

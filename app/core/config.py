@@ -9,7 +9,23 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     RECURRENCE_SCHEDULER_INTERVAL_SECONDS: int = 3600
+    ENVIRONMENT: str = "development"
+    RATE_LIMIT_ENABLED: bool = True
     CORS_ORIGINS: list[str] | str = ["http://localhost:5173", "http://localhost:5174"]
+
+    # Database connection pool (PostgreSQL)
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_RECYCLE: int = 1800
+    DB_POOL_PRE_PING: bool = True
+
+    # Cache / Redis configuration
+    REDIS_URL: str | None = None
+
+    # Storage / Attachments configuration
+    UPLOAD_DIR: str = "./uploads/attachments"
+    MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
+    MAX_ROOM_STORAGE_BYTES: int = 250 * 1024 * 1024  # 250 MB
 
     @field_validator("DATABASE_URL", mode="after")
     def ensure_async_sqlite(cls, v: str) -> str:

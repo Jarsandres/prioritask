@@ -3,6 +3,7 @@ import api from "../api";
 import { useNavigate, Link } from "react-router-dom";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
 import { useRoom } from "../context/RoomContext";
+import { useToast } from "../context/ToastContext";
 import ConfirmModal from "./ConfirmModal";
 import type { Task, TaskStatus } from "../types/task";
 import TaskCard from "./common/TaskCard";
@@ -12,12 +13,15 @@ import { Button } from "./ui/Button";
 import TaskViewSwitcher, { type TaskViewMode } from "./tasks/TaskViewSwitcher";
 import TaskListView from "./tasks/TaskListView";
 import TaskKanbanBoard from "./tasks/TaskKanbanBoard";
+import TaskCalendarView from "./tasks/TaskCalendarView";
+import { useRoomEvents } from "../hooks/useRoomEvents";
 import FilterBar from "./tasks/FilterBar";
 import {
   LuPlus,
   LuSparkles,
   LuListTodo,
   LuCircleCheck,
+  LuRadio,
 } from "react-icons/lu";
 import "./tasks/tasks.css";
 
@@ -35,12 +39,15 @@ const TaskList = () => {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   const navigate = useNavigate();
   const { version, notifyUpdate } = useTaskUpdate();
   const { roomId } = useRoom();
+  const { toast } = useToast();
+
+  // Cliente de Sincronización en Vivo SSE y BroadcastChannel para la sala activa
+  const { isConnected: isLiveConnected } = useRoomEvents(roomId);
 
   const handleChangeViewMode = (mode: TaskViewMode) => {
     setViewMode(mode);
@@ -84,7 +91,6 @@ const TaskList = () => {
   }, [busqueda]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const promptDelete = (tarea: Task) => {
-    setActionError(null);
     setTaskToDelete(tarea);
   };
 
@@ -92,15 +98,15 @@ const TaskList = () => {
     if (!taskToDelete) return;
     const id = taskToDelete.id;
     setDeletingId(id);
-    setActionError(null);
     try {
       await api.delete(`/tasks/${id}`);
       setTareas((prev) => prev.filter((t) => t.id !== id));
       notifyUpdate();
       setTaskToDelete(null);
+      toast.success("Tarea eliminada correctamente");
     } catch (error) {
       console.error("Error al eliminar tarea:", error);
-      setActionError("Ocurrió un error al eliminar la tarea.");
+      toast.error("Ocurrió un error al eliminar la tarea.");
     } finally {
       setDeletingId(null);
     }
@@ -108,16 +114,22 @@ const TaskList = () => {
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     setCompletingId(taskId);
-    setActionError(null);
     try {
       await api.patch(`/tasks/${taskId}/status`, { estado: newStatus });
       setTareas((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, estado: newStatus } : t))
       );
       notifyUpdate();
+      if (newStatus === "DONE") {
+        toast.success("¡Tarea completada! 🎉");
+      } else if (newStatus === "IN_PROGRESS") {
+        toast.info("Tarea en progreso 🚀");
+      } else {
+        toast.info("Tarea movida a Por Hacer");
+      }
     } catch (error) {
       console.error("Error al cambiar estado:", error);
-      setActionError("Error al actualizar el estado de la tarea.");
+      toast.error("Error al actualizar el estado de la tarea.");
     } finally {
       setCompletingId(null);
     }
@@ -145,6 +157,16 @@ const TaskList = () => {
           <h2 className="d-flex align-items-center gap-2 mb-1 fw-bold" style={{ fontSize: "24px" }}>
             <LuListTodo className="text-primary" size={26} aria-hidden="true" />
             <span>Listado de Tareas</span>
+            {isLiveConnected && (
+              <span
+                className="badge rounded-pill bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center gap-1 py-1 px-2 ms-2"
+                style={{ fontSize: "11px", fontWeight: 600 }}
+                title="Sincronización en tiempo real activa (SSE & Broadcast)"
+              >
+                <LuRadio size={12} className="text-success" />
+                <span>En vivo</span>
+              </span>
+            )}
           </h2>
           <p className="text-muted mb-0" style={{ fontSize: "14px" }}>
             Gestiona, filtra y organiza el trabajo de tu hogar en tiempo real.
@@ -185,18 +207,6 @@ const TaskList = () => {
         onClearFilters={handleClearFilters}
         totalTasks={tareas}
       />
-
-      {/* Banner de error para mutaciones inline */}
-      {actionError && (
-        <div className="alert alert-danger alert-dismissible fade show mb-3" role="alert">
-          {actionError}
-          <button
-            type="button"
-            className="btn-close"
-            onClick={() => setActionError(null)}
-          ></button>
-        </div>
-      )}
 
       {/* Renderizado de vistas */}
       {loading ? (
@@ -261,6 +271,15 @@ const TaskList = () => {
         </div>
       ) : viewMode === "list" ? (
         <TaskListView
+          tasks={tareas}
+          onComplete={handleToggleComplete}
+          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onDelete={promptDelete}
+          completingId={completingId}
+          deletingId={deletingId}
+        />
+      ) : viewMode === "calendar" ? (
+        <TaskCalendarView
           tasks={tareas}
           onComplete={handleToggleComplete}
           onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}

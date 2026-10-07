@@ -52,6 +52,7 @@ coverage.xml
 # FastAPI static and media
 /static/
 /media/
+uploads/
 
 # Other Python package management
 Pipfile.lock

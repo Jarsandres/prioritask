@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 from httpx import AsyncClient
 
+from app.core.config import settings
 from app.core.rate_limit import InMemoryRateLimiter, rate_limiter
 
 
@@ -110,7 +111,8 @@ async def test_rate_limit_endpoint_http_429_and_retry_after(async_client: AsyncC
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_bypass_header(async_client: AsyncClient):
+async def test_rate_limit_bypass_header_rejected(async_client: AsyncClient):
+    """Verify that external X-Bypass-Rate-Limit header does NOT bypass rate limiting (SEC-040)."""
     rate_limiter.clear()
 
     # Exhaust 5 requests
@@ -125,14 +127,34 @@ async def test_rate_limit_bypass_header(async_client: AsyncClient):
         )
         assert resp.status_code == 201
 
-    # 6th request with bypass header should pass rate limiter
+    # 6th request with external bypass header MUST be rejected with 429
     bypass_resp = await async_client.post(
         "/api/v1/auth/register",
         json={
-            "email": f"bypass-success-{uuid4()}@example.com",
-            "nombre": "Bypass Success",
+            "email": f"bypass-attempt-{uuid4()}@example.com",
+            "nombre": "Bypass Attempt",
             "password": "validPassword123",
         },
         headers={"X-Bypass-Rate-Limit": "1"},
     )
-    assert bypass_resp.status_code == 201
+    assert bypass_resp.status_code == 429
+    assert bypass_resp.json()["detail"] == "Demasiadas peticiones. Por favor, espere antes de reintentar."
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_disabled_via_settings(async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """Verify that rate limiting can only be bypassed via controlled server configuration."""
+    rate_limiter.clear()
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
+
+    # 6 requests should all succeed because rate limiting is disabled by configuration
+    for i in range(6):
+        resp = await async_client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": f"settings-disabled-{i}-{uuid4()}@example.com",
+                "nombre": f"ConfigUser {i}",
+                "password": "validPassword123",
+            },
+        )
+        assert resp.status_code == 201

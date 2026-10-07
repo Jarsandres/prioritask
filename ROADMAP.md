@@ -80,3 +80,45 @@ Fuente de la Verdad única (Single Source of Truth) para la gobernanza, estánda
 - [x] Documentación OpenAPI interactiva enriquecida con tags descriptivos y esquema de seguridad `HTTPBearer` (botón Authorize).
 - [x] **Quality Gate**: 172 tests en verde (100%), 70% cobertura global, 0 errores en Ruff, build de Vite exitoso en 3.07s, auditoría de seguridad y hardening APROBADA.
 
+### Sprint 6: Remediación Crítica, Subtareas y Hardening SAST — [COMPLETADO ✅]
+- [x] **SEC-040**: Remediación crítica de Rate Limiter (`app/core/rate_limit.py`) con blindaje contra spoofing de cabeceras, soporte para proxies seguros y almacenamiento thread-safe con ventana deslizante.
+- [x] **SUB-010**: Modelo relacional `SubTask` (`app/models/subtask.py`) con gobernanza Soft-delete (`deleted_at`), índices parciales y migraciones Alembic `4a781b2c9e31` y `b8c41d9e2f50`.
+- [x] **SUB-020**: Endpoints CRUD de subtareas (`/api/v1/tasks/{task_id}/subtasks`) con validación de propiedad IDOR y componentes reactivos en UI (`TaskChecklist.tsx`).
+- [x] **UI-060**: Unificación del sistema de Toasts y notificaciones retro-consistentes en la interfaz de usuario.
+- [x] **SEC-SAST**: Pipeline SAST en GitHub Actions reforzado con auditoría de dependencias (`pip-audit` y `npm audit`).
+- [x] **Quality Gate**: Tests unitarios y de integración para subtareas y rate limiter aprobados al 100%.
+
+### Sprint 7: Tiempo Real (SSE), Colaboración y Vista Calendario — [COMPLETADO ✅]
+- [x] **REAL-010**: Hub Server-Sent Events (SSE) en tiempo real (`app/services/events.py`, `/api/v1/rooms/{room_id}/events`) con difusión asíncrona segregada por hogar y heartbeat keep-alive.
+- [x] **SYNC-010**: Cliente reactivo multi-pestaña en frontend (`useRoomEvents.ts`) con reconexión exponencial y actualización automática de estado sin recarga.
+- [x] **VIEW-010**: Vista Calendario y Agenda cronológica (`TaskCalendarView.tsx`, `TaskViewSwitcher.tsx`) con filtros temporales y navegación mensual/semanal.
+- [x] **COM-010**: Modelo relacional `TaskComment` (`app/models/comment.py`), migración Alembic `e9d52f1a8c30` y endpoints `/api/v1/tasks/{task_id}/comments` con control de acceso y autoría inmutable.
+- [x] **COM-020**: Sección interactiva de comentarios en tiempo real (`TaskCommentsSection.tsx`) integrada en el detalle de tareas.
+- [x] **Quality Gate**: Tests de integración para SSE (`test_sse_events.py`), comentarios (`test_comments_api.py`) y calendario pasando al 100%.
+
+### Sprint 8: Infraestructura Escalable, Analítica y Resiliencia Distribuida — [COMPLETADO ✅]
+- [x] **INFRA-010**: Connection pooling avanzado en PostgreSQL/SQLAlchemy (`app/db/session.py`, `app/core/config.py`) con `pool_pre_ping=True`, reciclaje periódico y dimensionamiento configurable.
+- [x] **DIST-010**: Arquitectura hexagonal para Rate Limiter y Distributed Lock (`app/services/lock.py`, `app/core/rate_limit.py`) con adaptadores duales para Redis y memoria local.
+- [x] **ANLY-010**: Motor de analítica y métricas de hogar (`/api/v1/rooms/{room_id}/analytics`) con distribución por prioridad, ratios de compleción y rendimiento por miembro.
+- [x] **ANLY-020**: Dashboard analítico retro en frontend con métricas visuales del hogar (`RoomAnalyticsModal.tsx`, `src/types/analytics.ts`).
+- [x] **LOAD-010**: PWA Offline-First (`manifest.webmanifest`, `useNetworkStatus.ts`, `OfflineBanner.tsx`) y suite de pruebas de carga Locust (`tests/load/locustfile.py`).
+- [x] **Quality Gate**: Tests unitarios de pool DB, lock service, rate limiter Redis y analítica de hogar pasando al 100%.
+
+### Sprint 9: Motor de Búsqueda FTS, Command Palette y Gamificación Retro — [COMPLETADO ✅]
+- [x] **FTS-010**: Motor de Búsqueda de Texto Completo (Full-Text Search) ponderado (`app/services/search.py`, `/api/v1/rooms/{room_id}/search`) con ranking por título, descripción y etiquetas.
+- [x] **CMD-010**: Command Palette global `Ctrl+K` / `Cmd+K` (`CommandPaletteModal.tsx`, `CommandPaletteModal.css`) para navegación ultrarrápida y ejecución de acciones.
+- [x] **GAME-010**: Sistema de Gamificación con protección anti double-spending y rachas (`app/models/gamification.py`, `app/services/gamification.py`, `/api/v1/rooms/{room_id}/gamification`) otorgando XP y niveles por compleción de tareas.
+- [x] **GAME-020**: Celebración visual retro con audio sintetizado chiptune (`retroAudio.ts`) y confeti pixelado (`usePixelConfetti.ts`).
+- [x] **E2E-010**: Suite de pruebas End-to-End con Playwright (`prioritask-frontend/e2e/`, `playwright.config.ts`) integrada en el pipeline de CI.
+- [x] **Quality Gate**: Tests unitarios y de integración para FTS, gamificación y E2E aprobados al 100%.
+
+### Sprint 10: Almacenamiento Hexagonal, Privacidad GDPR y Optimización Bundle — [COMPLETADO ✅]
+- [x] **ATT-010/011/012**: Arquitectura hexagonal de almacenamiento de adjuntos (`app/services/storage/`), validación Zero Trust con Magic Bytes (`security.py`), modelo `TaskAttachment` y endpoints `/api/v1/tasks/{task_id}/attachments`.
+- [x] **ATT-020**: Dropzone drag-and-drop, captura directa por cámara móvil y compresión client-side a WebP (`attachmentUtils.ts`, `TaskAttachmentsSection.tsx`).
+- [x] **ATT-021**: Modal Lightbox retro pixel-art (`AttachmentLightboxModal.tsx`) con previsualización segura de imágenes y PDFs.
+- [x] **GDPR-010/020**: Cumplimiento GDPR con exportación en streaming JSON/CSV de datos del hogar (`/api/v1/rooms/{room_id}/export`) y plantilla imprimible A4 para nevera (`FridgeTemplateModal.tsx`).
+- [x] **PERF-010**: Code-splitting en Vite (`vite.config.ts`) con chunks dinámicos manuales, reduciendo el bundle JS inicial a 183 kB.
+- [x] **E2E-020**: Suite E2E ampliada con flujos completos de adjuntos, búsqueda, gamificación y exportación.
+- [x] **Quality Gate Consolidado**: 241 tests backend (100% pass), cobertura >= 65% (69.54%), 0 errores Ruff/ESLint, suite Playwright E2E completa, auditoría de seguridad Zero Trust APROBADA.
+
+

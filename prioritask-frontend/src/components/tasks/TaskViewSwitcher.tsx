@@ -1,6 +1,6 @@
-import { LuLayoutGrid, LuList, LuKanban } from "react-icons/lu";
+import { LuLayoutGrid, LuList, LuKanban, LuCalendar } from "react-icons/lu";
 
-export type TaskViewMode = "grid" | "list" | "kanban";
+export type TaskViewMode = "grid" | "list" | "kanban" | "calendar";
 
 export interface TaskViewSwitcherProps {
   currentMode: TaskViewMode;
@@ -50,6 +50,17 @@ export const TaskViewSwitcher = ({
       >
         <LuKanban size={16} aria-hidden="true" />
         <span className="view-switcher-label">Kanban</span>
+      </button>
+
+      <button
+        type="button"
+        className={`view-switcher-btn ${currentMode === "calendar" ? "active" : ""}`}
+        onClick={() => onChangeMode("calendar")}
+        title="Vista en calendario y agenda"
+        aria-pressed={currentMode === "calendar"}
+      >
+        <LuCalendar size={16} aria-hidden="true" />
+        <span className="view-switcher-label">Calendario</span>
       </button>
     </div>
   );

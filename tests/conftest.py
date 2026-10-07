@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app import models as _app_models  # noqa: F401
 from app.core.rate_limit import rate_limiter
 from app.db.session import get_session
 from app.main import app

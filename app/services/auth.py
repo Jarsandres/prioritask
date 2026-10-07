@@ -2,7 +2,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -19,6 +19,7 @@ pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret")
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Utilidades de contraseña y JWT
@@ -100,6 +101,43 @@ async def get_current_user(
         user_id_raw: str | None = payload.get("sub")
         user_id = UUID(user_id_raw)
     except (JWTError, ValueError):
+        raise cred_exc
+
+    user = await session.get(Usuario, user_id)
+    if not user or not user.is_active:
+        raise cred_exc
+    return user
+
+
+async def get_current_user_flexible(
+    token_query: str | None = Query(None, alias="token"),
+    token_header: str | None = Depends(oauth2_scheme_optional),
+    session: AsyncSession = Depends(get_session),
+) -> Usuario:
+    """
+    Dependencia de autenticación que admite tanto el header 'Authorization: Bearer <token>'
+    como el query parameter '?token=<token>' (útil para EventSource/SSE en navegadores).
+    """
+    token = token_query or token_header
+    cred_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Credenciales no válidas",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not token:
+        raise cred_exc
+
+    try:
+        payload = decode_token(token, SECRET_KEY, verify_exp=True)
+        token_type = payload.get("type")
+        if token_type and token_type != "access":
+            raise cred_exc
+
+        user_id_raw: str | None = payload.get("sub")
+        if not user_id_raw:
+            raise cred_exc
+        user_id = UUID(user_id_raw)
+    except (JWTError, ValueError, TypeError):
         raise cred_exc
 
     user = await session.get(Usuario, user_id)

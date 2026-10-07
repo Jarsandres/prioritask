@@ -9,6 +9,28 @@ export interface Tag {
   nombre: string;
 }
 
+export interface Subtask {
+  id: string;
+  task_id: string;
+  titulo: string;
+  completada: boolean;
+  orden: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface SubtaskCreate {
+  titulo: string;
+  orden?: number;
+}
+
+export interface SubtaskUpdate {
+  titulo?: string;
+  completada?: boolean;
+  orden?: number;
+}
+
 export interface Task {
   id: string;
   titulo: string;
@@ -21,6 +43,32 @@ export interface Task {
   room_id?: string | null;
   tags?: Tag[];
   is_recurring?: boolean;
+  subtasks?: Subtask[];
+  subtasks_count?: number;
+  subtasks_completed_count?: number;
+  comments_count?: number;
+  attachments_count?: number;
+}
+
+export type { TaskAttachment } from "./attachment";
+
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  author_name: string | null;
+  contenido: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface TaskCommentCreate {
+  contenido: string;
+}
+
+export interface TaskCommentUpdate {
+  contenido: string;
 }
 
 export type RoomRole = "ADMIN" | "MEMBER";

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TagCreate(BaseModel):
@@ -9,6 +9,9 @@ class TagCreate(BaseModel):
 class TagRead(BaseModel):
     id: UUID = Field(description="Identificador único de la etiqueta.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
     nombre: str = Field(description="Nombre de la etiqueta.", json_schema_extra={"example": "Urgente"})
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 class TagAssignRequest(BaseModel):
     tag_ids: list[UUID] = Field(description="Lista de identificadores únicos de etiquetas.", json_schema_extra={"example": ["123e4567-e89b-12d3-a456-426614174000", "123e4567-e89b-12d3-a456-426614174001"]})

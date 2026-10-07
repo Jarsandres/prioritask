@@ -10,15 +10,25 @@ import {
   LuMoon,
   LuUser,
   LuLogOut,
+  LuSearch,
+  LuVolume2,
+  LuVolumeX,
+  LuKeyboard,
 } from "react-icons/lu";
 import { useRoom } from "../context/RoomContext";
 import { useTheme } from "../context/ThemeContext";
 import api from "../api";
 import RoomMembersModal from "./RoomMembersModal";
+import { isRetroAudioMuted, setRetroAudioMuted } from "../utils/retroAudio";
 import type { UserProfile } from "../types/auth";
 import "./Header.css";
 
-const Header = () => {
+export interface HeaderProps {
+  onOpenCommandPalette?: () => void;
+  onOpenShortcuts?: () => void;
+}
+
+const Header = ({ onOpenCommandPalette, onOpenShortcuts }: HeaderProps) => {
   const { rooms, activeRoom, selectRoom, setRoomId, refreshRooms } = useRoom();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -28,9 +38,27 @@ const Header = () => {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [isMuted, setIsMuted] = useState<boolean>(() => isRetroAudioMuted());
 
   const roomDropdownRef = useRef<HTMLDivElement>(null);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleMuteChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ muted: boolean }>;
+      setIsMuted(customEvent.detail.muted);
+    };
+    window.addEventListener("retro_audio_mute_changed", handleMuteChange);
+    return () => {
+      window.removeEventListener("retro_audio_mute_changed", handleMuteChange);
+    };
+  }, []);
+
+  const toggleMute = () => {
+    const next = !isMuted;
+    setIsMuted(next);
+    setRetroAudioMuted(next);
+  };
 
   // Cargar usuario actual para el avatar/perfil
   useEffect(() => {
@@ -209,6 +237,49 @@ const Header = () => {
 
         {/* Lado derecho: Selector de Tema & Menú de Perfil */}
         <div className="header-right">
+          {/* Botón de búsqueda rápida / Paleta de comandos */}
+          {onOpenCommandPalette && (
+            <button
+              type="button"
+              className="header-search-btn"
+              onClick={onOpenCommandPalette}
+              aria-label="Abrir buscador y comandos (Ctrl+K)"
+              title="Buscar tareas y comandos (Ctrl+K)"
+            >
+              <LuSearch size={15} aria-hidden="true" />
+              <span className="d-none d-lg-inline">Buscar...</span>
+              <span className="header-search-kbd">Ctrl+K</span>
+            </button>
+          )}
+
+          {/* Control de sonido retro 8-bit */}
+          <button
+            type="button"
+            className="header-icon-btn"
+            onClick={toggleMute}
+            aria-label={isMuted ? "Activar efectos de audio retro" : "Silenciar efectos de audio retro"}
+            title={isMuted ? "Audio retro silenciado" : "Audio retro 8-bit activo"}
+          >
+            {isMuted ? (
+              <LuVolumeX size={18} aria-hidden="true" />
+            ) : (
+              <LuVolume2 size={18} aria-hidden="true" />
+            )}
+          </button>
+
+          {/* Atajos de teclado */}
+          {onOpenShortcuts && (
+            <button
+              type="button"
+              className="header-icon-btn d-none d-sm-flex"
+              onClick={onOpenShortcuts}
+              aria-label="Ver atajos de teclado (?)"
+              title="Atajos de teclado (?)"
+            >
+              <LuKeyboard size={18} aria-hidden="true" />
+            </button>
+          )}
+
           <button
             type="button"
             className="header-icon-btn theme-toggle-header"

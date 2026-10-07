@@ -12,6 +12,7 @@ import {
   LuPencil,
   LuTrash2,
   LuLoaderCircle,
+  LuListChecks,
 } from "react-icons/lu";
 import "./tasks.css";
 
@@ -87,9 +88,28 @@ export const TaskListView = ({
 
               {/* Título y descripción */}
               <div className="task-list-title-cell">
-                <div className="d-flex align-items-center gap-2">
+                <div className="d-flex align-items-center gap-2 flex-wrap">
                   <span className="task-list-item-title">{task.titulo}</span>
                   {task.is_recurring && <RecurringBadge />}
+                  {(task.subtasks_count ?? task.subtasks?.length ?? 0) > 0 && (
+                    <span
+                      className="badge rounded-pill bg-light text-dark border d-inline-flex align-items-center gap-1 px-2 py-0 small"
+                      style={{ fontSize: "11px", fontWeight: 600 }}
+                      title={`Subtareas: ${
+                        task.subtasks_completed_count ??
+                        task.subtasks?.filter((s) => s.completada).length ??
+                        0
+                      }/${task.subtasks_count ?? task.subtasks?.length ?? 0}`}
+                    >
+                      <LuListChecks size={12} aria-hidden="true" />
+                      <span>
+                        {task.subtasks_completed_count ??
+                          task.subtasks?.filter((s) => s.completada).length ??
+                          0}
+                        /{task.subtasks_count ?? task.subtasks?.length ?? 0}
+                      </span>
+                    </span>
+                  )}
                 </div>
                 {task.descripcion && (
                   <span className="task-list-item-desc">{task.descripcion}</span>

@@ -7,6 +7,8 @@ from sqlmodel import Field, Relationship, SQLModel
 from .enums import UserRole
 
 if TYPE_CHECKING:
+    from .attachment import TaskAttachment
+    from .comment import TaskComment
     from .room import Room
     from .room_member import RoomMember
     from .tag import Tag
@@ -29,6 +31,8 @@ class Usuario(SQLModel, table=True):
     tasks:   list["Task"]  = Relationship(back_populates="usuario")
     tasks_asignadas: list["TaskAssignment"] = Relationship(back_populates="user", sa_relationship_kwargs={"foreign_keys": "TaskAssignment.user_id"})
     etiquetas: list["Tag"] = Relationship(back_populates="usuario", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    comments: list["TaskComment"] = Relationship(back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    attachments: list["TaskAttachment"] = Relationship(back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
     @property
     def role(self) -> UserRole:

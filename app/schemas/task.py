@@ -3,10 +3,11 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import CategoriaTarea, EstadoTarea
 
+from .subtask import SubtaskRead
 from .tag import TagRead
 
 
@@ -34,6 +35,9 @@ class TaskRead(BaseModel):
     deleted_at: datetime | None = Field(default=None, description="Fecha de eliminación de la tarea, si aplica.", json_schema_extra={"example": None})
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
     tags: list[TagRead] = Field(default_factory=list, description="Etiquetas asociadas a la tarea")
+    subtasks: list[SubtaskRead] = Field(default_factory=list, description="Lista de subtareas asociadas")
+    subtasks_count: int = Field(default=0, description="Cantidad total de subtareas")
+    subtasks_completed_count: int = Field(default=0, description="Cantidad de subtareas completadas")
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):
@@ -49,6 +53,15 @@ class TaskRead(BaseModel):
                 raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
         return value
 
+    @model_validator(mode="after")
+    def sync_subtasks_counts(self):
+        if self.subtasks:
+            active_subtasks = [s for s in self.subtasks if getattr(s, "deleted_at", None) is None]
+            self.subtasks = active_subtasks
+            self.subtasks_count = len(active_subtasks)
+            self.subtasks_completed_count = sum(1 for s in active_subtasks if s.completada)
+        return self
+
     model_config = ConfigDict(from_attributes=True)
 
 class TaskUpdate(BaseModel):
@@ -60,6 +73,7 @@ class TaskUpdate(BaseModel):
     due_date: datetime | None = Field(None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
+    completed: bool | None = Field(default=None, description="Indica si la tarea está completada")
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):

@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -14,10 +14,11 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
-from app.models import CategoriaTarea, Room, Tag, TaskAssignment, TaskTag
+from app.models import CategoriaTarea, Room, RoomMember, Tag, TaskAssignment, TaskTag
 from app.models.task import EstadoTarea, Task, TaskHistory
 from app.models.user import Usuario
 from app.schemas.history import TaskHistoryRead
+from app.schemas.search import TaskSearchResponse
 from app.schemas.task import (
     TaskAssignmentCreate,
     TaskAssignmentRead,
@@ -26,10 +27,14 @@ from app.schemas.task import (
     TaskUpdate,
 )
 from app.services.auth import get_current_user
+from app.services.events import event_broadcaster
+from app.services.gamification import award_task_points
 from app.services.recurrence import advance_recurring_task
+from app.services.search import SearchEngineService
 from app.services.task_assignment import TaskAssignmentService
 
 router = APIRouter(prefix="/tasks", tags=["Gestión de tareas"])
+
 room_tasks_router = APIRouter(prefix="/rooms", tags=["Hogar"])
 
 
@@ -42,6 +47,8 @@ async def _fetch_tasks(
     completadas: bool | None = None,
     desde: datetime | None = None,
     hasta: datetime | None = None,
+    due_date_from: datetime | date | None = None,
+    due_date_to: datetime | date | None = None,
     order_by: str | None = None,
     is_descending: bool = False,
     tag_id: UUID | None = None,
@@ -49,9 +56,15 @@ async def _fetch_tasks(
     search: str | None = None,
     skip: int = 0,
     limit: int = 10,
+    is_room_scoped: bool = False,
 ) -> list[Task]:
     """Retrieve tasks applying common filters."""
-    filters = [Task.user_id == current_user.id, Task.deleted_at.is_(None)]
+    if is_room_scoped and room_id:
+        filters = [Task.room_id == room_id, Task.deleted_at.is_(None)]
+    else:
+        filters = [Task.user_id == current_user.id, Task.deleted_at.is_(None)]
+        if room_id:
+            filters.append(Task.room_id == room_id)
 
     if estado:
         filters.append(Task.estado == estado)
@@ -59,16 +72,31 @@ async def _fetch_tasks(
         filters.append(Task.categoria == categoria)
     if completadas is not None:
         filters.append(Task.completed == completadas)
-    if desde:
-        filters.append(Task.due_date >= desde)
-    if hasta:
-        filters.append(Task.due_date <= hasta)
-    if tag_id:
+
+    eff_from = due_date_from if due_date_from is not None else desde
+    if eff_from is not None:
+        if isinstance(eff_from, datetime):
+            from_dt = eff_from if eff_from.tzinfo else eff_from.replace(tzinfo=UTC)
+        elif isinstance(eff_from, date):
+            from_dt = datetime.combine(eff_from, datetime.min.time(), tzinfo=UTC)
+        else:
+            from_dt = eff_from
+        filters.append(Task.due_date >= from_dt)
+
+    eff_to = due_date_to if due_date_to is not None else hasta
+    if eff_to is not None:
+        if isinstance(eff_to, datetime):
+            to_dt = eff_to if eff_to.tzinfo else eff_to.replace(tzinfo=UTC)
+        elif isinstance(eff_to, date):
+            to_dt = datetime.combine(eff_to, datetime.max.time(), tzinfo=UTC)
+        else:
+            to_dt = eff_to
+        filters.append(Task.due_date <= to_dt)
+
+    if tag_id and not is_room_scoped:
         filters.append(
             Task.id.in_(select(TaskTag.task_id).where(TaskTag.tag_id == tag_id))
         )
-    if room_id:
-        filters.append(Task.room_id == room_id)
     if search:
         filters.append(
             Task.titulo.ilike(f"%{search}%") | Task.descripcion.ilike(f"%{search}%")
@@ -86,7 +114,10 @@ async def _fetch_tasks(
 
     result = await session.exec(
         select(Task)
-        .options(selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta))
+        .options(
+            selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta),
+            selectinload(Task.subtasks),
+        )
         .filter(*filters)
         .order_by(order_clause)
         .offset(skip)
@@ -101,6 +132,8 @@ async def get_tasks(
         completadas: bool | None = Query(None),
         desde: datetime | None = Query(None),
         hasta: datetime | None = Query(None),
+        due_date_from: datetime | date | None = Query(None, description="Filtro inicio due_date (calendario)"),
+        due_date_to: datetime | date | None = Query(None, description="Filtro fin due_date (calendario)"),
         search: str | None = Query(None),
         order_by: str | None = Query(None, description="due_date, peso o created_at"),
         is_descending: bool | None = Query(False),
@@ -120,6 +153,8 @@ async def get_tasks(
         completadas=completadas,
         desde=desde,
         hasta=hasta,
+        due_date_from=due_date_from,
+        due_date_to=due_date_to,
         search=search,
         order_by=order_by,
         is_descending=is_descending,
@@ -130,7 +165,30 @@ async def get_tasks(
     )
 
 
+@router.get(
+    "/search",
+    response_model=TaskSearchResponse,
+    summary="Búsqueda rápida de tareas",
+    description="Búsqueda tokenizada y ponderada por relevancia (título, etiquetas, descripción, subtareas) optimizada para Command Palette.",
+)
+async def search_tasks(
+    q: str = Query(..., min_length=1, max_length=100, description="Texto a buscar"),
+    room_id: UUID | None = Query(None, description="Filtrar por hogar"),
+    limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de resultados"),
+    session: AsyncSession = Depends(get_session),
+    current_user: Usuario = Depends(get_current_user),
+):
+    return await SearchEngineService.search(
+        query=q,
+        current_user=current_user,
+        session=session,
+        room_id=room_id,
+        limit=limit,
+    )
+
+
 @room_tasks_router.get("/{room_id}/tasks", response_model=list[TaskRead], summary="Obtener tareas de un hogar")
+
 async def get_tasks_by_room(
     room_id: UUID,
     estado: EstadoTarea | None = Query(None),
@@ -138,6 +196,8 @@ async def get_tasks_by_room(
     completadas: bool | None = Query(None),
     desde: datetime | None = Query(None),
     hasta: datetime | None = Query(None),
+    due_date_from: datetime | date | None = Query(None, description="Filtro inicio due_date (calendario)"),
+    due_date_to: datetime | date | None = Query(None, description="Filtro fin due_date (calendario)"),
     search: str | None = Query(None),
     order_by: str | None = Query(None, description="due_date, peso o created_at"),
     is_descending: bool | None = Query(False),
@@ -147,8 +207,19 @@ async def get_tasks_by_room(
     current_user: Usuario = Depends(get_current_user),
 ):
     room = await session.get(Room, room_id)
-    if not room or room.owner_id != current_user.id:
+    if not room:
         raise HTTPException(status_code=404, detail="Hogar no encontrado")
+
+    is_owner = (room.owner_id == current_user.id)
+    if not is_owner:
+        member_res = await session.exec(
+            select(RoomMember).where(
+                RoomMember.room_id == room_id,
+                RoomMember.user_id == current_user.id,
+            )
+        )
+        if not member_res.one_or_none():
+            raise HTTPException(status_code=404, detail="Hogar no encontrado")
 
     tag_result = await session.exec(
         select(Tag).where(Tag.nombre == room.nombre, Tag.user_id == current_user.id)
@@ -164,12 +235,16 @@ async def get_tasks_by_room(
         completadas=completadas,
         desde=desde,
         hasta=hasta,
+        due_date_from=due_date_from,
+        due_date_to=due_date_to,
         search=search,
         order_by=order_by,
         is_descending=is_descending,
         tag_id=tag_id,
+        room_id=room_id,
         skip=skip,
         limit=limit,
+        is_room_scoped=True,
     )
 
 async def _get_task_with_access(
@@ -184,6 +259,7 @@ async def _get_task_with_access(
         .options(
             selectinload(Task.colaboradores),
             selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta),
+            selectinload(Task.subtasks),
         )
         .where(
             Task.id == task_id,
@@ -197,6 +273,16 @@ async def _get_task_with_access(
 
     is_owner = (task.user_id == current_user.id)
     is_collaborator = any(c.user_id == current_user.id for c in task.colaboradores)
+
+    if not is_collaborator and allow_collaborator and task.room_id:
+        room_member_res = await session.exec(
+            select(RoomMember).where(
+                RoomMember.room_id == task.room_id,
+                RoomMember.user_id == current_user.id,
+            )
+        )
+        if room_member_res.first() is not None:
+            is_collaborator = True
 
     if not is_owner and not (allow_collaborator and is_collaborator):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para acceder a esta tarea")
@@ -264,6 +350,14 @@ async def create_task(
 
     session.add(history_entry)
     await session.commit()
+
+    if new_task.room_id:
+        await event_broadcaster.broadcast(
+            new_task.room_id,
+            "TASK_CREATED",
+            TaskRead.model_validate(new_task).model_dump(mode="json"),
+        )
+
     return new_task
 
 @router.post("/assign", response_model=TaskAssignmentRead, status_code=201, summary="Asignar tarea", description="Asigna una tarea a otro usuario.")
@@ -458,6 +552,11 @@ async def update_task(
     if not changes:
         return task
 
+    if "completed" in changes:
+        task.estado = EstadoTarea.DONE if task.completed else EstadoTarea.TODO
+    elif "estado" in changes:
+        task.completed = (task.estado == EstadoTarea.DONE)
+
     task.updated_at = datetime.now(UTC)
     session.add(task)
 
@@ -472,6 +571,17 @@ async def update_task(
 
     await session.commit()
     await session.refresh(task)
+
+    if task.completed:
+        await award_task_points(task, current_user, session)
+
+    if task.room_id:
+        await event_broadcaster.broadcast(
+            task.room_id,
+            "TASK_UPDATED",
+            TaskRead.model_validate(task).model_dump(mode="json"),
+        )
+
 
     return task
 
@@ -519,6 +629,13 @@ async def delete_task(
     session.add(history)
     await session.commit()
 
+    if task.room_id:
+        await event_broadcaster.broadcast(
+            task.room_id,
+            "TASK_DELETED",
+            {"id": str(task.id), "task_id": str(task.id), "room_id": str(task.room_id)},
+        )
+
 class UpdateTaskStatus(BaseModel):
     estado: EstadoTarea
 
@@ -556,6 +673,11 @@ async def patch_task(
         for key, value in update_data.items():
             setattr(task, key, value)
 
+        if "completed" in update_data and update_data["completed"] is not None:
+            task.estado = EstadoTarea.DONE if update_data["completed"] else EstadoTarea.TODO
+        elif "estado" in update_data and update_data["estado"] is not None:
+            task.completed = (update_data["estado"] == EstadoTarea.DONE)
+
         task.updated_at = datetime.now(UTC)
 
         session.add(task)
@@ -569,6 +691,17 @@ async def patch_task(
         session.add(history)
         await session.commit()
         await session.refresh(task)
+
+        if task.completed:
+            await award_task_points(task, current_user, session)
+
+        if task.room_id:
+            await event_broadcaster.broadcast(
+                task.room_id,
+                "TASK_UPDATED",
+                TaskRead.model_validate(task).model_dump(mode="json"),
+            )
+
 
         return task
     except HTTPException:
@@ -607,6 +740,7 @@ async def patch_task_status(
             raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
         task.estado = payload.estado
+        task.completed = (payload.estado == EstadoTarea.DONE)
         task.updated_at = datetime.now(UTC)
 
         session.add(task)
@@ -620,6 +754,17 @@ async def patch_task_status(
         session.add(history)
         await session.commit()
         await session.refresh(task)
+
+        if task.completed:
+            await award_task_points(task, current_user, session)
+
+        if task.room_id:
+            await event_broadcaster.broadcast(
+                task.room_id,
+                "TASK_UPDATED",
+                TaskRead.model_validate(task).model_dump(mode="json"),
+            )
+
 
         return task
     except HTTPException:
@@ -675,6 +820,14 @@ async def advance_task(
 
     await session.commit()
     await session.refresh(new_task)
+
+    if new_task.room_id:
+        await event_broadcaster.broadcast(
+            new_task.room_id,
+            "TASK_UPDATED",
+            TaskRead.model_validate(new_task).model_dump(mode="json"),
+        )
+
     return new_task
 
 

@@ -4,10 +4,14 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import Select from "react-select";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
 import { useTheme } from "../context/ThemeContext";
+import { useToast } from "../context/ToastContext";
 import { getCurrentRoomId } from "../utils/room";
 import { getModernSelectStyles } from "../utils/selectStyles";
 import { Card } from "./ui/Card";
 import { Button } from "./ui/Button";
+import TaskChecklist from "./tasks/TaskChecklist";
+import TaskCommentsSection from "./tasks/TaskCommentsSection";
+import TaskAttachmentsSection from "./tasks/TaskAttachmentsSection";
 import type { Tag } from "../types/task";
 import {
   LuSparkles,
@@ -16,6 +20,9 @@ import {
   LuRepeat,
   LuTag,
   LuLayers,
+  LuListChecks,
+  LuPlus,
+  LuTrash2,
 } from "react-icons/lu";
 
 interface AISuggestion {
@@ -42,6 +49,17 @@ const TaskForm = () => {
   const navigate = useNavigate();
   const { notifyUpdate } = useTaskUpdate();
   const { theme } = useTheme();
+  const { toast } = useToast();
+
+  const [draftSubtasks, setDraftSubtasks] = useState<string[]>([]);
+  const [draftSubtaskInput, setDraftSubtaskInput] = useState("");
+
+  const handleAddDraftSubtask = () => {
+    const val = draftSubtaskInput.trim();
+    if (!val) return;
+    setDraftSubtasks((prev) => [...prev, val]);
+    setDraftSubtaskInput("");
+  };
 
   const today = new Date().toISOString().split("T")[0];
   const [dateError, setDateError] = useState("");
@@ -175,13 +193,31 @@ const TaskForm = () => {
         }
       }
 
+      let createdTaskId = taskId;
       if (taskId) {
         await api.put(`/tasks/${taskId}`, payload);
       } else {
-        await api.post("/tasks", payload);
+        const res = await api.post<{ id: string }>("/tasks", payload);
+        createdTaskId = res.data.id;
+      }
+
+      if (!taskId && createdTaskId && draftSubtasks.length > 0) {
+        for (let i = 0; i < draftSubtasks.length; i++) {
+          try {
+            await api.post(`/tasks/${createdTaskId}/subtasks`, {
+              titulo: draftSubtasks[i],
+              orden: i,
+            });
+          } catch (stErr) {
+            console.error("Error al asociar subtarea inicial:", stErr);
+          }
+        }
       }
 
       notifyUpdate();
+      toast.success(
+        taskId ? "Tarea actualizada correctamente" : "Tarea creada correctamente"
+      );
       navigate("/tasks");
     } catch (err: unknown) {
       console.error(err);
@@ -456,6 +492,114 @@ const TaskForm = () => {
               placeholder="Seleccionar o buscar etiquetas..."
             />
           </div>
+
+          {/* Subtareas / Checklist */}
+          {taskId ? (
+            <div className="mb-4">
+              <label
+                className="form-label fw-semibold d-flex align-items-center gap-1 mb-2"
+                style={{ fontSize: "13px" }}
+              >
+                <LuListChecks size={15} className="text-primary" />
+                <span>Subtareas y Checklist</span>
+              </label>
+              <TaskChecklist taskId={taskId} />
+
+              <div className="mt-4 pt-3 border-top">
+                <TaskCommentsSection taskId={taskId} />
+              </div>
+
+              <div className="mt-4 pt-3 border-top">
+                <TaskAttachmentsSection taskId={taskId} />
+              </div>
+            </div>
+          ) : (
+            <div className="mb-4">
+              <label
+                className="form-label fw-semibold d-flex align-items-center gap-1 mb-1"
+                style={{ fontSize: "13px" }}
+              >
+                <LuListChecks size={15} className="text-primary" />
+                <span>Subtareas iniciales (opcional)</span>
+              </label>
+              <p className="text-muted small mb-2">
+                Añade pasos o ítems para este trabajo antes de crearlo.
+              </p>
+              <div className="d-flex gap-2 mb-2">
+                <input
+                  type="text"
+                  className="form-control"
+                  style={{
+                    borderRadius: "10px",
+                    borderColor: "var(--border-default)",
+                    backgroundColor: "var(--bg-subtle)",
+                    color: "var(--text-main)",
+                    minHeight: "40px",
+                    fontSize: "13px",
+                  }}
+                  value={draftSubtaskInput}
+                  onChange={(e) => setDraftSubtaskInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddDraftSubtask();
+                    }
+                  }}
+                  placeholder="Escribe una subtarea y presiona Enter..."
+                  disabled={isSubmitting}
+                  maxLength={100}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  onClick={handleAddDraftSubtask}
+                  disabled={!draftSubtaskInput.trim() || isSubmitting}
+                >
+                  <LuPlus size={15} />
+                  <span>Añadir</span>
+                </Button>
+              </div>
+
+              {draftSubtasks.length > 0 && (
+                <div
+                  className="d-flex flex-column gap-1 p-2 rounded"
+                  style={{
+                    backgroundColor: "var(--bg-subtle)",
+                    border: "1px solid var(--border-default)",
+                  }}
+                >
+                  {draftSubtasks.map((st, idx) => (
+                    <div
+                      key={idx}
+                      className="d-flex align-items-center justify-content-between px-3 py-2 rounded"
+                      style={{
+                        backgroundColor: "var(--bg-surface)",
+                        border: "1px solid var(--border-default)",
+                        fontSize: "13px",
+                      }}
+                    >
+                      <span className="text-truncate">
+                        <span className="text-muted me-2">#{idx + 1}</span>
+                        {st}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-link text-danger p-0"
+                        onClick={() =>
+                          setDraftSubtasks((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        disabled={isSubmitting}
+                        title="Eliminar subtarea"
+                      >
+                        <LuTrash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Switch de Tarea Recurrente */}
           <div className="form-check form-switch mb-4 d-flex align-items-center gap-2 ps-0">

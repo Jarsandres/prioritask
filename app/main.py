@@ -21,26 +21,32 @@ logger = logging.getLogger(__name__)
 
 async def _run_recurrence_advance() -> None:
     """Open a session and advance all overdue recurring tasks."""
+    from app.services.lock import distributed_lock
     from app.services.recurrence import advance_recurring_task
 
-    async with async_session() as session:
-        now = datetime.now(UTC)
-        result = await session.exec(
-            select(Task)
-            .options(selectinload(Task.recurrence_rule))  # type: ignore[arg-type]
-            .where(
-                Task.is_recurring == True,
-                Task.completed == False,
-                Task.due_date <= now,
-                Task.deleted_at.is_(None),
+    async with distributed_lock("recurrence_advance_scheduler", timeout_seconds=60) as acquired:
+        if not acquired:
+            logger.info("Recurrence advance skipped: lock held by another worker.")
+            return
+
+        async with async_session() as session:
+            now = datetime.now(UTC)
+            result = await session.exec(
+                select(Task)
+                .options(selectinload(Task.recurrence_rule))  # type: ignore[arg-type]
+                .where(
+                    Task.is_recurring == True,
+                    Task.completed == False,
+                    Task.due_date <= now,
+                    Task.deleted_at.is_(None),
+                )
             )
-        )
-        tasks = result.all()
-        for task in tasks:
-            try:
-                await advance_recurring_task(task, session)
-            except Exception:
-                logger.exception("Error advancing recurring task %s", task.id)
+            tasks = result.all()
+            for task in tasks:
+                try:
+                    await advance_recurring_task(task, session)
+                except Exception:
+                    logger.exception("Error advancing recurring task %s", task.id)
 
 
 async def _recurrence_scheduler() -> None:
@@ -78,6 +84,10 @@ tags_metadata = [
     {
         "name": "Gestión de tareas",
         "description": "📋 Ciclo de vida completo de tareas, asignación a colaboradores, filtrado y auditoría de eventos.",
+    },
+    {
+        "name": "Subtareas",
+        "description": "☑️ Gestión de listas de verificación (checklists) y subtareas asociadas a tareas.",
     },
     {
         "name": "Tareas con IA",

@@ -3,7 +3,93 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## 🚀 Versión 1.2.0 (Hardening, Tiempo Real, Analítica, Búsqueda FTS, Gamificación, Adjuntos, GDPR & E2E — Sprints 6 a 10) — [2026-10-07]
+
+### 🛡️ Sprint 6: Remediación Crítica, Subtareas y Hardening SAST
+- **[SEC-040] Remediación Crítica de Rate Limiter (`app/core/rate_limit.py`)**:
+  - Prevención de bypass por cabeceras `X-Forwarded-For` no confiables mediante validación estricta de IPs y soporte para proxies seguros.
+  - Desacoplamiento de almacenamiento de marcas de tiempo y control de concurrencia thread-safe con ventana deslizante determinista.
+- **[SUB-010] Modelo Relacional SubTask con Gobernanza Soft-Delete (`app/models/subtask.py`)**:
+  - Creación del modelo `SubTask(SQLModel, table=True)` con campos `id`, `tarea_id`, `titulo`, `completada`, `created_at`, `updated_at` y `deleted_at`.
+  - Migraciones Alembic `4a781b2c9e31_add_subtask_model.py` y `b8c41d9e2f50_add_deleted_at_to_subtask.py` con índice parcial en SQLite y PostgreSQL para títulos activos reutilizables.
+- **[SUB-020] Endpoints y Checklists Reactivos (`app/api/v1/endpoints/subtasks.py`, `TaskChecklist.tsx`)**:
+  - Endpoints CRUD completos `/api/v1/tasks/{task_id}/subtasks` con protección IDOR estricta contra acceso no autorizado.
+  - Componente frontend interactivo `TaskChecklist.tsx` con marcado instantáneo de progreso y feedback visual retro.
+- **[UI-060] Unificación del Sistema de Toasts**:
+  - Consolidación de alertas y mensajes de feedback visual con estética retro pixel-art y temporización controlada.
+- **[SEC-SAST] Pipeline SAST con `pip-audit` y `npm audit` (`.github/workflows/ci.yml`)**:
+  - Integración de escaneos estáticos automatizados contra bases de datos de vulnerabilidades conocidas (CVE) para dependencias de backend y frontend en cada Pull Request.
+
+### ⚡ Sprint 7: Hub SSE en Tiempo Real, Sincronización y Vista Calendario
+- **[REAL-010] Hub Server-Sent Events (SSE) en Tiempo Real (`app/services/events.py`, `app/api/v1/endpoints/rooms.py`)**:
+  - Implementación de `RoomEventBroadcaster` con canales asíncronos en memoria (`asyncio.Queue`) segregados por identificador de hogar (`room_id`).
+  - Endpoint `GET /api/v1/rooms/{room_id}/events` emitiendo eventos de ciclo de vida (`task_created`, `task_updated`, `task_deleted`, `comment_created`) con heartbeat keep-alive automático para prevenir desconexiones por inactividad.
+- **[SYNC-010] Cliente Reactivo Multi-Pestaña (`src/hooks/useRoomEvents.ts`)**:
+  - Hook reactivo frontend para consumo de SSE con reconexión exponencial y difusión de eventos a través de `BroadcastChannel` para sincronización instantánea entre pestañas del navegador sin duplicar conexiones HTTP.
+- **[VIEW-010] Vista Calendario / Agenda Cronológica (`TaskCalendarView.tsx`, `TaskViewSwitcher.tsx`)**:
+  - Módulo de visualización en vista de cuadrícula mensual y agenda semanal, ordenando tareas según fecha límite (`due_date`) y nivel de urgencia/prioridad.
+- **[COM-010 / COM-020] Notas y Comentarios Relacionales (`app/models/comment.py`, `app/api/v1/endpoints/comments.py`, `TaskCommentsSection.tsx`)**:
+  - Modelo relacional `TaskComment` y migración Alembic `e9d52f1a8c30_add_taskcomment_model.py`.
+  - Endpoints `/api/v1/tasks/{task_id}/comments` protegidos con validación IDOR y preservación de autoría inmutable.
+  - Sección interactiva en frontend con carga asíncrona de comentarios y formateo retro de fechas.
+
+### 📊 Sprint 8: Infraestructura Escalable, Analítica y Resiliencia Distribuida
+- **[INFRA-010] Connection Pooling en PostgreSQL/SQLAlchemy (`app/db/session.py`, `app/core/config.py`)**:
+  - Configuración optimizada de `create_async_engine` con `pool_pre_ping=True`, tamaño de pool (`pool_size=10`), desbordamiento (`max_overflow=20`), timeout (`pool_timeout=30s`) y reciclaje periódico (`pool_recycle=1800s`), manteniendo compatibilidad transparente con `aiosqlite` en entornos locales y tests.
+- **[DIST-010] Rate Limiter Hexagonal y Distributed Lock con Redis/Memoria (`app/services/lock.py`, `app/core/rate_limit.py`)**:
+  - Patrón hexagonal con adaptadores para backend distribuido (Redis vía `redis.asyncio`) y fallback transparente en memoria para entornos autónomos o desarrollo local.
+  - Implementación de locks distribuidos con expiración TTL para evitar condiciones de carrera en operaciones críticas.
+- **[ANLY-010 / ANLY-020] Analítica de Hogar (`app/schemas/analytics.py`, `app/api/v1/endpoints/rooms.py`, `RoomAnalyticsModal.tsx`)**:
+  - Endpoint `GET /api/v1/rooms/{room_id}/analytics` calculando distribución por prioridad, tasa de compleción global, tiempos promedio y ranking de colaboración por conviviente.
+  - Modal interactivo de analítica con gráficos de barra en CSS puro y estética pixel-art.
+- **[LOAD-010] PWA Offline-First y Suite Locust (`public/manifest.webmanifest`, `useNetworkStatus.ts`, `OfflineBanner.tsx`, `tests/load/locustfile.py`)**:
+  - Manifiesto de PWA configurable para instalación móvil y de escritorio, hook de detección de conectividad en tiempo real y banner visual de trabajo offline.
+  - Suite de pruebas de carga Locust emulando usuarios concurrentes realizando operaciones concurrentes en la API.
+
+### 🔍 Sprint 9: Motor de Búsqueda FTS, UX Turbo y Gamificación Retro
+- **[FTS-010] Motor de Búsqueda FTS Ponderado (`app/services/search.py`, `app/api/v1/endpoints/rooms.py`)**:
+  - Búsqueda de texto completo ponderada con normalización de caracteres, soporte para prefijos y cálculo de relevancia (título x3, etiquetas x2, descripción x1).
+  - Endpoint `GET /api/v1/rooms/{room_id}/search` con soporte de filtrado opcional por categoría y estado.
+- **[CMD-010] Command Palette Global Ctrl+K (`CommandPaletteModal.tsx`, `CommandPaletteModal.css`)**:
+  - Paleta de comandos invocable con `Ctrl+K` / `Cmd+K` para navegación instantánea entre hogares, búsqueda en vivo de tareas y ejecución de atajos rápidos con navegación por teclado accesible.
+- **[GAME-010] Gamificación Anti Double-Spending y Rachas (`app/models/gamification.py`, `app/services/gamification.py`, `app/api/v1/endpoints/gamification.py`)**:
+  - Modelos `UserGamificationProfile`, `UserStreak` y `GamificationActionLog` con migración Alembic `f2a71b3e8c40_add_gamification_models.py`.
+  - Otorgamiento de puntos de experiencia (XP) por compleción de tareas según prioridad, cálculo de rachas diarias continuas y salvaguarda estricta contra doble puntuación (*anti double-spending*).
+- **[GAME-020] Celebración Visual Retro con Chiptune y Confeti Pixelado (`retroAudio.ts`, `usePixelConfetti.ts`)**:
+  - Generador de audio chiptune de 8-bits utilizando Web Audio API sin dependencias de audio externas pesadas.
+  - Efecto de partículas de confeti en lienzo HTML5 con gravedad y dispersión pixel-art al completar hitos y tareas.
+- **[E2E-010] Suite Playwright E2E en CI (`prioritask-frontend/e2e/`, `prioritask-frontend/playwright.config.ts`)**:
+  - Configuración e integración de tests End-to-End con Playwright automatizando los flujos de inicio de sesión, creación de tareas, cambio de estado y apertura de paleta de comandos.
+
+### 📎 Sprint 10: Almacenamiento Hexagonal de Adjuntos, GDPR y Optimización Bundle
+- **[ATT-010 / ATT-011 / ATT-012] Almacenamiento Hexagonal y Magic Bytes Zero Trust (`app/services/storage/`, `app/models/attachment.py`, `app/api/v1/endpoints/attachments.py`)**:
+  - Puerto de almacenamiento desacoplado (`StorageService`) con implementación de sistema de archivos local (`LocalStorageService`) y sanitización de nombres de archivo vía UUIDv4.
+  - Validación Zero Trust de tipos de archivo mediante inspección de Magic Bytes binarios reales (`security.py`) impidiendo suplantaciones de extensión (permitidos: JPEG, PNG, WebP, PDF con límite de 10 MB).
+  - Modelo relacional `TaskAttachment`, migración `a9b1c2d3e4f5_add_taskattachment_model.py` y endpoints `/api/v1/tasks/{task_id}/attachments` con control de acceso IDOR estricto.
+- **[ATT-020] Dropzone, Cámara Móvil y Compresión Client-side (`TaskAttachmentsSection.tsx`, `attachmentUtils.ts`)**:
+  - Zona de arrastre dropzone intuitiva, disparador directo de captura con cámara en dispositivos móviles y pipeline en navegador para redimensionar y comprimir imágenes a formato WebP antes de la transmisión.
+- **[ATT-021] Lightbox Retro Pixel-Art (`AttachmentLightboxModal.tsx`)**:
+  - Modal para visualización a pantalla completa de imágenes adjuntas con controles retro de navegación, zoom y descarga segura.
+- **[GDPR-010 / GDPR-020] Exportación GDPR en Streaming y Plantilla de Nevera A4 (`app/api/v1/endpoints/rooms.py`, `FridgeTemplateModal.tsx`)**:
+  - Endpoint `GET /api/v1/rooms/{room_id}/export` generando archivos JSON y CSV en streaming con cabeceras `Content-Disposition`, dando cumplimiento a las normativas de portabilidad de datos GDPR.
+  - Modal y hoja de estilos CSS optimizada para impresión en formato A4 (`@media print`), transformando la lista de tareas en un cuadrante físico retro listo para colocar en la nevera del hogar.
+- **[PERF-010] Code-splitting en Vite (`prioritask-frontend/vite.config.ts`)**:
+  - Reestructuración de la división de paquetes de Vite configurando `manualChunks` dinámicos, reduciendo drásticamente el peso del chunk JavaScript inicial a **183 kB**.
+- **[E2E-020] Suite E2E Ampliada (`prioritask-frontend/e2e/tasks.spec.ts`)**:
+  - Cobertura de tests Playwright para subida de adjuntos, filtrado por calendario, interacción con checklist y exportación de datos.
+
+### 🟢 Quality Gate Consolidado de Release v1.2.0
+- **Backend Test Suite**: **241 pruebas automatizadas** en verde (100% pass rate) en suites unitarias y de integración.
+- **Cobertura de Código**: **69.54%** (superando holgadamente el umbral obligatorio de CI `fail_under = 65%`).
+- **Análisis Estático Backend**: **0 errores y 0 advertencias** con Ruff en `app/` y `tests/`.
+- **Análisis Estático Frontend**: **0 errores y 0 advertencias** con ESLint y TypeScript.
+- **Frontend Bundle**: Compilación limpia en producción con Vite (chunk principal 183 kB).
+- **Auditoría de Seguridad y Zero Trust**: **APROBADA** (verificación estricta contra IDOR, rate limiting hexagonal, validación binaria de magic bytes, protección CWE-942 en CORS y segregación multi-tenancy).
+
+---
+
 ## 🚀 Versión 1.0.0-rc1 (Hardening, CI/CD y Preparación para Producción — Sprint 5) — [2026-09-28]
+
 
 ### 🔄 CI/CD & Automatización de Calidad (DevOps & CI/CD)
 - **[BE-OPS-001] Pipeline Dual en GitHub Actions (`.github/workflows/ci.yml`)**:

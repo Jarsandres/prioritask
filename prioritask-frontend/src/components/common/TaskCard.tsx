@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import type { Task } from "../../types/task";
+import type { Task, Subtask } from "../../types/task";
+import TaskChecklist from "../tasks/TaskChecklist";
+import TaskCommentsSection from "../tasks/TaskCommentsSection";
+import TaskAttachmentsSection from "../tasks/TaskAttachmentsSection";
 import {
   PriorityBadge,
   StatusBadge,
@@ -14,6 +17,9 @@ import {
   LuTrash2,
   LuCalendar,
   LuLoaderCircle,
+  LuListChecks,
+  LuMessageSquare,
+  LuPaperclip,
 } from "react-icons/lu";
 import "../tasks/tasks.css";
 
@@ -44,8 +50,25 @@ export const TaskCard = ({
 }: TaskCardProps) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [showAttachments, setShowAttachments] = useState(false);
+  const [attachmentsCount, setAttachmentsCount] = useState<number | undefined>(task.attachments_count);
+  const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks ?? []);
   const menuRef = useRef<HTMLDivElement>(null);
   const isDone = task.estado === "DONE";
+
+  useEffect(() => {
+    if (task.subtasks) {
+      setSubtasks(task.subtasks);
+    }
+  }, [task.subtasks]);
+
+  const totalSubtasks = subtasks.length > 0 ? subtasks.length : (task.subtasks_count ?? 0);
+  const completedSubtasks =
+    subtasks.length > 0
+      ? subtasks.filter((s) => s.completada).length
+      : (task.subtasks_completed_count ?? 0);
 
   // Manejar clic exterior para cerrar el menú de acciones
   useEffect(() => {
@@ -69,7 +92,7 @@ export const TaskCard = ({
   return (
     <div
       className={`ui-task-card ${isDone ? "task-done" : ""} ${className}`.trim()}
-      draggable={draggable}
+      draggable={draggable && !showChecklist}
       onDragStart={onDragStart}
     >
       {/* Cabecera superior: Badges + Menú contextual de 3 puntos */}
@@ -84,6 +107,62 @@ export const TaskCard = ({
           <PriorityBadge peso={task.peso} />
           <StatusBadge status={task.estado} />
           {task.is_recurring && <RecurringBadge />}
+          {totalSubtasks > 0 && (
+            <button
+              type="button"
+              className={`ui-task-subtasks-badge ${showChecklist ? "active" : ""} ${
+                completedSubtasks === totalSubtasks && totalSubtasks > 0 ? "all-done" : ""
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowChecklist((prev) => !prev);
+              }}
+              title={showChecklist ? "Ocultar subtareas" : "Ver subtareas"}
+              aria-label={`Subtareas: ${completedSubtasks} de ${totalSubtasks} completadas`}
+              aria-expanded={showChecklist}
+            >
+              <LuListChecks size={13} aria-hidden="true" />
+              <span>
+                {completedSubtasks}/{totalSubtasks}
+              </span>
+            </button>
+          )}
+
+          {/* Badge de Notas y Comentarios */}
+          <button
+            type="button"
+            className={`ui-task-comments-badge ${showComments ? "active" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowComments((prev) => !prev);
+            }}
+            title={showComments ? "Ocultar notas" : "Ver notas y comentarios"}
+            aria-label="Notas y comentarios de la tarea"
+            aria-expanded={showComments}
+          >
+            <LuMessageSquare size={13} aria-hidden="true" />
+            <span>Notas</span>
+          </button>
+
+          {/* Badge compacto de Adjuntos y Evidencias */}
+          <button
+            type="button"
+            className={`ui-task-attachments-badge ${showAttachments ? "active" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAttachments((prev) => !prev);
+            }}
+            title={showAttachments ? "Ocultar adjuntos" : "Ver adjuntos y evidencias fotográficas"}
+            aria-label="Adjuntos y evidencias de la tarea"
+            aria-expanded={showAttachments}
+          >
+            <LuPaperclip size={13} aria-hidden="true" />
+            <span>
+              {attachmentsCount !== undefined && attachmentsCount > 0
+                ? `📎 ${attachmentsCount}`
+                : "Adjuntos"}
+            </span>
+          </button>
         </div>
 
         {(onEdit || onDelete) && (
@@ -104,6 +183,48 @@ export const TaskCard = ({
 
             {menuOpen && (
               <div className="ui-task-menu-menu" role="menu">
+                <button
+                  type="button"
+                  className="ui-task-menu-item"
+                  role="menuitem"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    setShowChecklist((prev) => !prev);
+                  }}
+                  disabled={isDeleting || isCompleting}
+                >
+                  <LuListChecks size={14} aria-hidden="true" />
+                  <span>{showChecklist ? "Ocultar subtareas" : "Subtareas"}</span>
+                </button>
+                <button
+                  type="button"
+                  className="ui-task-menu-item"
+                  role="menuitem"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    setShowComments((prev) => !prev);
+                  }}
+                  disabled={isDeleting || isCompleting}
+                >
+                  <LuMessageSquare size={14} aria-hidden="true" />
+                  <span>{showComments ? "Ocultar notas" : "Notas y Comentarios"}</span>
+                </button>
+                <button
+                  type="button"
+                  className="ui-task-menu-item"
+                  role="menuitem"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    setShowAttachments((prev) => !prev);
+                  }}
+                  disabled={isDeleting || isCompleting}
+                >
+                  <LuPaperclip size={14} aria-hidden="true" />
+                  <span>{showAttachments ? "Ocultar adjuntos" : "Adjuntos y Evidencias"}</span>
+                </button>
                 {onEdit && (
                   <button
                     type="button"
@@ -169,6 +290,43 @@ export const TaskCard = ({
         <p className="ui-task-desc" title={task.descripcion}>
           {task.descripcion}
         </p>
+      )}
+
+      {/* Checklist desplegable integrado */}
+      {showChecklist && (
+        <div
+          className="ui-task-checklist-wrapper mb-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TaskChecklist
+            taskId={task.id}
+            initialSubtasks={subtasks.length > 0 ? subtasks : undefined}
+            onSubtasksChange={(updated) => setSubtasks(updated)}
+          />
+        </div>
+      )}
+
+      {/* Sección de notas y comentarios integrada */}
+      {showComments && (
+        <div
+          className="ui-task-comments-wrapper mb-2 p-2 rounded border bg-surface shadow-xs"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TaskCommentsSection taskId={task.id} />
+        </div>
+      )}
+
+      {/* Sección de adjuntos y evidencias integrada */}
+      {showAttachments && (
+        <div
+          className="ui-task-attachments-wrapper mb-2 p-2 rounded border bg-surface shadow-xs"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TaskAttachmentsSection
+            taskId={task.id}
+            onAttachmentsCountChange={(count) => setAttachmentsCount(count)}
+          />
+        </div>
       )}
 
       {/* Footer meta: Fecha de vencimiento y Tags */}
