@@ -62,14 +62,22 @@ async def _recurrence_scheduler() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan: start and cancel the recurrence scheduler."""
-    task = asyncio.create_task(_recurrence_scheduler())
-    yield
-    task.cancel()
+    """Manage application lifespan: start and cancel the recurrence scheduler, event broadcaster and AI client."""
+    from app.services.AI.ollama_client import close_ollama_client
+    from app.services.events import event_broadcaster
+
+    recurrence_task = asyncio.create_task(_recurrence_scheduler())
+    await event_broadcaster.start()
     try:
-        await task
-    except asyncio.CancelledError:
-        pass
+        yield
+    finally:
+        recurrence_task.cancel()
+        try:
+            await recurrence_task
+        except asyncio.CancelledError:
+            pass
+        await event_broadcaster.stop()
+        await close_ollama_client()
 
 
 tags_metadata = [
@@ -176,7 +184,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Registrar CORSMiddleware antes de cualquier otra configuración
+from app.core.middleware import SecurityHeadersMiddleware
+
+# Registrar middleware de cabeceras de seguridad y CORS
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,

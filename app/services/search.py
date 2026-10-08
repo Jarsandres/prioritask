@@ -110,6 +110,7 @@ class SearchEngineService:
             Task.id.in_(subtask_subquery),
         )
 
+        candidate_limit = min(max(limit * 5, 50), 200)
         stmt = (
             select(Task)
             .options(
@@ -121,6 +122,7 @@ class SearchEngineService:
                 security_condition,
                 candidate_filter,
             )
+            .limit(candidate_limit)
         )
 
         candidates = (await session.exec(stmt)).all()
@@ -193,3 +195,80 @@ class SearchEngineService:
         results = scored_items[:limit]
 
         return TaskSearchResponse(total_matches=total_matches, results=results)
+
+    @classmethod
+    async def autocomplete(
+        cls,
+        *,
+        query: str,
+        current_user: Usuario,
+        session: AsyncSession,
+        room_id: UUID | None = None,
+        limit: int = 10,
+    ) -> list[str]:
+        """Autocompletado rápido de prefijos indexados para Command Palette."""
+        sanitized = query[:50].strip()
+        if not sanitized:
+            return []
+
+        esc = _escape_sql_wildcards(sanitized)
+
+        # 1. Obtener salas accesibles
+        owned_rooms_stmt = select(Room.id).where(Room.owner_id == current_user.id)
+        member_rooms_stmt = select(RoomMember.room_id).where(RoomMember.user_id == current_user.id)
+
+        owned_room_ids = set((await session.exec(owned_rooms_stmt)).all())
+        member_room_ids = set((await session.exec(member_rooms_stmt)).all())
+        accessible_room_ids = owned_room_ids.union(member_room_ids)
+
+        if room_id is not None:
+            if room_id not in accessible_room_ids:
+                return []
+            security_condition = Task.room_id == room_id
+        else:
+            if accessible_room_ids:
+                security_condition = or_(
+                    Task.user_id == current_user.id,
+                    Task.room_id.in_(accessible_room_ids),
+                )
+            else:
+                security_condition = Task.user_id == current_user.id
+
+        # 2. Sugerencias de títulos de tareas por prefijo / coincidencia
+        task_stmt = (
+            select(Task.titulo)
+            .where(
+                Task.deleted_at.is_(None),
+                security_condition,
+                or_(
+                    Task.titulo.ilike(f"{esc}%", escape="\\"),
+                    Task.titulo.ilike(f"%{esc}%", escape="\\"),
+                ),
+            )
+            .limit(limit)
+        )
+        task_titles = (await session.exec(task_stmt)).all()
+
+        # 3. Sugerencias de etiquetas por prefijo
+        tag_stmt = (
+            select(Tag.nombre)
+            .where(
+                Tag.user_id == current_user.id,
+                Tag.nombre.ilike(f"{esc}%", escape="\\"),
+            )
+            .limit(limit)
+        )
+        tag_names = (await session.exec(tag_stmt)).all()
+
+        # Combinar resultados eliminando duplicados manteniendo el orden
+        seen = set()
+        suggestions: list[str] = []
+        for t in list(task_titles) + [f"#{name}" for name in tag_names]:
+            if t and t not in seen:
+                seen.add(t)
+                suggestions.append(t)
+                if len(suggestions) >= limit:
+                    break
+
+        return suggestions
+
