@@ -39,79 +39,90 @@ export async function compressImageToWebP(
   }
 
   return new Promise((resolve) => {
-    const reader = new FileReader();
+    let objectUrl: string | null = null;
+    try {
+      objectUrl = URL.createObjectURL(file);
+    } catch {
+      // Fallback si URL.createObjectURL falla en entornos restringidos
+      resolve(file);
+      return;
+    }
 
-    reader.onload = (event) => {
-      const img = new Image();
-
-      img.onload = () => {
-        try {
-          let { width, height } = img;
-
-          // Redimensionar proporcionalmente si supera maxDimension
-          if (width > maxDimension || height > maxDimension) {
-            if (width > height) {
-              height = Math.round((height * maxDimension) / width);
-              width = maxDimension;
-            } else {
-              width = Math.round((width * maxDimension) / height);
-              height = maxDimension;
-            }
-          }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve(file);
-            return;
-          }
-
-          // Dibujar en el canvas redimensionado
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Convertir a WebP
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) {
-                resolve(file);
-                return;
-              }
-
-              // Generar nombre con extensión .webp
-              const baseName = file.name.replace(/\.[^/.]+$/, "");
-              const webpFilename = `${baseName}.webp`;
-
-              const compressedFile = new File([blob], webpFilename, {
-                type: "image/webp",
-                lastModified: Date.now(),
-              });
-
-              resolve(compressedFile);
-            },
-            "image/webp",
-            quality
-          );
-        } catch (err) {
-          console.warn("Fallo en compresión WebP, usando archivo original:", err);
-          resolve(file);
-        }
-      };
-
-      img.onerror = () => {
-        resolve(file);
-      };
-
-      img.src = event.target?.result as string;
+    const cleanup = () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+      }
     };
 
-    reader.onerror = () => {
+    const img = new Image();
+
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+
+        // Redimensionar proporcionalmente si supera maxDimension
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          cleanup();
+          resolve(file);
+          return;
+        }
+
+        // Dibujar en el canvas redimensionado
+        ctx.drawImage(img, 0, 0, width, height);
+        // Revocación inmediata tras el render en canvas para liberar memoria de la imagen cargada
+        cleanup();
+
+        // Convertir a WebP
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+
+            // Generar nombre con extensión .webp
+            const baseName = file.name.replace(/\.[^/.]+$/, "");
+            const webpFilename = `${baseName}.webp`;
+
+            const compressedFile = new File([blob], webpFilename, {
+              type: "image/webp",
+              lastModified: Date.now(),
+            });
+
+            resolve(compressedFile);
+          },
+          "image/webp",
+          quality
+        );
+      } catch (err) {
+        cleanup();
+        console.warn("Fallo en compresión WebP, usando archivo original:", err);
+        resolve(file);
+      }
+    };
+
+    img.onerror = () => {
+      cleanup();
       resolve(file);
     };
 
-    reader.readAsDataURL(file);
+    img.src = objectUrl;
   });
 }
 

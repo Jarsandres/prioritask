@@ -3,6 +3,55 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## 🚀 Versión 1.3.0 (Calidad, Hardening Arquitectónico, Optimización de Testing & Vitest) — [2026-10-08]
+
+### ⚡ Rendimiento & Testing Backend
+- **[PERF-TEST-001] Aceleración Drástica de la Suite de Pruebas Backend (~37.1s, -70% tiempo total)**:
+  - Optimización de hashing en pruebas sobreescribiendo rondas de Bcrypt a `rounds=4` en fixture global (`tests/conftest.py`), reduciendo latencia criptográfica en cientos de llamadas.
+  - Aislamiento de llamadas externas en tests de endpoints IA (`tests/integration/test_ai_endpoints.py`) mediante mocks deterministas asíncronos para `OllamaClient.generate`, `generate_priority`, `rewrite_title` y `organize_tasks`.
+  - Cierre inmediato y ordenado de streams Server-Sent Events en pruebas de integración (`tests/integration/test_sse_events.py`) utilizando `asyncio.wait_for(..., timeout=0.1)` y cancelación controlada de tareas en background para eliminar esperas de sockets.
+  - **255 tests en verde (100% pass rate)** ejecutados de forma hermética y determinista.
+
+### 🛡️ Endurecimiento Arquitectónico (6 Correcciones Críticas)
+- **[HARD-001] Fix de Serialización en `TaskRead` para Tareas Vencidas (`app/schemas/task.py`)**:
+  - Corrección en el serializador Pydantic de `TaskRead` para aceptar correctamente `due_date` retroactivo en tareas vencidas sin generar fallos de validación al recuperar tareas históricas o expiradas.
+- **[HARD-002] Transaccionalidad y Commit Atómico en Subtareas (`app/api/v1/endpoints/subtasks.py`)**:
+  - Garantía de persistencia atómica con commits transaccionales explícitos en operaciones de creación, actualización y eliminación de subtareas (`SubTask`), previniendo estados inconsistentes entre tareas padre y subtareas.
+- **[HARD-003] Compensación Física `delete_file` en Almacenamiento Hexagonal (`app/api/v1/endpoints/attachments.py`)**:
+  - Implementación del patrón de compensación que ejecuta la eliminación física segura (`delete_file`) del archivo temporal en el almacenamiento local si ocurre una excepción de base de datos durante la persistencia del registro `TaskAttachment`.
+- **[HARD-004] Validación Estricta de Candados Distribuidos y Código 409 (`app/services/lock.py`, `app/services/gamification.py`)**:
+  - Validación explícita de `acquired=True` al intentar adquirir locks distribuidos concurrentes, devolviendo `HTTP 409 Conflict` cuando el candado se encuentra ocupado por otro proceso en operaciones críticas como la consolidación de gamificación.
+- **[HARD-005] Sanitización de Comodines SQL y Soporte de Emojis en FTS (`app/services/search.py`)**:
+  - Sanitización de comodines de escape SQL (`%`, `_`) para prevenir inyecciones o lecturas no deseadas en consultas `LIKE`/`ILIKE`.
+  - Normalización de términos de búsqueda con compatibilidad para caracteres multibyte y emojis en el ranking ponderado de búsqueda de texto completo.
+- **[HARD-006] Integridad Referencial en Eliminación de Salas/Hogares (`app/api/v1/endpoints/rooms.py`)**:
+  - Endurecimiento de la cascada de eliminación de `Room` para garantizar la limpieza consistente de registros asociados (`RoomMember`, `Task`, `TaskAttachment`, `TaskHistory`), previniendo violaciones de clave foránea.
+
+### 🧪 Infraestructura de Pruebas Frontend (Vitest & RTL)
+- **[FE-TEST-001] Adopción de Vitest y React Testing Library (`vitest.config.ts`, `src/test/setup.ts`, `package.json`)**:
+  - Configuración del entorno de pruebas unitarias en `prioritask-frontend` con Vitest y JSDOM.
+  - Script `npm run test:unit` para ejecución en CI/CD local.
+  - Creación de 5 suites unitarias completas:
+    - `src/__tests__/api.test.ts`: Validación de interceptores Axios y mapeo de errores de red/autenticación.
+    - `src/utils/__tests__/attachmentUtils.test.ts`: Validación de cálculo de tamaños legibles, validación de extensiones y compresión WebP.
+    - `src/utils/__tests__/retroAudio.test.ts`: Validación de sintetizador Web Audio API, desbloqueo pasivo de audio y silenciado.
+    - `src/components/tasks/__tests__/TaskChecklist.test.tsx`: Validación de componentes interactivos de subtareas, creación y toggle optimista.
+    - `src/components/tasks/__tests__/AttachmentLightboxModal.test.tsx`: Validación de modal lightbox retro, rotación/zoom, visor PDF y atajos de teclado.
+- **[FE-HARD-001] Mapeo de Errores Axios, Memoria WebP y Audio Unlocker (`src/api.ts`, `attachmentUtils.ts`, `retroAudio.ts`)**:
+  - Mapeo unificado de códigos `413 Payload Too Large`, `415 Unsupported Media Type` y errores de conectividad offline.
+  - Prevención de fugas de memoria con `URL.revokeObjectURL` en previsualizaciones de imágenes y blobs temporales.
+  - Desbloqueo pasivo del `AudioContext` en el primer gesto de usuario para compatibilidad en navegadores móviles (iOS WebKit y Chrome Android).
+
+### 🟢 Métricas Finales & Quality Gate Consolidado
+- **Backend Test Suite**: **255 pruebas automatizadas** en verde (100% pass rate) en solo 37.1s.
+- **Cobertura de Código Backend**: Cobertura global **>82.5%** con análisis de ramas (`--cov-branch`), superando el **>92%** en endpoints de API.
+- **Frontend Test Suite**: **5 suites unitarias (34 pruebas unitarias)** pasando al 100% y suites E2E Playwright activas.
+- **Análisis Estático Backend**: **0 errores y 0 advertencias** con Ruff en `app/` y `tests/`.
+- **Análisis Estático Frontend**: **0 errores y 0 advertencias** con ESLint y TypeScript.
+- **Compilación Frontend**: Build de producción con Vite limpio en ~2.49s.
+
+---
+
 ## 🚀 Versión 1.2.0 (Hardening, Tiempo Real, Analítica, Búsqueda FTS, Gamificación, Adjuntos, GDPR & E2E — Sprints 6 a 10) — [2026-10-07]
 
 ### 🛡️ Sprint 6: Remediación Crítica, Subtareas y Hardening SAST

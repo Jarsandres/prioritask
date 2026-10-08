@@ -21,6 +21,20 @@ class TaskCreate(BaseModel):
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
 
+    @field_validator("due_date", mode="before")
+    def validate_due_date(cls, value):
+        if value:
+            try:
+                value = datetime.fromisoformat(value) if isinstance(value, str) else value
+            except ValueError:
+                raise ValueError("Formato de fecha inválido")
+            # Permitir fechas pasadas en un entorno de pruebas
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=UTC)
+            if value < datetime.now(UTC) and not os.getenv("ALLOW_PAST_DUE_DATES"):
+                raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
+        return value
+
 class TaskRead(BaseModel):
     id: UUID = Field(description="Identificador único de la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
     titulo: str = Field(description="Título de la tarea.", json_schema_extra={"example": "Comprar comida"})
@@ -38,20 +52,6 @@ class TaskRead(BaseModel):
     subtasks: list[SubtaskRead] = Field(default_factory=list, description="Lista de subtareas asociadas")
     subtasks_count: int = Field(default=0, description="Cantidad total de subtareas")
     subtasks_completed_count: int = Field(default=0, description="Cantidad de subtareas completadas")
-
-    @field_validator("due_date", mode="before")
-    def validate_due_date(cls, value):
-        if value:
-            try:
-                value = datetime.fromisoformat(value) if isinstance(value, str) else value
-            except ValueError:
-                raise ValueError("Formato de fecha inválido")
-            # Permitir fechas pasadas en un entorno de pruebas
-            if value.tzinfo is None:
-                value = value.replace(tzinfo=UTC)
-            if value < datetime.now(UTC) and not os.getenv("ALLOW_PAST_DUE_DATES"):
-                raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
-        return value
 
     @model_validator(mode="after")
     def sync_subtasks_counts(self):

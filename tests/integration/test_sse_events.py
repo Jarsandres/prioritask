@@ -69,12 +69,13 @@ async def test_sse_endpoint_stream_reception(async_client: AsyncClient):
                 if len(lines) >= 2:
                     # Enviar evento de cierre para finalizar el generador SSE limpiamente
                     await event_broadcaster.broadcast(UUID(room_id), "close", {})
+                    await response.aclose()
                     break
 
             assert len(lines) >= 2
             assert "event: ping" in lines[0] or "event: ping" in lines[1]
 
-    await asyncio.wait_for(_run(), timeout=5.0)
+    await asyncio.wait_for(_run(), timeout=2.0)
 
 
 @pytest.mark.asyncio

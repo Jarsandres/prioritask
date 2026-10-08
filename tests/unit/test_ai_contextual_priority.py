@@ -65,7 +65,9 @@ async def test_priority_expired_due_date():
         colaboradores=[],
     )
 
-    prioridad, motivo = await evaluar_prioridad_contextual(task)
+    with patch("app.services.AI.priority_classifier.clasificar_prioridad", new_callable=AsyncMock) as mock_ia:
+        mock_ia.return_value = "media"
+        prioridad, motivo = await evaluar_prioridad_contextual(task)
     assert prioridad == "alta"
     assert "fecha límite inminente (<24h)" in motivo.lower()
 

@@ -7,11 +7,13 @@ from uuid import uuid4
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+import app.services.auth as auth_service
 from app import models as _app_models  # noqa: F401
 from app.core.rate_limit import rate_limiter
 from app.db.session import get_session
@@ -22,6 +24,10 @@ from app.models.task import Task
 from app.models.task_assignment import TaskAssignment
 from app.models.user import Usuario
 from app.services.auth import SECRET_KEY, create_access_token, hash_password
+
+# Use minimal bcrypt rounds (4) in test suite for fast password hashing
+auth_service.pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=4)
+
 
 # ---------------------------------------------------------------------------
 # Test engine: single in-memory SQLite shared across all connections

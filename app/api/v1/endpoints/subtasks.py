@@ -65,8 +65,7 @@ async def create_subtask(
         completada=False,
     )
     session.add(subtask)
-    await session.commit()
-    await session.refresh(subtask)
+    await session.flush()
 
     history = TaskHistory(
         task_id=task.id,
@@ -76,6 +75,7 @@ async def create_subtask(
     )
     session.add(history)
     await session.commit()
+    await session.refresh(subtask)
     return subtask
 
 

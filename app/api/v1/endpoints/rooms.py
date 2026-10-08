@@ -311,6 +311,10 @@ async def delete_room(
             detail="Sala no encontrada.",
         )
 
+    members_res = await session.exec(select(RoomMember).where(RoomMember.room_id == room_id))
+    for m in members_res.all():
+        await session.delete(m)
+
     await session.delete(room)
     await session.commit()
 

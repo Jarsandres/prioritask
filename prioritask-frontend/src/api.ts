@@ -14,10 +14,30 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Interceptor de errores para refrescar token si es necesario
+// Interceptor de errores para clasificar fallos y refrescar token si es necesario
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Clasificar errores sin respuesta como desconexión de red
+    if (!error.response && !axios.isCancel(error)) {
+      error.message = "Sin conexión a internet. La acción se canceló";
+    }
+
+    // Clasificar códigos HTTP específicos de carga de archivos y cuota
+    if (error.response?.status === 413) {
+      const msg413 = "El archivo supera el tamaño máximo permitido de 10 MB";
+      error.message = msg413;
+      if (error.response.data && typeof error.response.data === "object") {
+        (error.response.data as { detail?: string }).detail = msg413;
+      }
+    } else if (error.response?.status === 415) {
+      const msg415 = "Formato de archivo no soportado. Suba JPEG, PNG, WebP o PDF";
+      error.message = msg415;
+      if (error.response.data && typeof error.response.data === "object") {
+        (error.response.data as { detail?: string }).detail = msg415;
+      }
+    }
+
     const originalRequest = error.config;
     const isAuthRoute =
       originalRequest?.url?.includes("/auth/login") ||

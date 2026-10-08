@@ -90,7 +90,12 @@ async def award_task_points(
         return 0
 
     lock_name = f"gamification:{task.room_id}:{user.id}"
-    async with distributed_lock(lock_name):
+    async with distributed_lock(lock_name) as acquired:
+        if not acquired:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Operación concurrente en curso. Reintente.",
+            )
         # 1. Comprobación anti-double spending en el libro contable inmutable
         existing_tx = await session.exec(
             select(PointTransaction).where(
@@ -207,7 +212,12 @@ async def redeem_reward(
         )
 
     lock_name = f"gamification:{room_id}:{user.id}"
-    async with distributed_lock(lock_name):
+    async with distributed_lock(lock_name) as acquired:
+        if not acquired:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Operación concurrente en curso. Reintente.",
+            )
         gam = await get_or_create_user_gamification(room_id, user.id, session)
         if gam.points_balance < reward.cost_points:
             raise HTTPException(

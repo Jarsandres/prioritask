@@ -18,6 +18,7 @@ export const setRetroAudioMuted = (muted: boolean): void => {
 };
 
 let sharedAudioContext: AudioContext | null = null;
+let isAudioUnlocked = false;
 
 const getAudioContext = (): AudioContext | null => {
   if (typeof window === "undefined") return null;
@@ -32,6 +33,37 @@ const getAudioContext = (): AudioContext | null => {
   }
   return sharedAudioContext;
 };
+
+/**
+ * Inicializador pasivo con listener único ('pointerdown' y 'touchstart' en window)
+ * que reanuda o inicializa sharedAudioContext en el primer toque del usuario,
+ * previniendo advertencias de Autoplay bloqueado cuando los sonidos se disparan vía SSE.
+ */
+export const unlockRetroAudio = (): void => {
+  if (typeof window === "undefined" || isAudioUnlocked) return;
+
+  const handleUserInteraction = () => {
+    isAudioUnlocked = true;
+    try {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+    } catch {
+      // Ignorar fallos de AudioContext en entornos restringidos
+    }
+    window.removeEventListener("pointerdown", handleUserInteraction);
+    window.removeEventListener("touchstart", handleUserInteraction);
+  };
+
+  window.addEventListener("pointerdown", handleUserInteraction, { once: true, passive: true });
+  window.addEventListener("touchstart", handleUserInteraction, { once: true, passive: true });
+};
+
+// Auto-inicializar pasivamente si estamos en entorno navegador
+if (typeof window !== "undefined") {
+  unlockRetroAudio();
+}
 
 /**
  * Sonido icónico estilo Moneda Game Boy / NES 8-bit al completar tareas.

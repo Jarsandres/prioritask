@@ -17,6 +17,11 @@ from app.schemas.search import SearchResultItem, TaskSearchResponse
 from app.schemas.task import TaskRead
 
 
+def _escape_sql_wildcards(token: str) -> str:
+    """Escapa los comodines SQL '%' y '_' y la barra invertida para búsquedas ILIKE seguras."""
+    return token.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class SearchEngineService:
     """Motor de búsqueda tokenizada y ponderada por relevancia para tareas."""
 
@@ -48,7 +53,7 @@ class SearchEngineService:
         if not sanitized_query:
             return TaskSearchResponse(total_matches=0, results=[])
 
-        tokens = [t.lower() for t in re.findall(r"\w+", sanitized_query) if len(t) > 0]
+        tokens = [t.lower() for t in sanitized_query.split() if t]
         if not tokens:
             return TaskSearchResponse(total_matches=0, results=[])
 
@@ -79,20 +84,23 @@ class SearchEngineService:
         # 3. Filtro de coincidencia en base de datos para recuperar candidatos
         token_conditions = []
         for token in tokens:
-            token_conditions.append(Task.titulo.ilike(f"%{token}%"))
-            token_conditions.append(Task.descripcion.ilike(f"%{token}%"))
+            esc = _escape_sql_wildcards(token)
+            token_conditions.append(Task.titulo.ilike(f"%{esc}%", escape="\\"))
+            token_conditions.append(Task.descripcion.ilike(f"%{esc}%", escape="\\"))
 
         tag_subquery = (
             select(TaskTag.task_id)
             .join(Tag, Tag.id == TaskTag.tag_id)
-            .where(or_(*[Tag.nombre.ilike(f"%{token}%") for token in tokens]))
+            .where(
+                or_(*[Tag.nombre.ilike(f"%{_escape_sql_wildcards(token)}%", escape="\\") for token in tokens])
+            )
         )
 
         subtask_subquery = (
             select(Subtask.task_id)
             .where(
                 Subtask.deleted_at.is_(None),
-                or_(*[Subtask.titulo.ilike(f"%{token}%") for token in tokens]),
+                or_(*[Subtask.titulo.ilike(f"%{_escape_sql_wildcards(token)}%", escape="\\") for token in tokens]),
             )
         )
 

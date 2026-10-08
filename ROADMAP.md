@@ -121,4 +121,18 @@ Fuente de la Verdad única (Single Source of Truth) para la gobernanza, estánda
 - [x] **E2E-020**: Suite E2E ampliada con flujos completos de adjuntos, búsqueda, gamificación y exportación.
 - [x] **Quality Gate Consolidado**: 241 tests backend (100% pass), cobertura >= 65% (69.54%), 0 errores Ruff/ESLint, suite Playwright E2E completa, auditoría de seguridad Zero Trust APROBADA.
 
+### Sprint de Calidad, Hardening y Optimización de Testing — [COMPLETADO ✅]
+- [x] **PERF-TEST-01**: Aceleración drástica de la suite de pruebas backend a ~37.1s (-70% de tiempo de ejecución) optimizando rondas de Bcrypt (`rounds=4` en fixture de conftest), mocks asíncronos para inferencia IA y corte inmediato de streams SSE.
+- [x] **HARD-010**: Endurecimiento arquitectónico de 6 defectos críticos:
+  1. Serialización y deserialización consistente de `TaskRead` en tareas vencidas (`due_date` retroactivo).
+  2. Transaccionalidad y commit atómico en operaciones de subtareas (`SubTask`).
+  3. Compensación física `delete_file` en almacenamiento hexagonal ante fallos en persistencia de base de datos de adjuntos.
+  4. Validación estricta de propiedad de candados distribuidos (`acquired=True`), retornando `409 Conflict` cuando otro proceso retiene el lock.
+  5. Sanitización de comodines SQL (`%`, `_`) y soporte de emojis/símbolos multibyte en búsqueda Full-Text Search (`FTS`).
+  6. Integridad referencial y cascada controlada en la eliminación de hogares compartidos (`Room`).
+- [x] **FE-TEST-01**: Adopción de Vitest + React Testing Library en `prioritask-frontend` (`vitest.config.ts`, `src/test/setup.ts`, script `test:unit`), implementando 5 suites unitarias (34 tests en verde).
+- [x] **FE-HARD-01**: Mapeo estricto de errores Axios (413 Payload Too Large, 415 Unsupported Media Type, errores offline), optimización de memoria en compresión WebP vía `createObjectURL` y Audio Unlocker pasivo para navegadores móviles (iOS/Chrome).
+- [x] **Quality Gate Consolidado**: 255 tests backend pasando al 100%, elevación de cobertura a >82.5% con branch coverage (`--cov-branch`), cobertura en capa endpoints superior al >92%, 5 suites unitarias frontend (34 tests), suites E2E Playwright activas, 0 errores en Ruff y 0 errores en ESLint.
+
+
 

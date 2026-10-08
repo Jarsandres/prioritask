@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         working-directory: prioritask-frontend
         run: |
-          npm ci
+          npm ci || npm install
 
       - name: Security audit dependencies
         working-directory: prioritask-frontend
@@ -62,6 +62,11 @@ jobs:
         working-directory: prioritask-frontend
         run: |
           npm run lint
+
+      - name: Run unit tests
+        working-directory: prioritask-frontend
+        run: |
+          npm run test:unit
 
       - name: Build
         working-directory: prioritask-frontend

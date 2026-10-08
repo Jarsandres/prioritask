@@ -317,7 +317,12 @@ export const TaskAttachmentsSection: React.FC<TaskAttachmentsSectionProps> = ({
       toast.success("Evidencia adjuntada exitosamente 📎");
     } catch (err: unknown) {
       console.error("Error al subir archivo:", err);
-      toast.error("No se pudo subir el archivo. Comprueba la cuota o formato.");
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      const errorMessage =
+        axiosErr.response?.data?.detail ||
+        axiosErr.message ||
+        "No se pudo subir el archivo. Comprueba la cuota o formato.";
+      toast.error(errorMessage);
     } finally {
       setIsUploading(false);
       setUploadStatusText("");

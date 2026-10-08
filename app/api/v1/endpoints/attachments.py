@@ -109,7 +109,11 @@ async def upload_task_attachment(
         changes=f"Added attachment {safe_filename} ({size_bytes} bytes)",
     )
     session.add(history)
-    await session.commit()
+    try:
+        await session.commit()
+    except Exception:
+        storage.delete_file(storage_key)
+        raise
     await session.refresh(attachment)
 
     read_dto = AttachmentRead(

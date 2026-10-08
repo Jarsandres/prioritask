@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
@@ -14,11 +15,13 @@ async def test_prioritize_tasks_real(async_client):
     await create_task(async_client, token, {"titulo": "Enviar currículum urgente", "categoria": "OTRO"})
     await create_task(async_client, token, {"titulo": "Limpiar el baño", "categoria": "OTRO"})
 
-    response = await async_client.post(
-        "/api/v1/tasks/ai/prioritize",
-        headers=headers,
-        json={"task_ids": None}
-    )
+    with patch("app.services.AI.priority_classifier.clasificar_prioridad", new_callable=AsyncMock) as mock_ia:
+        mock_ia.return_value = "baja"
+        response = await async_client.post(
+            "/api/v1/tasks/ai/prioritize",
+            headers=headers,
+            json={"task_ids": None}
+        )
 
     assert response.status_code == 200
     data = response.json()
@@ -42,11 +45,16 @@ async def test_group_tasks_real(async_client):
     await create_task(async_client, token, {"titulo": "Organizar cocina", "categoria": "LIMPIEZA"})
     await create_task(async_client, token, {"titulo": "Pagar facturas", "categoria": "MANTENIMIENTO"})
 
-    response = await async_client.post(
-        "/api/v1/tasks/ai/group",
-        headers=headers,
-        json={"task_ids": None}
-    )
+    with patch("app.services.AI.task_organizer.generate_json", new_callable=AsyncMock) as mock_ai:
+        mock_ai.return_value = {
+            "Limpieza": ["Limpiar cocina", "Organizar cocina"],
+            "Mantenimiento": ["Pagar facturas"],
+        }
+        response = await async_client.post(
+            "/api/v1/tasks/ai/group",
+            headers=headers,
+            json={"task_ids": None}
+        )
 
     assert response.status_code == 200
     data = response.json()
@@ -61,11 +69,13 @@ async def test_rewrite_tasks_real(async_client):
     await create_task(async_client, token, {"titulo": "Hacer cosas del trabajo", "categoria": "OTRO"})
     await create_task(async_client, token, {"titulo": "Organizar casa", "categoria": "OTRO"})
 
-    response = await async_client.post(
-        "/api/v1/tasks/ai/rewrite",
-        headers=headers,
-        json={"task_ids": None}
-    )
+    with patch("app.services.AI.reformulator.generate_json", new_callable=AsyncMock) as mock_ai:
+        mock_ai.return_value = {"reformulada": "Gestionar asuntos laborales"}
+        response = await async_client.post(
+            "/api/v1/tasks/ai/rewrite",
+            headers=headers,
+            json={"task_ids": None}
+        )
 
     assert response.status_code == 200
     data = response.json()
@@ -173,11 +183,13 @@ async def test_prioritize_tasks_filtering_by_task_ids(async_client):
     t2 = await create_task(async_client, token, {"titulo": "Tarea 2 a priorizar", "categoria": "OTRO"})
     await create_task(async_client, token, {"titulo": "Tarea 3 que no se debe incluir", "categoria": "OTRO"})
 
-    response = await async_client.post(
-        "/api/v1/tasks/ai/prioritize",
-        headers=headers,
-        json={"task_ids": [t1["id"], t2["id"]]},
-    )
+    with patch("app.services.AI.priority_classifier.clasificar_prioridad", new_callable=AsyncMock) as mock_ia:
+        mock_ia.return_value = "media"
+        response = await async_client.post(
+            "/api/v1/tasks/ai/prioritize",
+            headers=headers,
+            json={"task_ids": [t1["id"], t2["id"]]},
+        )
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
