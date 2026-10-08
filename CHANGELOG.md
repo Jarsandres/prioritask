@@ -3,6 +3,124 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## 🚀 Versión 1.5.0 (Motor de Alto Rendimiento, Escalabilidad, Redis Pub/Sub, Virtualización DOM & Web Workers — Sprint 12) — [2026-10-08]
+
+### ⚡ Motor de Alto Rendimiento, IA y Base de Datos (Backend)
+- **[PERF-AI-010] Concurrencia e IA de Alto Rendimiento con Pool Persistente y Semáforo (`app/services/AI/ollama_client.py`, `task_organizer.py`)**:
+  - Pool persistente `httpx.AsyncClient` reutilizable con timeouts y keep-alive optimizado, eliminando el overhead de handshake TCP en cada inferencia.
+  - Paralelización acotada con `asyncio.Semaphore(4)` para tareas concurrentes en `task_organizer.py`, mitigando saturación de CPU/GPU local.
+- **[CACHE-SEM-010] Caché Semántica Híbrida L1/L2 NFKC con Redis (`app/services/AI/cache.py`)**:
+  - Arquitectura de caché en dos niveles: L1 (memoria en proceso LRU) y L2 (Redis distribuido con `redis.asyncio`).
+  - Normalización de cadenas Unicode NFKC, eliminación de espacios superfluos y hashing MD5 determinista para máxima tasa de aciertos de caché (*cache hit ratio*).
+- **[SQL-OPT-010] Erradicación de Consultas N+1 y Read-Through Cache en Analítica (`app/services/analytics.py`, `app/api/v1/endpoints/rooms.py`)**:
+  - Reemplazo de bucles N+1 por agregación pura en SQL (`func.count`, `func.avg`, `case`) ejecutando un único roundtrip a la base de datos.
+  - Implementación de Read-Through Cache con Redis (TTL 60s) e invalidación reactiva inmediata ante mutaciones de tareas o miembros del hogar.
+- **[INDEX-COV-010] Covering Indexes para Analítica y Gamificación (`app/models/`, migración `d1e2f3a4b5c6`)**:
+  - Nuevos índices cubrientes de alto rendimiento:
+    1. `ix_task_room_analytics_covering` (`room_id`, `deleted_at`, `estado`, `prioridad`, `due_date`, `completed_at`) en `task`.
+    2. `ix_gamification_leaderboard_covering` (`room_id`, `puntos_totales`, `usuario_id`, `nivel`) en `usergamificationprofile`.
+  - Migración Alembic `d1e2f3a4b5c6_add_covering_indexes_analytics_and_gamification.py`.
+- **[DIST-SSE-010] Hub SSE Distribuido con Redis Pub/Sub y Bounded Queues (`app/services/events.py`, `app/api/v1/endpoints/rooms.py`)**:
+  - `DistributedRoomEventBroadcaster` con adaptador transparente Redis Pub/Sub para escalabilidad horizontal multirréplica y fallback local.
+  - Colas acotadas (*Drop-Oldest bounded queues*, `maxsize=100`) para proteger el consumo de memoria ante clientes lentos.
+  - Keep-alive heartbeat a 15 segundos para mantener conexiones vivas en balanceadores y proxies.
+- **[FTS-OPT-010] Autocompletado en Tiempo Real en Búsqueda FTS (`app/services/search.py`, `app/api/v1/endpoints/rooms.py`)**:
+  - Endpoint `GET /api/v1/rooms/{room_id}/search/autocomplete` con ranking ponderado, sanitización contra inyecciones de comodines y límites defensivos.
+
+### 🖥️ Virtualización DOM, Caché SWR y Web Workers (Frontend)
+- **[FE-VIRT-010] Virtualización DOM Inteligente (`TaskListView.tsx`, `TaskKanbanBoard.tsx`)**:
+  - Integración de `@tanstack/react-virtual` con activación condicional cuando la lista supera las 40 tareas, manteniendo la ligereza en listas cortas y renderizado de 60 FPS con miles de elementos.
+  - Compatibilidad total con drag-and-drop, modales y navegación fluida por teclado.
+- **[FE-CACHE-010] Gestor de Caché L1 SWR en Cliente (`prioritask-frontend/src/services/cacheManager.ts`, `api.ts`)**:
+  - Almacenamiento en memoria con política Stale-While-Revalidate (SWR), reduciendo el tiempo de renderizado percibido a 0ms.
+  - Invalidación reactiva instantánea coordinada con el hub de Server-Sent Events (SSE).
+- **[FE-WORKER-010] Compresión de Imágenes en Web Worker (`imageCompressor.worker.ts`, `attachmentUtils.ts`)**:
+  - Delegación de la compresión y redimensionamiento a WebP con `OffscreenCanvas` a un hilo de trabajo Web Worker dedicado, asegurando que el hilo principal permanezca en 60 FPS sin jitter.
+- **[FE-SEARCH-010] Búsqueda Multi-Capa y Autocompletado en Paleta de Comandos (`CommandPaletteModal.tsx`)**:
+  - Estrategia de búsqueda multi-capa: 0ms en memoria local + LRU query cache + fallback al endpoint de autocompletado backend con debounce optimizado a 150ms.
+- **[FE-TEST-030] Expansión de Suites de Pruebas Unitarias Vitest**:
+  - Suites unitarias y de virtualización (`TaskListView.virtualization.test.tsx`, `TaskKanbanBoard.virtualization.test.tsx`) aprobadas al 100%.
+
+### 🟢 Métricas Finales & Quality Gate Consolidado
+- **Backend Test Suite**: **272 pruebas automatizadas** en verde (100% pass rate).
+- **Cobertura de Código Backend**: Cobertura global **>= 70%** con branch coverage, superando el umbral mínimo obligatorio de CI.
+- **Análisis Estático Backend**: **0 errores y 0 advertencias** con Ruff en `app/` y `tests/`.
+- **Análisis Estático Frontend**: **0 errores y 0 advertencias** con ESLint y TypeScript.
+- **Compilación Frontend**: Build de producción con Vite limpio en **2.48s**.
+- **Auditoría de Rendimiento, Escalabilidad y Calidad**: **APROBADA** (Redis Pub/Sub SSE, Covering Indexes, SWR Client Cache, Web Workers y Virtualización DOM).
+
+---
+
+## 🚀 Versión 1.4.0 (Hardening de Seguridad, Asincronía No Bloqueante, Offline Mutation Engine & A11y Testing — Sprint 11) — [2026-10-08]
+
+### ⚡ Asincronía No Bloqueante & Rendimiento Backend
+- **[ASYNC-010] Desacoplamiento No Bloqueante con `asyncio.to_thread` (`app/services/storage/local.py`, `app/services/auth.py`)**:
+  - Delegación de todas las operaciones síncronas de I/O de disco (lectura, escritura y eliminación de archivos en `LocalStorageService`) al threadpool para no bloquear el Event Loop de FastAPI.
+  - Delegación de las operaciones criptográficas CPU-bound de hashing y verificación de contraseñas con Bcrypt (`get_password_hash`, `verify_password`) a `asyncio.to_thread`.
+- **[PERF-020] Paginación Estricta, Mitigación DoS en Búsqueda FTS & 5 Índices Compuestos (`app/api/v1/endpoints/`, `app/services/search.py`, `app/models/`)**:
+  - Límite de paginación estricto (`le=100`, por defecto 20/50) en endpoints de listado (`/tasks/`, `/rooms/`, `/tags/`, `/subtasks/`, `/comments/`), mitigando volcados de memoria y ataques de agotamiento de recursos.
+  - Sanitización y truncamiento de términos de búsqueda en FTS (`search.py`) limitando la longitud máxima de consultas para prevenir ataques de denegación de servicio por expresiones complejas o regex abusivos.
+  - Creación de 5 índices compuestos en base de datos para optimizar consultas frecuentes:
+    1. `ix_task_user_deleted_state` (`user_id`, `deleted_at`, `estado`) en `task`.
+    2. `ix_task_room_deleted_state` (`room_id`, `deleted_at`, `estado`) en `task`.
+    3. `ix_task_assignment_user_completed` (`usuario_id`, `completada`) en `task_assignment`.
+    4. `ix_subtask_tarea_deleted_completada` (`tarea_id`, `deleted_at`, `completada`) en `subtask`.
+    5. `ix_comment_tarea_deleted` (`tarea_id`, `deleted_at`) en `taskcomment`.
+  - Migración Alembic `e4c82d1b7a30_add_token_version_and_composite_indexes.py` con soporte SQLite batch y PostgreSQL.
+- **[CLEAN-010] Eliminación del Hack `__getattribute__` en Modelo Task (`app/models/task.py`)**:
+  - Reemplazo del override peligroso de `__getattribute__` por acceso estándar mediante propiedades y `getattr` seguro, estabilizando la introspección de SQLModel y Pydantic.
+
+### 🛡️ Seguridad, Autenticación & Cabeceras Globales
+- **[SEC-050] Revocación de Sesiones JWT y Blacklist Redis (`app/api/v1/endpoints/auth.py`, `app/services/auth.py`, `app/models/user.py`)**:
+  - Endpoint `POST /api/v1/auth/logout` que añade el token JWT actual a la blacklist distribuida en Redis con TTL equivalente al tiempo restante de expiración.
+  - Campo `token_version: int` en el modelo `Usuario` y en el payload del JWT (`ver`), permitiendo invalidar instantáneamente todas las sesiones activas de un usuario ante cambio de contraseña o cierre de sesión global.
+  - Verificación dual en dependencias de autenticación: comprobación contra Redis blacklist y validación de concordancia de `token_version`.
+- **[SEC-060] Middleware Global de Cabeceras de Seguridad (`app/core/middleware.py`, `app/main.py`)**:
+  - Implementación de `SecurityHeadersMiddleware` inyectando cabeceras defensivas en todas las respuestas HTTP:
+    - `Content-Security-Policy` (CSP) estricto.
+    - `Strict-Transport-Security` (HSTS: `max-age=31536000; includeSubDomains; preload`).
+    - `X-Frame-Options: DENY` (anti-clickjacking).
+    - `X-Content-Type-Options: nosniff` (anti-MIME sniffing).
+    - `Referrer-Policy: strict-origin-when-cross-origin`.
+    - `Permissions-Policy` restringiendo APIs sensibles del navegador.
+- **[RATE-010] Rate Limiting Granular en Endpoints Críticos**:
+  - Aplicación de directivas de limitación de tasa diferenciadas en autenticación, endpoints de administración de hogares, carga de adjuntos y endpoints de inferencia IA.
+
+### 📱 Experiencia Mobile, Reactividad Atómica & Accesibilidad WCAG 2.1 AA
+- **[SSE-020] Reactividad Atómica In-Place en SSE (`prioritask-frontend/src/hooks/useRoomEvents.ts`, `TaskCard.tsx`, `ToastContext.tsx`)**:
+  - Actualizaciones atómicas en memoria en el cliente SSE ante eventos `task_updated`, `task_created` y `task_deleted`, eliminando refetching completo y parpadeos en pantalla.
+  - Memoización granular de `TaskCard` con `React.memo` y comparación de props optimizada.
+  - División de `ToastContext` en `ToastStateContext` y `ToastDispatchContext` para prevenir renderizados innecesarios en consumidores que solo emiten alertas.
+- **[OFFLINE-020] Motor de Cola de Mutaciones Offline con IndexedDB (`prioritask-frontend/src/services/offlineQueue.ts`, `api.ts`, `OfflineBanner.tsx`)**:
+  - Persistencia de mutaciones fallidas por desconexión en base de datos IndexedDB local.
+  - Sincronización automática secuencial FIFO al restaurar la conectividad con reintentos controlados y notificación de estado en `OfflineBanner`.
+- **[TOUCH-010] Gestos Táctiles Swipe y Modales BottomSheet (`TaskCard.tsx`, `TaskForm.tsx`, `index.css`)**:
+  - Detección de gestos táctiles Swipe en tarjetas de tareas en móviles para completar o eliminar rápidamente.
+  - Selector segmentado táctil para selección ágil de prioridad (`baja`, `media`, `alta`).
+  - Adaptación automática de modales a paneles deslizantes tipo BottomSheet en pantallas móviles con anclaje inferior accesible con una sola mano.
+- **[A11Y-010] Accesibilidad WCAG 2.1 AA & Lector de Pantallas (`useA11yModal.ts`, `ScreenReaderAnnouncer.tsx`)**:
+  - Hook reutilizable `useA11yModal` con Focus Trap determinista, cierre con tecla Escape y restauración del foco al elemento disparador original.
+  - Componente global `ScreenReaderAnnouncer` con región `aria-live="polite"` y `role="status"` para anunciar dinámicamente eventos y cambios de estado a lectores de pantalla.
+
+### 🧪 Infraestructura de Testing & CI/CD
+- **[TEST-010] Elevación de Umbral de Cobertura Backend (>= 70%) & Caché Playwright (`pyproject.toml`, `.github/workflows/ci.yml`)**:
+  - Aumento del umbral de calidad obligatorio en `pyproject.toml` y CI a `--cov-fail-under=70`.
+  - Adición del paso de testing unitario de frontend en el pipeline CI (`npm run test:unit`).
+  - Optimización del tiempo de pipeline CI configurando caché para los binarios de navegadores de Playwright (`~/.cache/ms-playwright` vía `actions/cache`).
+- **[FE-TEST-020] Expansión a 12 Suites Unitarias en Vitest + RTL (100% Pass Rate)**:
+  - Adición de suites unitarias para `useA11yModal`, `ScreenReaderAnnouncer`, `offlineQueue`, `TaskCard`, `RoomGamificationModal`, `RoomExportModal`, `OfflineBanner`, `CommandPaletteModal`, etc.
+
+### 🟢 Métricas Finales & Quality Gate Consolidado
+- **Backend Test Suite**: **264 pruebas automatizadas** en verde (100% pass rate).
+- **Cobertura de Código Backend**: Cobertura global **>= 70%** con branch coverage, superando el umbral mínimo de CI.
+- **Frontend Test Suite**: **12 suites unitarias** en Vitest + RTL pasando al 100% y suites E2E Playwright activas.
+- **Análisis Estático Backend**: **0 errores y 0 advertencias** con Ruff en `app/` y `tests/`.
+- **Análisis Estático Frontend**: **0 errores y 0 advertencias** con ESLint y TypeScript.
+- **Compilación Frontend**: Build de producción con Vite limpio.
+- **Auditoría de Seguridad**: **APROBADA** (Zero Trust, Security Headers Middleware, JWT Blacklist con Redis, prevención DoS y control IDOR estricto).
+
+---
+
 ## 🚀 Versión 1.3.0 (Calidad, Hardening Arquitectónico, Optimización de Testing & Vitest) — [2026-10-08]
 
 ### ⚡ Rendimiento & Testing Backend

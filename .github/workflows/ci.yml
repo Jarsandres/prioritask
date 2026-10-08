@@ -35,7 +35,7 @@ jobs:
 
       - name: Tests
         run: |
-          pytest --cov=app --cov-report=term-missing --cov-fail-under=65
+          pytest --cov=app --cov-report=term-missing --cov-fail-under=70
 
   frontend-ci:
     runs-on: ubuntu-latest
@@ -89,10 +89,24 @@ jobs:
         run: |
           npm ci
 
+      - name: Cache Playwright Binaries
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('prioritask-frontend/package-lock.json') }}
+
       - name: Install Playwright Browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: prioritask-frontend
         run: |
           npx playwright install --with-deps chromium
+
+      - name: Install Playwright OS dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: prioritask-frontend
+        run: |
+          npx playwright install-deps chromium
 
       - name: Run Playwright E2E Tests
         working-directory: prioritask-frontend
