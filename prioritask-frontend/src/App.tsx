@@ -23,6 +23,7 @@ import { ToastProvider } from "./context/ToastContext";
 import CreateRoom from "./pages/CreateRoom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import OfflineBanner from "./components/common/OfflineBanner";
+import ScreenReaderAnnouncer from "./components/common/ScreenReaderAnnouncer";
 import ModalSkeleton from "./components/ui/ModalSkeleton";
 import "./App.css";
 
@@ -177,6 +178,9 @@ const AppContent = () => {
 
       {/* Banner flotante de conectividad Offline-First */}
       <OfflineBanner />
+
+      {/* Anunciador universal para lectores de pantalla (NVDA / TalkBack / VoiceOver) */}
+      <ScreenReaderAnnouncer />
 
       {/* Modales Globales de Paleta de Comandos y Atajos (Lazy Loaded) */}
       {isCommandPaletteOpen && (

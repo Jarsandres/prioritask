@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import useA11yModal from "../../hooks/useA11yModal";
 import {
   LuSearch,
   LuX,
@@ -17,6 +18,7 @@ import {
 } from "react-icons/lu";
 import api from "../../api";
 import { useRoom } from "../../context/RoomContext";
+import { cacheManager } from "../../services/cacheManager";
 import type { TaskSearchResponse, SearchResultItem } from "../../types/search";
 import type { Room } from "../../types/task";
 import "./CommandPaletteModal.css";
@@ -57,6 +59,54 @@ interface TaskCommandItem {
 
 type PaletteCommandItem = ActionCommandItem | RoomCommandItem | TaskCommandItem;
 
+/**
+ * Estructura de datos LRU (Least Recently Used) en memoria con capacidad fija de 50 consultas.
+ */
+export class QueryLRUCache<K, V> {
+  private capacity: number;
+  private cache: Map<K, V>;
+
+  constructor(capacity = 50) {
+    this.capacity = capacity;
+    this.cache = new Map<K, V>();
+  }
+
+  get(key: K): V | undefined {
+    if (!this.cache.has(key)) return undefined;
+    const value = this.cache.get(key)!;
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.capacity) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
+    this.cache.set(key, value);
+  }
+
+  has(key: K): boolean {
+    return this.cache.has(key);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  size(): number {
+    return this.cache.size;
+  }
+}
+
+// Instancia compartida del LRU Cache (Capa 2) para el Command Palette
+export const searchLRUCache = new QueryLRUCache<string, SearchResultItem[]>(50);
+
 export const CommandPaletteModal = ({
   isOpen,
   onClose,
@@ -73,6 +123,14 @@ export const CommandPaletteModal = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const itemsContainerRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useA11yModal({
+    isOpen,
+    onClose,
+    modalRef,
+    initialFocusRef: inputRef,
+  });
 
   // Autoenfocar input al abrir
   useEffect(() => {
@@ -241,7 +299,7 @@ export const CommandPaletteModal = ({
     }));
   }, [taskResults, onClose, selectRoom, navigate]);
 
-  // Petición al API con debounce para tareas
+  // Búsqueda Multi-Capa (Capa 1: In-Memory 0ms, Capa 2: LRU Cache, Capa 3: Backend Debounced 150ms)
   useEffect(() => {
     const trimmed = query.trim();
     if (!trimmed) {
@@ -250,8 +308,42 @@ export const CommandPaletteModal = ({
       return;
     }
 
+    const qLower = trimmed.toLowerCase();
+
+    // ── CAPA 1 (0 ms): Búsqueda inmediata síncrona en memoria sobre tareas cacheadas ──
+    const allCached = cacheManager.getAllCachedTasks();
+    const layer1Matches: SearchResultItem[] = allCached
+      .filter(
+        (t) =>
+          t.titulo.toLowerCase().includes(qLower) ||
+          (t.descripcion && t.descripcion.toLowerCase().includes(qLower)) ||
+          (t.categoria && t.categoria.toLowerCase().includes(qLower))
+      )
+      .map((t) => ({
+        task: t,
+        relevance_score: 1.0,
+        matched_fields: ["titulo"],
+      }));
+
+    // ── CAPA 2 (LRU Cache): Consulta de resultados previos cacheados de consultas idénticas ──
+    const lruCached = searchLRUCache.get(qLower);
+
+    if (lruCached && lruCached.length > 0) {
+      const mergedMap = new Map<string, SearchResultItem>();
+      lruCached.forEach((item) => mergedMap.set(item.task.id, item));
+      layer1Matches.forEach((item) => {
+        if (!mergedMap.has(item.task.id)) mergedMap.set(item.task.id, item);
+      });
+      setTaskResults(Array.from(mergedMap.values()));
+    } else if (layer1Matches.length > 0) {
+      setTaskResults(layer1Matches);
+    }
+
+    // ── CAPA 3 (Backend asíncrono con debounce de 150ms y FTS enriquecido) ──
     const controller = new AbortController();
-    setLoading(true);
+    if (!lruCached && layer1Matches.length === 0) {
+      setLoading(true);
+    }
 
     const timer = setTimeout(async () => {
       try {
@@ -267,15 +359,29 @@ export const CommandPaletteModal = ({
           params,
           signal: controller.signal,
         });
-        setTaskResults(res.data.results || []);
+
+        const remoteResults = res.data.results || [];
+
+        // Guardar en Capa 2 (LRU)
+        searchLRUCache.set(qLower, remoteResults);
+
+        // Fusión atómica deduplicada por id de tarea
+        const finalMap = new Map<string, SearchResultItem>();
+        remoteResults.forEach((item) => finalMap.set(item.task.id, item));
+        layer1Matches.forEach((item) => {
+          if (!finalMap.has(item.task.id)) {
+            finalMap.set(item.task.id, item);
+          }
+        });
+
+        setTaskResults(Array.from(finalMap.values()));
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "CanceledError") return;
-        // Búsqueda silenciosa en caso de error de red
-        setTaskResults([]);
+        // Fallback silencioso en caso de desconexión manteniendo los resultados de Capa 1
       } finally {
         setLoading(false);
       }
-    }, 250);
+    }, 150);
 
     return () => {
       clearTimeout(timer);
@@ -342,7 +448,8 @@ export const CommandPaletteModal = ({
       role="presentation"
     >
       <div
-        className="command-palette-container"
+        ref={modalRef}
+        className="command-palette-container retro-bottom-sheet"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

@@ -1584,3 +1584,47 @@ textarea.form-control {
 .ui-skeleton-rectangular {
   border-radius: var(--radius-xs);
 }
+
+/* =========================================================
+   BOTTOMSHEET MODAL ERGONOMICS (MOBILE < 768px)
+   ========================================================= */
+@media (max-width: 768px) {
+  .modal-dialog {
+    margin: 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    transform: translateY(0) !important;
+  }
+
+  .modal-content,
+  .retro-bottom-sheet {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 20px !important;
+    border-top-right-radius: 20px !important;
+    max-height: 88vh !important;
+    animation: bottomSheetSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  .retro-bottom-sheet-handle {
+    width: 40px;
+    height: 4px;
+    background-color: var(--border-default);
+    border-radius: var(--radius-full);
+    margin: 8px auto 4px auto;
+  }
+}
+
+@keyframes bottomSheetSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import {
   ToastContainer,
@@ -21,18 +21,36 @@ export interface ToastMethods {
   warning: (message: string, options?: ToastOptions) => string;
 }
 
-export interface ToastContextType extends ToastMethods {
-  toasts: ToastItem[];
+export interface ToastActionsContextType extends ToastMethods {
   showToast: (type: ToastType, message: string, options?: ToastOptions) => string;
   dismissToast: (id: string) => void;
   dismissAll: () => void;
   toast: ToastMethods;
 }
 
-export const ToastContext = createContext<ToastContextType | undefined>(undefined);
+export type ToastStateContextType = ToastItem[];
+
+// Desacoplamiento de contextos para evitar re-renderizados globales al emitir notificaciones
+export const ToastStateContext = createContext<ToastStateContextType>([]);
+export const ToastActionsContext = createContext<ToastActionsContextType | undefined>(undefined);
+
+// Backwards compatibility alias
+export const ToastContext = ToastActionsContext;
+
+// Componente interno para aislar la suscripción al estado de toasts únicamente al ToastContainer
+const ToastContainerWrapper = ({
+  onDismiss,
+}: {
+  onDismiss: (id: string) => void;
+}) => {
+  const toasts = useContext(ToastStateContext);
+  return <ToastContainer toasts={toasts} onDismiss={onDismiss} />;
+};
 
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastsRef = useRef(toasts);
+  toastsRef.current = toasts;
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -80,30 +98,35 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
     [showToast]
   );
 
-  const value = useMemo(
+  const actionsValue: ToastActionsContextType = useMemo(
     () => ({
-      toasts,
       showToast,
       dismissToast,
       dismissAll,
       toast: toastMethods,
       ...toastMethods,
     }),
-    [toasts, showToast, dismissToast, dismissAll, toastMethods]
+    [showToast, dismissToast, dismissAll, toastMethods]
   );
 
   return (
-    <ToastContext.Provider value={value}>
-      {children}
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-    </ToastContext.Provider>
+    <ToastStateContext.Provider value={toasts}>
+      <ToastActionsContext.Provider value={actionsValue}>
+        {children}
+        <ToastContainerWrapper onDismiss={dismissToast} />
+      </ToastActionsContext.Provider>
+    </ToastStateContext.Provider>
   );
 };
 
-export const useToast = () => {
-  const context = useContext(ToastContext);
+export const useToast = (): ToastActionsContextType => {
+  const context = useContext(ToastActionsContext);
   if (!context) {
     throw new Error("useToast must be used within a ToastProvider");
   }
   return context;
+};
+
+export const useToastState = (): ToastStateContextType => {
+  return useContext(ToastStateContext);
 };

@@ -1,26 +1,122 @@
-import { useState, useEffect } from "react";
-import { LuWifiOff, LuWifi } from "react-icons/lu";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { LuWifiOff, LuWifi, LuRefreshCw } from "react-icons/lu";
 import useNetworkStatus from "../../hooks/useNetworkStatus";
+import {
+  getPendingMutations,
+  removeMutation,
+  type OfflineMutation,
+} from "../../services/offlineQueue";
+import api from "../../api";
+import { useToast } from "../../context/ToastContext";
+import { useTaskUpdate } from "../../context/TaskUpdateContext";
 
 export const OfflineBanner = () => {
   const { isOffline, isOnline, wasOffline } = useNetworkStatus();
   const [showRestored, setShowRestored] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const { toast } = useToast();
+  const { notifyUpdate } = useTaskUpdate();
+  const isSyncingRef = useRef(false);
+
+  // Consultar periódicamente o ante cambios de red el conteo de mutaciones encoladas
+  const refreshPendingCount = useCallback(async () => {
+    try {
+      const pending = await getPendingMutations();
+      setPendingCount(pending.length);
+    } catch {
+      setPendingCount(0);
+    }
+  }, []);
 
   useEffect(() => {
+    refreshPendingCount();
+    const interval = setInterval(refreshPendingCount, 4000);
+    return () => clearInterval(interval);
+  }, [refreshPendingCount, isOffline]);
+
+  // Función de sincronización FIFO de mutaciones offline
+  const syncOfflineQueue = useCallback(async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    setIsSyncing(true);
+
+    try {
+      const mutations: OfflineMutation[] = await getPendingMutations();
+      if (mutations.length === 0) {
+        setIsSyncing(false);
+        isSyncingRef.current = false;
+        return;
+      }
+
+      for (const mutation of mutations) {
+        try {
+          await api.request({
+            url: mutation.url,
+            method: mutation.method,
+            data: mutation.data,
+            params: mutation.params,
+            headers: mutation.headers,
+            // Bandera para evitar re-encolado recursivo
+            ...({ _isOfflineSync: true } as object),
+          });
+          await removeMutation(mutation.id);
+        } catch (err) {
+          console.error("Error sincronizando mutación offline:", mutation, err);
+          // Si es un error del cliente 4xx (excepto 408/429), descartar para no bloquear la cola
+          const statusCode = (err as { response?: { status?: number } })?.response?.status;
+          if (statusCode && statusCode >= 400 && statusCode < 500 && statusCode !== 408 && statusCode !== 429) {
+            await removeMutation(mutation.id);
+          }
+        }
+      }
+
+      const remaining = await getPendingMutations();
+      setPendingCount(remaining.length);
+
+      if (remaining.length === 0) {
+        toast.success("¡Todas las tareas sincronizadas con éxito! ✅");
+        notifyUpdate();
+      }
+    } catch (err) {
+      console.error("Fallo general durante la sincronización offline:", err);
+    } finally {
+      setIsSyncing(false);
+      isSyncingRef.current = false;
+    }
+  }, [toast, notifyUpdate]);
+
+  // Escuchar cuando el navegador vuelve a estar online
+  useEffect(() => {
+    const handleWindowOnline = () => {
+      syncOfflineQueue();
+    };
+
+    window.addEventListener("online", handleWindowOnline);
+
     if (wasOffline && isOnline) {
       setShowRestored(true);
+      syncOfflineQueue();
       const timer = setTimeout(() => {
         setShowRestored(false);
       }, 3500);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener("online", handleWindowOnline);
+      };
     }
-  }, [wasOffline, isOnline]);
 
-  if (!isOffline && !showRestored) {
+    return () => {
+      window.removeEventListener("online", handleWindowOnline);
+    };
+  }, [wasOffline, isOnline, syncOfflineQueue]);
+
+  if (!isOffline && !showRestored && pendingCount === 0) {
     return null;
   }
 
-  if (showRestored) {
+  if (showRestored && !isOffline) {
     return (
       <aside
         className="offline-banner position-fixed shadow-lg rounded-pill px-4 py-2 d-flex align-items-center gap-2 border animate-fade-in"
@@ -42,7 +138,9 @@ export const OfflineBanner = () => {
       >
         <LuWifi size={18} className="text-success" aria-hidden="true" />
         <span className="fw-semibold small text-white">
-          ¡Conexión restablecida! Sincronizando datos...
+          {isSyncing
+            ? "¡Conexión restablecida! Sincronizando datos..."
+            : "¡Conexión a internet restablecida!"}
         </span>
       </aside>
     );
@@ -67,7 +165,7 @@ export const OfflineBanner = () => {
       }}
       role="alert"
       aria-live="assertive"
-      aria-label="Aviso de pérdida de conexión a internet"
+      aria-label="Aviso de modo sin conexión y cola de cambios offline"
     >
       <div
         className="rounded-circle d-flex align-items-center justify-content-center p-2 flex-shrink-0"
@@ -77,26 +175,36 @@ export const OfflineBanner = () => {
           border: "1px solid rgba(245, 158, 11, 0.3)",
         }}
       >
-        <LuWifiOff size={20} aria-hidden="true" />
+        {isSyncing ? (
+          <LuRefreshCw size={20} className="ui-btn-spinner" aria-hidden="true" />
+        ) : (
+          <LuWifiOff size={20} aria-hidden="true" />
+        )}
       </div>
       <div>
         <div
           className="fw-bold small d-flex align-items-center gap-2"
           style={{ color: "#fef08a", letterSpacing: "0.2px" }}
         >
-          <span>Estás navegando en modo sin conexión</span>
+          <span>
+            {isOffline ? "Estás navegando en modo sin conexión" : "Sincronizando tareas"}
+          </span>
           <span
             className="badge rounded-pill bg-warning text-dark px-2 py-0"
             style={{ fontSize: "10px", fontWeight: 700 }}
           >
-            OFFLINE
+            {isOffline ? "OFFLINE" : "SYNC"}
           </span>
         </div>
         <p
           className="mb-0 text-white-50"
           style={{ fontSize: "12px", lineHeight: "1.3" }}
         >
-          Las acciones se conservarán localmente hasta que vuelva la conexión.
+          {pendingCount > 0
+            ? `${pendingCount} ${
+                pendingCount === 1 ? "cambio guardado" : "cambios guardados"
+              } offline esperando conexión ⏳`
+            : "Las acciones se conservarán localmente hasta que vuelva la conexión."}
         </p>
       </div>
     </aside>

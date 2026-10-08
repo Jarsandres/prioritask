@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
 import { LuTriangleAlert, LuCircleAlert, LuInfo, LuX } from "react-icons/lu";
 import Button from "./ui/Button";
+import useA11yModal from "../hooks/useA11yModal";
 
 export interface ConfirmModalProps {
   isOpen: boolean;
@@ -27,60 +28,15 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
-  const previousActiveElement = useRef<Element | null>(null);
 
-  // Focus trap y soporte de teclado (Escape)
-  useEffect(() => {
-    if (!isOpen) return;
-
-    previousActiveElement.current = document.activeElement;
-    document.body.style.overflow = "hidden";
-
-    // Foco inicial en el botón de cancelar para prevenir confirmaciones accidentales
-    const timer = setTimeout(() => {
-      cancelBtnRef.current?.focus();
-    }, 50);
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (!isLoading) onCancel();
-        return;
-      }
-
-      if (e.key === "Tab" && modalRef.current) {
-        const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusableElements.length === 0) return;
-
-        const firstElement = focusableElements[0];
-        const lastElement = focusableElements[focusableElements.length - 1];
-
-        if (e.shiftKey) {
-          if (document.activeElement === firstElement) {
-            e.preventDefault();
-            lastElement.focus();
-          }
-        } else {
-          if (document.activeElement === lastElement) {
-            e.preventDefault();
-            firstElement.focus();
-          }
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", handleKeyDown);
-      clearTimeout(timer);
-      if (previousActiveElement.current instanceof HTMLElement) {
-        previousActiveElement.current.focus();
-      }
-    };
-  }, [isOpen, isLoading, onCancel]);
+  useA11yModal({
+    isOpen,
+    onClose: () => {
+      if (!isLoading) onCancel();
+    },
+    modalRef,
+    initialFocusRef: cancelBtnRef,
+  });
 
   if (!isOpen) return null;
 
@@ -147,7 +103,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
       <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: "480px" }}>
         <div
           ref={modalRef}
-          className="modal-content rounded-4 border shadow-xl p-4"
+          className="modal-content rounded-4 border shadow-xl p-4 retro-bottom-sheet"
           style={{
             backgroundColor: "var(--bg-surface, #ffffff)",
             borderColor: "var(--border-default, #e2e8f0)",

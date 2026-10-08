@@ -1,4 +1,4 @@
-import { useEffect, useState, Suspense, lazy } from "react";
+import { useEffect, useState, useCallback, Suspense, lazy } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { useRoom } from "../context/RoomContext";
@@ -15,9 +15,10 @@ import TaskViewSwitcher, { type TaskViewMode } from "../components/tasks/TaskVie
 import TaskListView from "../components/tasks/TaskListView";
 import TaskKanbanBoard from "../components/tasks/TaskKanbanBoard";
 import TaskCalendarView from "../components/tasks/TaskCalendarView";
-import { useRoomEvents } from "../hooks/useRoomEvents";
+import { useRoomEvents, type RoomSyncEvent } from "../hooks/useRoomEvents";
 import { usePixelConfetti } from "../hooks/usePixelConfetti";
-import type { Task, Room, TaskStatus } from "../types/task";
+import { cacheManager } from "../services/cacheManager";
+import type { Task, Room, TaskStatus, Subtask } from "../types/task";
 import type { GamificationOverview } from "../types/gamification";
 import {
   LuHouse,
@@ -40,23 +41,23 @@ const RoomExportModal = lazy(() => import("../components/rooms/RoomExportModal")
 const RoomTasks = () => {
   const { roomId } = useParams();
   const { setRoomId } = useRoom();
-  const { version, notifyUpdate } = useTaskUpdate();
+  const { notifyUpdate } = useTaskUpdate();
   const { toast } = useToast();
   const navigate = useNavigate();
-
-  // Cliente de Sincronización en Vivo SSE y BroadcastChannel
-  const { isConnected: isLiveConnected } = useRoomEvents(roomId);
   const { triggerCelebration } = usePixelConfetti();
 
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const cachedData = roomId ? cacheManager.getRoomTasks(roomId) : null;
+  const cachedGamification = roomId ? cacheManager.getRoomGamification(roomId) : null;
+
+  const [tasks, setTasks] = useState<Task[]>(() => cachedData?.tasks || []);
   const [roomName, setRoomName] = useState<string>("");
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
   const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [gamification, setGamification] = useState<GamificationOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [gamification, setGamification] = useState<GamificationOverview | null>(() => cachedGamification);
+  const [loading, setLoading] = useState<boolean>(() => !cachedData);
 
   const [viewMode, setViewMode] = useState<TaskViewMode>(() => {
     return (localStorage.getItem("tasks_view_mode") as TaskViewMode) || "grid";
@@ -75,12 +76,23 @@ const RoomTasks = () => {
     setRoomId(roomId ?? null);
   }, [roomId, setRoomId]);
 
+  // Carga inicial y cambio de sala con entrega SWR instantánea (0ms de espera visual)
   useEffect(() => {
     if (!roomId) return;
     const controller = new AbortController();
 
-    const fetchTasks = async () => {
+    // Comprobar si existen datos en caché L1
+    const cacheHit = cacheManager.getRoomTasks(roomId);
+    if (cacheHit) {
+      setTasks(cacheHit.tasks);
+      setLoading(false);
+      const cachedGam = cacheManager.getRoomGamification(roomId);
+      if (cachedGam) setGamification(cachedGam);
+    } else {
       setLoading(true);
+    }
+
+    const fetchTasks = async () => {
       try {
         const [tasksRes, roomsRes, gamificationRes] = await Promise.all([
           api.get<Task[]>(`/rooms/${roomId}/tasks`, {
@@ -94,10 +106,15 @@ const RoomTasks = () => {
             signal: controller.signal,
           }).catch(() => ({ data: null })),
         ]);
+
         setTasks(tasksRes.data);
+        cacheManager.setRoomTasks(roomId, tasksRes.data);
+
         if (gamificationRes.data) {
           setGamification(gamificationRes.data);
+          cacheManager.setRoomGamification(roomId, gamificationRes.data);
         }
+
         const foundRoom = roomsRes.data.find((r) => r.id === roomId);
         if (foundRoom) {
           setCurrentRoom(foundRoom);
@@ -106,7 +123,9 @@ const RoomTasks = () => {
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "CanceledError") return;
         console.error(err);
-        toast.error("No se pudieron cargar las tareas del hogar.");
+        if (!cacheHit) {
+          toast.error("No se pudieron cargar las tareas del hogar.");
+        }
       } finally {
         setLoading(false);
       }
@@ -117,7 +136,159 @@ const RoomTasks = () => {
     return () => {
       controller.abort();
     };
-  }, [roomId, toast, version]);
+  }, [roomId, toast]);
+
+  // Conciliación In-Place reactiva para SSE (Cero Flicker y Cero Skeletons destructivos)
+  const handleLiveEvent = useCallback(
+    (event: RoomSyncEvent) => {
+      if (!event || !event.type) return;
+
+      switch (event.type) {
+        case "TASK_CREATED": {
+          const newTask = event.data as Task;
+          if (newTask && newTask.id) {
+            setTasks((prev) => {
+              if (prev.some((t) => t.id === newTask.id)) {
+                return prev.map((t) => (t.id === newTask.id ? { ...t, ...newTask } : t));
+              }
+              return [newTask, ...prev];
+            });
+          }
+          break;
+        }
+
+        case "TASK_UPDATED": {
+          const updated = event.data as Partial<Task> & { id: string };
+          if (updated && updated.id) {
+            setTasks((prev) =>
+              prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+            );
+          }
+          break;
+        }
+
+        case "TASK_DELETED": {
+          const payload = event.data as { id?: string; task_id?: string } | string;
+          const deletedId =
+            typeof payload === "string" ? payload : payload?.id || payload?.task_id;
+          if (deletedId) {
+            setTasks((prev) => prev.filter((t) => t.id !== deletedId));
+          }
+          break;
+        }
+
+        case "SUBTASK_TOGGLED":
+        case "SUBTASK_CREATED": {
+          const subtaskPayload = event.data as {
+            task_id?: string;
+            subtask?: Subtask;
+            subtasks_count?: number;
+            subtasks_completed_count?: number;
+          };
+          if (subtaskPayload?.task_id) {
+            setTasks((prev) =>
+              prev.map((t) => {
+                if (t.id !== subtaskPayload.task_id) return t;
+                let updatedSubtasks = t.subtasks;
+                if (subtaskPayload.subtask) {
+                  if (updatedSubtasks?.some((s) => s.id === subtaskPayload.subtask?.id)) {
+                    updatedSubtasks = updatedSubtasks.map((s) =>
+                      s.id === subtaskPayload.subtask?.id ? subtaskPayload.subtask! : s
+                    );
+                  } else if (updatedSubtasks) {
+                    updatedSubtasks = [...updatedSubtasks, subtaskPayload.subtask];
+                  }
+                }
+                const total =
+                  subtaskPayload.subtasks_count ??
+                  (updatedSubtasks ? updatedSubtasks.length : t.subtasks_count);
+                const completed =
+                  subtaskPayload.subtasks_completed_count ??
+                  (updatedSubtasks
+                    ? updatedSubtasks.filter((s) => s.completada).length
+                    : t.subtasks_completed_count);
+                return {
+                  ...t,
+                  subtasks: updatedSubtasks,
+                  subtasks_count: total,
+                  subtasks_completed_count: completed,
+                };
+              })
+            );
+          }
+          break;
+        }
+
+        case "COMMENT_ADDED":
+        case "COMMENT_DELETED": {
+          const commentPayload = event.data as {
+            task_id?: string;
+            comments_count?: number;
+          };
+          if (commentPayload?.task_id) {
+            setTasks((prev) =>
+              prev.map((t) => {
+                if (t.id !== commentPayload.task_id) return t;
+                const countDiff = event.type === "COMMENT_ADDED" ? 1 : -1;
+                return {
+                  ...t,
+                  comments_count:
+                    commentPayload.comments_count ??
+                    Math.max(0, (t.comments_count ?? 0) + countDiff),
+                };
+              })
+            );
+          }
+          break;
+        }
+
+        case "ATTACHMENT_ADDED":
+        case "ATTACHMENT_DELETED": {
+          const attPayload = event.data as {
+            task_id?: string;
+            attachments_count?: number;
+          };
+          if (attPayload?.task_id) {
+            setTasks((prev) =>
+              prev.map((t) => {
+                if (t.id !== attPayload.task_id) return t;
+                const countDiff = event.type === "ATTACHMENT_ADDED" ? 1 : -1;
+                return {
+                  ...t,
+                  attachments_count:
+                    attPayload.attachments_count ??
+                    Math.max(0, (t.attachments_count ?? 0) + countDiff),
+                };
+              })
+            );
+          }
+          break;
+        }
+
+        case "POINTS_AWARDED":
+        case "STREAK_UPDATED":
+        case "REWARD_REDEEMED": {
+          // Refrescar datos de gamificación en segundo plano sin skeletons destructivos
+          if (roomId) {
+            api
+              .get<GamificationOverview>(`/rooms/${roomId}/gamification`)
+              .then((res) => {
+                if (res.data) {
+                  setGamification(res.data);
+                  cacheManager.setRoomGamification(roomId, res.data);
+                }
+              })
+              .catch(() => {});
+          }
+          break;
+        }
+      }
+    },
+    [roomId]
+  );
+
+  // Cliente de Sincronización en Vivo SSE y BroadcastChannel con conciliación atómica
+  const { isConnected: isLiveConnected } = useRoomEvents(roomId, handleLiveEvent);
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     setCompletingId(taskId);
@@ -126,9 +297,11 @@ const RoomTasks = () => {
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, estado: newStatus } : t))
       );
+      if (roomId) {
+        cacheManager.updateTaskInCache(roomId, { id: taskId, estado: newStatus });
+      }
       notifyUpdate();
       if (newStatus === "DONE") {
-        // Disparo de confeti pixelado 8-bit y sintetizador de audio procedural
         triggerCelebration();
         toast.success("¡Tarea completada! 🎉");
       } else if (newStatus === "IN_PROGRESS") {
@@ -173,6 +346,9 @@ const RoomTasks = () => {
     try {
       await api.delete(`/tasks/${id}`);
       setTasks((prev) => prev.filter((t) => t.id !== id));
+      if (roomId) {
+        cacheManager.removeTaskFromCache(roomId, id);
+      }
       notifyUpdate();
       setTaskToDelete(null);
       toast.success("Tarea eliminada correctamente");

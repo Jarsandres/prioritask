@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "../context/ToastContext";
-import { useTaskUpdate } from "../context/TaskUpdateContext";
+import { announce } from "../components/common/ScreenReaderAnnouncer";
+import { cacheManager } from "../services/cacheManager";
+import type { Task, Subtask } from "../types/task";
 
 export type RoomEventType =
   | "TASK_CREATED"
   | "TASK_UPDATED"
   | "TASK_DELETED"
   | "SUBTASK_TOGGLED"
+  | "SUBTASK_CREATED"
   | "COMMENT_ADDED"
   | "COMMENT_DELETED"
+  | "ATTACHMENT_ADDED"
+  | "ATTACHMENT_DELETED"
+  | "MEMBER_EVICTED"
   | "POINTS_AWARDED"
   | "STREAK_UPDATED"
   | "REWARD_REDEEMED"
@@ -29,23 +35,39 @@ export interface UseRoomEventsReturn {
 
 const TAB_ID = `tab_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-export const useRoomEvents = (roomId?: string | null): UseRoomEventsReturn => {
+const getUserIdFromToken = (): string | null => {
+  if (typeof window === "undefined") return null;
+  const token = localStorage.getItem("token");
+  if (!token) return null;
+  try {
+    const base64Url = token.split(".")[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(window.atob(base64));
+    return payload.sub || payload.user_id || null;
+  } catch {
+    return null;
+  }
+};
+
+export const useRoomEvents = (
+  roomId?: string | null,
+  onEvent?: (event: RoomSyncEvent) => void
+): UseRoomEventsReturn => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [lastEvent, setLastEvent] = useState<RoomSyncEvent | null>(null);
 
   const { toast } = useToast();
-  const { notifyUpdate } = useTaskUpdate();
-
-  // Mantener referencias estables para evitar re-suscripciones innecesarias
-  const notifyUpdateRef = useRef(notifyUpdate);
-  useEffect(() => {
-    notifyUpdateRef.current = notifyUpdate;
-  }, [notifyUpdate]);
 
   const toastRef = useRef(toast);
   useEffect(() => {
     toastRef.current = toast;
   }, [toast]);
+
+  const onEventRef = useRef(onEvent);
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
@@ -53,35 +75,179 @@ export const useRoomEvents = (roomId?: string | null): UseRoomEventsReturn => {
     (eventType: RoomEventType, data: unknown, isFromBroadcast = false) => {
       if (eventType === "ping") return;
 
+      const currentRoomId = roomId || "";
+
       const eventPayload: RoomSyncEvent = {
         type: eventType,
         data,
-        roomId: roomId || "",
+        roomId: currentRoomId,
         timestamp: Date.now(),
         sourceTabId: TAB_ID,
       };
 
       setLastEvent(eventPayload);
 
-      // Reactividad: invalidar queries y refrescar listas de tareas
-      notifyUpdateRef.current();
+      // Actualización directa de la caché L1 en cliente ante eventos SSE
+      if (currentRoomId) {
+        switch (eventType) {
+          case "TASK_CREATED": {
+            const newTask = data as Task;
+            if (newTask && newTask.id) {
+              cacheManager.addTaskToCache(currentRoomId, newTask);
+            }
+            break;
+          }
+          case "TASK_UPDATED": {
+            const updated = data as Partial<Task> & { id: string };
+            if (updated && updated.id) {
+              cacheManager.updateTaskInCache(currentRoomId, updated);
+            }
+            break;
+          }
+          case "TASK_DELETED": {
+            const payload = data as { id?: string; task_id?: string } | string;
+            const deletedId =
+              typeof payload === "string" ? payload : payload?.id || payload?.task_id;
+            if (deletedId) {
+              cacheManager.removeTaskFromCache(currentRoomId, deletedId);
+            }
+            break;
+          }
+          case "SUBTASK_TOGGLED":
+          case "SUBTASK_CREATED": {
+            const subtaskPayload = data as {
+              task_id?: string;
+              subtask?: Subtask;
+              subtasks_count?: number;
+              subtasks_completed_count?: number;
+            };
+            if (subtaskPayload?.task_id) {
+              cacheManager.updateSubtaskInCache(
+                currentRoomId,
+                subtaskPayload.task_id,
+                subtaskPayload
+              );
+            }
+            break;
+          }
+          case "COMMENT_ADDED": {
+            const commentPayload = data as {
+              task_id?: string;
+              comments_count?: number;
+            };
+            if (commentPayload?.task_id) {
+              cacheManager.updateCommentsCountInCache(
+                currentRoomId,
+                commentPayload.task_id,
+                commentPayload.comments_count !== undefined
+                  ? { comments_count: commentPayload.comments_count }
+                  : 1
+              );
+            }
+            break;
+          }
+          case "COMMENT_DELETED": {
+            const commentPayload = data as {
+              task_id?: string;
+              comments_count?: number;
+            };
+            if (commentPayload?.task_id) {
+              cacheManager.updateCommentsCountInCache(
+                currentRoomId,
+                commentPayload.task_id,
+                commentPayload.comments_count !== undefined
+                  ? { comments_count: commentPayload.comments_count }
+                  : -1
+              );
+            }
+            break;
+          }
+          case "ATTACHMENT_ADDED": {
+            const attPayload = data as {
+              task_id?: string;
+              attachments_count?: number;
+            };
+            if (attPayload?.task_id) {
+              cacheManager.updateAttachmentsCountInCache(
+                currentRoomId,
+                attPayload.task_id,
+                attPayload.attachments_count !== undefined
+                  ? { attachments_count: attPayload.attachments_count }
+                  : 1
+              );
+            }
+            break;
+          }
+          case "ATTACHMENT_DELETED": {
+            const attPayload = data as {
+              task_id?: string;
+              attachments_count?: number;
+            };
+            if (attPayload?.task_id) {
+              cacheManager.updateAttachmentsCountInCache(
+                currentRoomId,
+                attPayload.task_id,
+                attPayload.attachments_count !== undefined
+                  ? { attachments_count: attPayload.attachments_count }
+                  : -1
+              );
+            }
+            break;
+          }
+          case "POINTS_AWARDED":
+          case "STREAK_UPDATED":
+          case "REWARD_REDEEMED": {
+            cacheManager.invalidateRoom(currentRoomId);
+            break;
+          }
+        }
+      }
 
-      // Toast sutil informando a los miembros del hogar
-      const eventMessages: Record<string, string> = {
+      // Manejo específico del evento MEMBER_EVICTED
+      if (eventType === "MEMBER_EVICTED") {
+        const currentUserId = getUserIdFromToken();
+        const evictedUserId = (data as { user_id?: string })?.user_id;
+
+        if (evictedUserId && currentUserId && evictedUserId === currentUserId) {
+          toastRef.current.warning("Has sido removido de este hogar", {
+            duration: 5000,
+          });
+          announce("Has sido removido de este hogar. Redirigiendo a tu panel.");
+          if (typeof window !== "undefined") {
+            window.location.href = "/dashboard";
+          }
+          return;
+        }
+      }
+
+      // Notificar al callback de conciliación granular in-place
+      if (onEventRef.current) {
+        onEventRef.current(eventPayload);
+      }
+
+      // Mensajes amigables para toasts y lectores de pantalla
+      const eventMessages: Partial<Record<RoomEventType, string>> = {
         TASK_CREATED: "Nueva tarea agregada en el hogar",
         TASK_UPDATED: "Una tarea fue modificada en el hogar",
         TASK_DELETED: "Una tarea fue eliminada en el hogar",
         SUBTASK_TOGGLED: "Progreso de subtarea actualizado",
+        SUBTASK_CREATED: "Nueva subtarea añadida",
         COMMENT_ADDED: "Nuevo comentario añadido en una tarea",
         COMMENT_DELETED: "Comentario eliminado en una tarea",
+        ATTACHMENT_ADDED: "Nuevo archivo adjunto subido",
+        ATTACHMENT_DELETED: "Archivo adjunto eliminado",
+        MEMBER_EVICTED: "Un miembro ha salido del hogar",
         POINTS_AWARDED: "¡Puntos otorgados en el hogar! 🪙",
         STREAK_UPDATED: "¡Racha de tareas actualizada! 🔥",
         REWARD_REDEEMED: "¡Alguien ha canjeado una recompensa! 🎁",
       };
 
-      const message =
-        eventMessages[eventType] || "Cambio detectado en la sala...";
+      const message = eventMessages[eventType] || "Cambio detectado en la sala...";
 
+      // Anunciar a lectores de pantalla (NVDA, TalkBack, VoiceOver)
+      announce(message);
+
+      // Toast informativo
       toastRef.current.info(message, {
         duration: 3500,
       });
@@ -162,8 +328,12 @@ export const useRoomEvents = (roomId?: string | null): UseRoomEventsReturn => {
         "TASK_UPDATED",
         "TASK_DELETED",
         "SUBTASK_TOGGLED",
+        "SUBTASK_CREATED",
         "COMMENT_ADDED",
         "COMMENT_DELETED",
+        "ATTACHMENT_ADDED",
+        "ATTACHMENT_DELETED",
+        "MEMBER_EVICTED",
         "POINTS_AWARDED",
         "STREAK_UPDATED",
         "REWARD_REDEEMED",
@@ -186,7 +356,6 @@ export const useRoomEvents = (roomId?: string | null): UseRoomEventsReturn => {
 
       eventSource.onerror = (e) => {
         setIsConnected(false);
-        // EventSource intentará reconectar automáticamente si no se cierra
         if (eventSource?.readyState === EventSource.CLOSED) {
           console.debug("SSE stream desconectado para el hogar:", roomId, e);
         }

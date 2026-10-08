@@ -46,8 +46,36 @@ const TaskList = () => {
   const { roomId } = useRoom();
   const { toast } = useToast();
 
-  // Cliente de Sincronización en Vivo SSE y BroadcastChannel para la sala activa
-  const { isConnected: isLiveConnected } = useRoomEvents(roomId);
+  // Cliente de Sincronización en Vivo SSE y BroadcastChannel para la sala activa con conciliación in-place
+  const handleLiveEvent = useCallback((event: { type: string; data: unknown }) => {
+    if (!event || !event.type) return;
+    if (event.type === "TASK_CREATED") {
+      const newTask = event.data as Task;
+      if (newTask && newTask.id) {
+        setTareas((prev) =>
+          prev.some((t) => t.id === newTask.id)
+            ? prev.map((t) => (t.id === newTask.id ? { ...t, ...newTask } : t))
+            : [newTask, ...prev]
+        );
+      }
+    } else if (event.type === "TASK_UPDATED") {
+      const updated = event.data as Partial<Task> & { id: string };
+      if (updated && updated.id) {
+        setTareas((prev) =>
+          prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+        );
+      }
+    } else if (event.type === "TASK_DELETED") {
+      const payload = event.data as { id?: string; task_id?: string } | string;
+      const deletedId =
+        typeof payload === "string" ? payload : payload?.id || payload?.task_id;
+      if (deletedId) {
+        setTareas((prev) => prev.filter((t) => t.id !== deletedId));
+      }
+    }
+  }, []);
+
+  const { isConnected: isLiveConnected } = useRoomEvents(roomId, handleLiveEvent);
 
   const handleChangeViewMode = (mode: TaskViewMode) => {
     setViewMode(mode);

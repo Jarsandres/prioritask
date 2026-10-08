@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import api from "../../api";
 import type { Task } from "../../types/task";
 import { useToast } from "../../context/ToastContext";
+import useA11yModal from "../../hooks/useA11yModal";
 import {
   LuDownload,
   LuFileSpreadsheet,
@@ -31,6 +32,9 @@ export const RoomExportModal: React.FC<RoomExportModalProps> = ({
   const [downloadingJson, setDownloadingJson] = useState(false);
   const [downloadingCsv, setDownloadingCsv] = useState(false);
   const { toast } = useToast();
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useA11yModal({ isOpen, onClose, modalRef });
 
   if (!isOpen) return null;
 
@@ -108,7 +112,8 @@ export const RoomExportModal: React.FC<RoomExportModalProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
           <div
-            className="modal-content shadow-lg border-2"
+            ref={modalRef}
+            className="modal-content shadow-lg border-2 retro-bottom-sheet"
             style={{
               backgroundColor: "var(--bg-surface)",
               color: "var(--text-main)",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
@@ -9,6 +9,7 @@ import RoomMembersModal from "../components/RoomMembersModal";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { cacheManager } from "../services/cacheManager";
 import type { Task, Room } from "../types/task";
 import {
   LuPlus,
@@ -23,9 +24,11 @@ import {
 import "../components/tasks/tasks.css";
 
 const Dashboard = () => {
-  const [tareas, setTareas] = useState<Task[]>([]);
+  const cachedAllTasks = useMemo(() => cacheManager.getAllCachedTasks(), []);
+
+  const [tareas, setTareas] = useState<Task[]>(() => cachedAllTasks);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => cachedAllTasks.length === 0);
   const [selectedMemberModalRoom, setSelectedMemberModalRoom] = useState<Room | null>(null);
   const { version, notifyUpdate } = useTaskUpdate();
   const { roomId, setRoomId } = useRoom();
@@ -35,58 +38,74 @@ const Dashboard = () => {
     const controller = new AbortController();
     let isMounted = true;
 
-    const fetchTareas = async () => {
-      try {
-        const res = await api.get<Task[]>("/tasks", { signal: controller.signal });
-        if (isMounted) setTareas(res.data);
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === "CanceledError") return;
-        console.error(err);
+    const loadData = async () => {
+      // Si ya tenemos tareas cacheadas, evitamos skeletons destructivos (0ms UI wait)
+      if (cacheManager.getAllCachedTasks().length === 0 && tareas.length === 0) {
+        if (isMounted) setLoading(true);
       }
-    };
 
-    const fetchRooms = async () => {
       try {
-        const r = await api.get<Room[]>("/rooms", { signal: controller.signal });
+        // Ejecución en paralelo eliminando anti-patrón N+1 de peticiones iterativas
+        const [tasksRes, roomsRes] = await Promise.all([
+          api.get<Task[]>("/tasks", { signal: controller.signal }),
+          api.get<Room[]>("/rooms", { signal: controller.signal }),
+        ]);
+
         if (!isMounted) return;
 
-        if (r.data.length === 0) {
+        const allTasks = tasksRes.data;
+        const allRooms = roomsRes.data;
+
+        setTareas(allTasks);
+
+        if (allRooms.length === 0) {
           navigate("/rooms/create");
           return;
         }
 
-        const list = await Promise.all(
-          r.data.map(async (room) => {
-            try {
-              const tasksRes = await api.get<Task[]>(`/rooms/${room.id}/tasks`, {
-                params: { limit: 100 },
-                signal: controller.signal,
-              });
-              return { ...room, count: tasksRes.data.length };
-            } catch (err: unknown) {
-              if (err instanceof Error && err.name === "CanceledError") return room;
-              console.error(err);
-              return room;
-            }
-          })
-        );
+        // Agrupación en memoria O(N) para asignar conteos de tareas por sala sin peticiones HTTP adicionales
+        const taskCountByRoom = new Map<string, number>();
+        const tasksByRoom = new Map<string, Task[]>();
 
-        if (!isMounted) return;
-        setRooms(list);
+        allTasks.forEach((t) => {
+          if (t.room_id) {
+            taskCountByRoom.set(
+              t.room_id,
+              (taskCountByRoom.get(t.room_id) || 0) + 1
+            );
+            const list = tasksByRoom.get(t.room_id) || [];
+            list.push(t);
+            tasksByRoom.set(t.room_id, list);
+          }
+        });
 
-        if (!roomId && list.length > 0) {
-          setRoomId(list[0].id);
+        // Alimentar la caché L1 para cada sala
+        tasksByRoom.forEach((rTasks, rId) => {
+          const existing = cacheManager.getRoomTasks(rId);
+          if (!existing) {
+            cacheManager.setRoomTasks(rId, rTasks);
+          }
+        });
+
+        const enhancedRooms: Room[] = allRooms.map((room) => {
+          const cached = cacheManager.getRoomTasks(room.id);
+          const count = cached
+            ? cached.tasks.length
+            : taskCountByRoom.get(room.id) || 0;
+          return {
+            ...room,
+            count,
+          };
+        });
+
+        setRooms(enhancedRooms);
+
+        if (!roomId && enhancedRooms.length > 0) {
+          setRoomId(enhancedRooms[0].id);
         }
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "CanceledError") return;
-        console.error(err);
-      }
-    };
-
-    const loadData = async () => {
-      if (isMounted) setLoading(true);
-      try {
-        await Promise.all([fetchTareas(), fetchRooms()]);
+        console.error("Error al cargar datos en Dashboard:", err);
       } finally {
         if (isMounted) setLoading(false);
       }

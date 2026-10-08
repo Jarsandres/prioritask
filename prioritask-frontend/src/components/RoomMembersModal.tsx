@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LuUsers,
   LuUserPlus,
@@ -18,6 +18,7 @@ import Button from "./ui/Button";
 import Input from "./ui/Input";
 import Badge from "./ui/Badge";
 import { useToast } from "../context/ToastContext";
+import useA11yModal from "../hooks/useA11yModal";
 
 export interface RoomMembersModalProps {
   roomId: string;
@@ -119,17 +120,8 @@ const RoomMembersModal = ({
     }
   }, [isOpen, fetchMembersAndContext]);
 
-  // Manejo de tecla Escape
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useA11yModal({ isOpen, onClose, modalRef });
 
   if (!isOpen) return null;
 
@@ -319,7 +311,8 @@ const RoomMembersModal = ({
       >
         <div className="modal-dialog modal-dialog-centered modal-lg">
           <div
-            className="modal-content rounded-4 border shadow-xl overflow-hidden"
+            ref={modalRef}
+            className="modal-content rounded-4 border shadow-xl overflow-hidden retro-bottom-sheet"
             style={{
               backgroundColor: "var(--bg-surface, #ffffff)",
               borderColor: "var(--border-default, #e2e8f0)",

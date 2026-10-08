@@ -23,12 +23,21 @@ import {
   LuListChecks,
   LuPlus,
   LuTrash2,
+  LuCalendar,
 } from "react-icons/lu";
 
 interface AISuggestion {
   prioridad: string;
   motivo: string;
 }
+
+const PRIORITY_LEVELS = [
+  { level: 1, label: "Baja", color: "#10b981", activeBg: "#10b981", textColor: "#ffffff" },
+  { level: 2, label: "Media Baja", color: "#06b6d4", activeBg: "#06b6d4", textColor: "#ffffff" },
+  { level: 3, label: "Media", color: "#f59e0b", activeBg: "#f59e0b", textColor: "#1e293b" },
+  { level: 4, label: "Alta", color: "#f97316", activeBg: "#f97316", textColor: "#ffffff" },
+  { level: 5, label: "Urgente", color: "#ef4444", activeBg: "#ef4444", textColor: "#ffffff" },
+];
 
 const TaskForm = () => {
   const [titulo, setTitulo] = useState("");
@@ -72,6 +81,14 @@ const TaskForm = () => {
     }
     setDateError("");
     setDueDate(value);
+  };
+
+  const handleSetQuickDate = (daysToAdd: number) => {
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + daysToAdd);
+    const dateStr = targetDate.toISOString().split("T")[0];
+    setDateError("");
+    setDueDate(dateStr);
   };
 
   useEffect(() => {
@@ -332,57 +349,87 @@ const TaskForm = () => {
             />
           </div>
 
-          {/* Categoría y Peso */}
-          <div className="row g-3 mb-3">
-            <div className="col-12 col-md-6">
-              <label htmlFor="categoria" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
-                Categoría
-              </label>
-              <select
-                id="categoria"
-                className="form-select"
-                style={{
-                  borderRadius: "10px",
-                  borderColor: "var(--border-default)",
-                  backgroundColor: "var(--bg-subtle)",
-                  color: "var(--text-main)",
-                  minHeight: "42px",
-                  fontSize: "14px",
-                }}
-                value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
-                disabled={isSubmitting}
-              >
-                <option value="LIMPIEZA">Limpieza</option>
-                <option value="COMPRA">Compra</option>
-                <option value="MANTENIMIENTO">Mantenimiento</option>
-                <option value="OTRO">Otro</option>
-              </select>
-            </div>
+          {/* Categoría */}
+          <div className="mb-3">
+            <label htmlFor="categoria" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
+              Categoría
+            </label>
+            <select
+              id="categoria"
+              className="form-select"
+              style={{
+                borderRadius: "10px",
+                borderColor: "var(--border-default)",
+                backgroundColor: "var(--bg-subtle)",
+                color: "var(--text-main)",
+                minHeight: "42px",
+                fontSize: "14px",
+              }}
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              disabled={isSubmitting}
+            >
+              <option value="LIMPIEZA">Limpieza</option>
+              <option value="COMPRA">Compra</option>
+              <option value="MANTENIMIENTO">Mantenimiento</option>
+              <option value="OTRO">Otro</option>
+            </select>
+          </div>
 
-            <div className="col-12 col-md-6">
-              <label htmlFor="peso" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
-                Nivel de Prioridad / Peso (1 = Baja, 5 = Alta)
-              </label>
-              <input
-                id="peso"
-                type="number"
-                className="form-control"
-                style={{
-                  borderRadius: "10px",
-                  borderColor: "var(--border-default)",
-                  backgroundColor: "var(--bg-subtle)",
-                  color: "var(--text-main)",
-                  minHeight: "42px",
-                  fontSize: "14px",
-                }}
-                value={peso}
-                onChange={(e) => setPeso(Number(e.target.value))}
-                min="1"
-                max="5"
-                disabled={isSubmitting}
-              />
+          {/* Control Segmentado Táctil de Prioridad (44px alto para ergonomía móvil) */}
+          <div className="mb-3">
+            <label className="form-label fw-semibold d-block mb-2" style={{ fontSize: "13px" }}>
+              Nivel de Prioridad / Peso (1 = Baja, 5 = Urgente) *
+            </label>
+            <div
+              className="d-grid gap-2"
+              style={{
+                gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+              }}
+              role="radiogroup"
+              aria-label="Selección de nivel de prioridad"
+            >
+              {PRIORITY_LEVELS.map((item) => {
+                const isSelected = peso === item.level;
+                return (
+                  <button
+                    key={item.level}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    className="btn d-flex flex-column align-items-center justify-content-center px-2 py-1"
+                    style={{
+                      minHeight: "44px",
+                      borderRadius: "10px",
+                      border: `2px solid ${isSelected ? item.activeBg : "var(--border-default)"}`,
+                      backgroundColor: isSelected ? item.activeBg : "var(--bg-subtle)",
+                      color: isSelected ? item.textColor : "var(--text-main)",
+                      fontWeight: isSelected ? 700 : 500,
+                      transition: "all 0.15s ease",
+                      cursor: isSubmitting ? "not-allowed" : "pointer",
+                      boxShadow: isSelected ? "var(--shadow-sm)" : "none",
+                    }}
+                    onClick={() => !isSubmitting && setPeso(item.level)}
+                    disabled={isSubmitting}
+                    data-testid={`priority-btn-${item.level}`}
+                  >
+                    <span style={{ fontSize: "14px", lineHeight: "1.1" }}>
+                      {item.level}
+                    </span>
+                    <span style={{ fontSize: "11px", opacity: 0.9 }}>
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+            {/* Input oculto para sincronización con pruebas basadas en formulario estándar */}
+            <input
+              type="hidden"
+              id="peso"
+              name="peso"
+              value={peso}
+            />
           </div>
 
           {/* Botón de Asistente IA */}
@@ -419,12 +466,74 @@ const TaskForm = () => {
             </div>
           )}
 
-          {/* Fecha y Estado */}
+          {/* Fecha y Estado con Chips Táctiles de Acceso Rápido */}
           <div className="row g-3 mb-3">
             <div className="col-12 col-md-6">
-              <label htmlFor="dueDate" className="form-label fw-semibold" style={{ fontSize: "13px" }}>
-                Fecha de vencimiento
-              </label>
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <label htmlFor="dueDate" className="form-label fw-semibold mb-0" style={{ fontSize: "13px" }}>
+                  Fecha de vencimiento
+                </label>
+              </div>
+
+              {/* Chips táctiles de acceso rápido: [ Hoy ], [ Mañana ], [ Próx. Semana ] */}
+              <div className="d-flex gap-1 mb-2">
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{
+                    minHeight: "36px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "8px",
+                    backgroundColor: "var(--bg-subtle)",
+                    border: "1px solid var(--border-default)",
+                    color: "var(--text-main)",
+                  }}
+                  onClick={() => handleSetQuickDate(0)}
+                  disabled={isSubmitting}
+                  title="Establecer para hoy"
+                >
+                  <LuCalendar size={12} className="me-1" />
+                  Hoy
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{
+                    minHeight: "36px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "8px",
+                    backgroundColor: "var(--bg-subtle)",
+                    border: "1px solid var(--border-default)",
+                    color: "var(--text-main)",
+                  }}
+                  onClick={() => handleSetQuickDate(1)}
+                  disabled={isSubmitting}
+                  title="Establecer para mañana"
+                >
+                  Mañana
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{
+                    minHeight: "36px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "8px",
+                    backgroundColor: "var(--bg-subtle)",
+                    border: "1px solid var(--border-default)",
+                    color: "var(--text-main)",
+                  }}
+                  onClick={() => handleSetQuickDate(7)}
+                  disabled={isSubmitting}
+                  title="Establecer para dentro de una semana"
+                >
+                  Próx. Semana
+                </button>
+              </div>
+
               <div className="input-group">
                 <input
                   id="dueDate"

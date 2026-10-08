@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useId } from "react";
+import { useState, useEffect, useCallback, useId, useRef } from "react";
 import {
   LuFlame,
   LuTrophy,
@@ -22,6 +22,7 @@ import usePixelConfetti from "../../hooks/usePixelConfetti";
 import ConfirmModal from "../ConfirmModal";
 import { Skeleton } from "../ui/Skeleton";
 import { Button } from "../ui/Button";
+import useA11yModal from "../../hooks/useA11yModal";
 import type {
   GamificationOverview,
   RewardRead,
@@ -128,18 +129,8 @@ export const RoomGamificationModal = ({
     };
   }, [isOpen, fetchData]);
 
-  // Manejo de atajo Esc
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useA11yModal({ isOpen, onClose, modalRef });
 
   // Canjear recompensa
   const handleConfirmRedeem = async () => {
@@ -212,7 +203,8 @@ export const RoomGamificationModal = ({
         }}
       >
         <div
-          className="card border-0 shadow-lg"
+          ref={modalRef}
+          className="card border-0 shadow-lg retro-bottom-sheet"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

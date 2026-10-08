@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, memo } from "react";
 import type { Task, Subtask } from "../../types/task";
 import TaskChecklist from "../tasks/TaskChecklist";
 import TaskCommentsSection from "../tasks/TaskCommentsSection";
@@ -36,7 +36,7 @@ export interface TaskCardProps {
   onDragStart?: (e: React.DragEvent) => void;
 }
 
-export const TaskCard = ({
+const TaskCardComponent = ({
   task,
   onComplete,
   onEdit,
@@ -57,6 +57,11 @@ export const TaskCard = ({
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks ?? []);
   const menuRef = useRef<HTMLDivElement>(null);
   const isDone = task.estado === "DONE";
+
+  // Control táctil para gestos Swipe en dispositivos móviles
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchCurrentX, setTouchCurrentX] = useState<number | null>(null);
+  const [isSwiping, setIsSwiping] = useState(false);
 
   useEffect(() => {
     if (task.subtasks) {
@@ -89,11 +94,66 @@ export const TaskCard = ({
     }
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Solo activar swipe si no estamos interactuando con controles expandidos
+    if (showChecklist || showComments || showAttachments || menuOpen) return;
+    setTouchStartX(e.touches[0].clientX);
+    setTouchCurrentX(e.touches[0].clientX);
+    setIsSwiping(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    setTouchCurrentX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX !== null && touchCurrentX !== null) {
+      const deltaX = touchCurrentX - touchStartX;
+
+      // Swipe hacia la derecha -> Completar/Alternar
+      if (deltaX > 75 && onComplete && !isCompleting && !isDeleting) {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(30);
+        }
+        onComplete(task.id);
+      }
+      // Swipe hacia la izquierda -> Eliminar
+      else if (deltaX < -75 && onDelete && !isDeleting && !isCompleting) {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(30);
+        }
+        onDelete(task);
+      }
+    }
+
+    setTouchStartX(null);
+    setTouchCurrentX(null);
+    setIsSwiping(false);
+  };
+
+  const swipeOffset = touchStartX !== null && touchCurrentX !== null ? touchCurrentX - touchStartX : 0;
+  const clampedOffset = Math.max(-100, Math.min(100, swipeOffset));
+
   return (
     <div
       className={`ui-task-card ${isDone ? "task-done" : ""} ${className}`.trim()}
       draggable={draggable && !showChecklist}
       onDragStart={onDragStart}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{
+        transform: isSwiping && Math.abs(clampedOffset) > 10 ? `translateX(${clampedOffset}px)` : undefined,
+        transition: isSwiping ? "none" : "transform 0.2s ease, box-shadow 0.15s ease",
+        borderColor:
+          clampedOffset > 40
+            ? "var(--success-500)"
+            : clampedOffset < -40
+            ? "var(--danger-500)"
+            : undefined,
+      }}
+      data-testid={`task-card-${task.id}`}
     >
       {/* Cabecera superior: Badges + Menú contextual de 3 puntos */}
       <div className="ui-task-card-header">
@@ -379,4 +439,6 @@ export const TaskCard = ({
   );
 };
 
+// Memoización atómica para evitar re-renderizados innecesarios de tarjetas en listas grandes
+export const TaskCard = memo(TaskCardComponent);
 export default TaskCard;
