@@ -13,7 +13,7 @@ vi.mock("../../../context/RoomContext", () => ({
 
 describe("CommandPaletteModal (Multi-Tier Instant Search & LRU Cache)", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
     searchLRUCache.clear();
     cacheManager.clearCache();
     mockUseRoom.mockReturnValue({

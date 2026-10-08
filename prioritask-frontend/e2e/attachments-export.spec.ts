@@ -135,7 +135,7 @@ test.describe("Sprint 10 E2E - Exportación GDPR y Gestión de Adjuntos", () => 
       }
     });
 
-    await page.goto("/dashboard");
+    await page.goto("/rooms/room-s10-xyz/tasks");
 
     // Verificar que estamos en la sala correcta
     await expect(page.locator(".header-room-name")).toContainText("Casa de Pruebas");
@@ -153,15 +153,15 @@ test.describe("Sprint 10 E2E - Exportación GDPR y Gestión de Adjuntos", () => 
     // Validar las 3 opciones principales
     await expect(page.locator("text=Imprimir Lista para la Nevera (A4)")).toBeVisible();
     await expect(page.locator("text=Respaldo Total (JSON)")).toBeVisible();
-    await expect(page.locator("text=Hoja de Cálculo (CSV)")).toBeVisible();
+    await expect(page.locator("text=Hojas de Cálculo (CSV)")).toBeVisible();
 
     // Probar click en Descargar JSON
-    const downloadJsonBtn = page.locator('button:has-text("Descargar JSON (GDPR)")');
+    const downloadJsonBtn = page.locator('button:has-text("Descargar JSON")');
     await expect(downloadJsonBtn).toBeVisible();
     await downloadJsonBtn.click();
 
     // Probar click en Descargar CSV
-    const downloadCsvBtn = page.locator('button:has-text("Descargar CSV (Excel)")');
+    const downloadCsvBtn = page.locator('button:has-text("Descargar CSV")');
     await expect(downloadCsvBtn).toBeVisible();
     await downloadCsvBtn.click();
 
@@ -227,7 +227,7 @@ test.describe("Sprint 10 E2E - Exportación GDPR y Gestión de Adjuntos", () => 
       });
     });
 
-    await page.goto("/dashboard");
+    await page.goto("/rooms/room-s10-xyz/tasks");
 
     // Verificar que la tarea está renderizada
     await expect(page.locator("text=Reparar persiana del salón").first()).toBeVisible();

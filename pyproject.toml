@@ -11,10 +11,11 @@ dependencies = [
   # ─── ORM / BDs ────────────────────────────────────────────────────────
   "sqlmodel~=0.0.24",
   "aiosqlite~=0.21",          # driver async para SQLite
+  "sqlalchemy[asyncio]>=2.0", # incluye greenlet (SQLAlchemy 2.1 ya no lo instala por defecto)
 
   # ─── Configuración & Seguridad ───────────────────────────────────────
   "pydantic-settings~=2.1",
-  "python-jose[cryptography]>=3.4.0",   # JWT
+  "python-jose[cryptography]>=3.3.0",   # JWT
   "rsa>=4.9",
   "passlib[bcrypt]==1.7.*",           # hashing de contraseñas
   "bcrypt==4.0.1",
@@ -24,7 +25,7 @@ dependencies = [
   "celery[redis]~=5.4",
 
 
-  # ─── Miscelánea ────────────────────────────────clear──────────────────────
+  # ─── Miscelánea ────────────────────────────────────────────────────────
   "python-dotenv~=1.0",
   "filetype>=1.2.0",
   "python-multipart>=0.0.9"
