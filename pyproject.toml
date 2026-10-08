@@ -45,7 +45,7 @@ dev = [
 addopts = "-q"
 
 [tool.coverage.report]
-fail_under = 65
+fail_under = 70
 omit = [
     "app/services/intelligence.py",
     "app/schemas/response_examples.py",
