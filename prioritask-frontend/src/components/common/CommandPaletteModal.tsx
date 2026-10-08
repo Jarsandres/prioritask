@@ -387,7 +387,7 @@ export const CommandPaletteModal = ({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, activeRoom]);
+  }, [query, activeRoom?.id]);
 
   // Lista aplanada de todos los elementos seleccionables en orden
   const flatItems: PaletteCommandItem[] = useMemo(() => {
@@ -435,7 +435,7 @@ export const CommandPaletteModal = ({
       `[data-index="${selectedIndex}"]`
     );
     if (activeEl) {
-      activeEl.scrollIntoView({ block: "nearest" });
+      activeEl.scrollIntoView?.({ block: "nearest" });
     }
   }, [selectedIndex]);
 

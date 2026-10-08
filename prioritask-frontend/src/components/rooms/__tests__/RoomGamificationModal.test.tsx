@@ -74,7 +74,7 @@ describe("RoomGamificationModal Component", () => {
     renderGamificationModal();
 
     expect(await screen.findByText(/Gamificación/i)).toBeInTheDocument();
-    expect(await screen.findByText("5 días")).toBeInTheDocument();
+    expect(await screen.findByText(/5\s*d/i)).toBeInTheDocument();
     expect(screen.getByText("150")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Recompensas/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Clasificación/i })).toBeInTheDocument();

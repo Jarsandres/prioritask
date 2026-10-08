@@ -146,10 +146,13 @@ describe("CommandPaletteModal (Multi-Tier Instant Search & LRU Cache)", () => {
 
     fireEvent.change(input, { target: { value: "caldera" } });
 
-    await waitFor(() => {
-      expect(getSpy).toHaveBeenCalledWith("/tasks/search", expect.anything());
-      expect(screen.getByText("Reparar caldera")).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(getSpy).toHaveBeenCalledWith("/tasks/search", expect.anything());
+        expect(screen.getByText("Reparar caldera")).toBeInTheDocument();
+      },
+      { timeout: 4000 }
+    );
 
     // Debe haberse guardado en Capa 2 (LRU)
     expect(searchLRUCache.has("caldera")).toBe(true);

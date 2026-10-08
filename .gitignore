@@ -76,4 +76,7 @@ PROJECT.md
 TEST_INFRA.md
 TEST_READY.md
 .claude/
+usuarios_db_export.json
+*export*.json
+
 

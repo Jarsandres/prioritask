@@ -58,8 +58,8 @@ describe("RoomExportModal Component", () => {
 
     expect(screen.getByText("Exportar Datos y Lista de Tareas")).toBeInTheDocument();
     expect(screen.getByText(/Hogar: Hogar Dulce Hogar/i)).toBeInTheDocument();
-    expect(screen.getByText(/Exportar como JSON/i)).toBeInTheDocument();
-    expect(screen.getByText(/Exportar como CSV/i)).toBeInTheDocument();
+    expect(screen.getByText(/Respaldo Total \(JSON\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Hojas de Cálculo \(CSV\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Imprimir Lista para la Nevera/i)).toBeInTheDocument();
   });
 
@@ -70,7 +70,7 @@ describe("RoomExportModal Component", () => {
 
     renderExportModal();
 
-    const jsonBtn = screen.getByRole("button", { name: /Exportar como JSON/i });
+    const jsonBtn = screen.getByRole("button", { name: /Descargar JSON/i });
     fireEvent.click(jsonBtn);
 
     await waitFor(() => {
@@ -94,7 +94,7 @@ describe("RoomExportModal Component", () => {
 
     renderExportModal();
 
-    const printBtn = screen.getByRole("button", { name: /Imprimir Lista para la Nevera/i });
+    const printBtn = screen.getByRole("button", { name: /Imprimir Ahora/i });
     fireEvent.click(printBtn);
 
     expect(printSpy).toHaveBeenCalled();

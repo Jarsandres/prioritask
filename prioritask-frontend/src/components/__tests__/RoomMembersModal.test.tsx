@@ -71,18 +71,18 @@ describe("RoomMembersModal Component", () => {
 
     expect(await screen.findByText("Convivientes del Hogar")).toBeInTheDocument();
     expect(screen.getByText("Piso Compartido Centro")).toBeInTheDocument();
-    expect(await screen.findByText("Joel Admin")).toBeInTheDocument();
+    expect(await screen.findByText(/Joel Admin/i)).toBeInTheDocument();
     expect(screen.getByText("Laura Member")).toBeInTheDocument();
   });
 
   it("permite desplegar el formulario para añadir un nuevo miembro", async () => {
     renderMembersModal();
 
-    const addBtn = await screen.findByRole("button", { name: /Añadir Miembro/i });
+    const addBtn = await screen.findByRole("button", { name: /Añadir Conviviente/i });
     fireEvent.click(addBtn);
 
-    expect(screen.getByPlaceholderText(/ID de usuario/i)).toBeInTheDocument();
-    expect(screen.getByText("Rol")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/UUID del Usuario|e7b54d31/i)).toBeInTheDocument();
+    expect(screen.getByText(/Rol Inicial/i)).toBeInTheDocument();
   });
 
   it("llama a la API para incorporar un nuevo miembro", async () => {
@@ -98,13 +98,13 @@ describe("RoomMembersModal Component", () => {
 
     renderMembersModal();
 
-    const addBtn = await screen.findByRole("button", { name: /Añadir Miembro/i });
+    const addBtn = await screen.findByRole("button", { name: /Añadir Conviviente/i });
     fireEvent.click(addBtn);
 
-    const input = screen.getByPlaceholderText(/ID de usuario/i);
+    const input = screen.getByPlaceholderText(/UUID del Usuario|e7b54d31/i);
     fireEvent.change(input, { target: { value: "user-new-id" } });
 
-    const saveBtn = screen.getByRole("button", { name: /Guardar Miembro/i });
+    const saveBtn = screen.getByRole("button", { name: /^Añadir$/i });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
