@@ -94,12 +94,13 @@ def test_validate_file_security_forbidden_formats():
     assert exc_info.value.status_code == 415
 
 
-def test_local_storage_adapter_lifecycle_and_traversal_prevention(tmp_path: Path):
+@pytest.mark.asyncio
+async def test_local_storage_adapter_lifecycle_and_traversal_prevention(tmp_path: Path):
     adapter = LocalStorageAdapter(base_dir=tmp_path)
 
     # 1. Save file
     file_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + b"\x00" * 20
-    key, size = adapter.save_file(file_bytes, "evidencia.png", "image/png")
+    key, size = await adapter.save_file(file_bytes, "evidencia.png", "image/png")
 
     assert size == len(file_bytes)
     assert key.endswith(".png")
@@ -121,7 +122,7 @@ def test_local_storage_adapter_lifecycle_and_traversal_prevention(tmp_path: Path
         adapter.get_file_path("sub/../../traversal")
 
     # 4. Deletion
-    assert adapter.delete_file(key) is True
+    assert await adapter.delete_file(key) is True
     assert not file_path.exists()
-    assert adapter.delete_file(key) is False  # Already deleted
-    assert adapter.delete_file("../evil.txt") is False  # Invalid key
+    assert await adapter.delete_file(key) is False  # Already deleted
+    assert await adapter.delete_file("../evil.txt") is False  # Invalid key

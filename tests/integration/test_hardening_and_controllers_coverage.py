@@ -1,6 +1,6 @@
 import os
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -217,7 +217,7 @@ async def test_attachment_physical_compensation_on_commit_failure(
     # Parchear AsyncSession.commit para simular fallo de BD
     with (
         patch("sqlmodel.ext.asyncio.session.AsyncSession.commit", side_effect=RuntimeError("DB Commit failed")),
-        patch("app.services.storage.LocalStorageAdapter.delete_file") as mock_delete,
+        patch("app.services.storage.LocalStorageAdapter.delete_file", new_callable=AsyncMock) as mock_delete,
         pytest.raises(RuntimeError, match="DB Commit failed"),
     ):
         await async_client.post(

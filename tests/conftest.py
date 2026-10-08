@@ -23,7 +23,12 @@ from app.models.room import Room
 from app.models.task import Task
 from app.models.task_assignment import TaskAssignment
 from app.models.user import Usuario
-from app.services.auth import SECRET_KEY, create_access_token, hash_password
+from app.services.auth import (
+    SECRET_KEY,
+    create_access_token,
+    hash_password,
+    token_blacklist,
+)
 
 # Use minimal bcrypt rounds (4) in test suite for fast password hashing
 auth_service.pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=4)
@@ -61,10 +66,12 @@ app.dependency_overrides[get_session] = override_get_session
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def reset_test_db():
     rate_limiter.clear()
+    token_blacklist.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
     yield
     rate_limiter.clear()
+    token_blacklist.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
 

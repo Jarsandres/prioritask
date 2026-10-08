@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import api from "../api";
 import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
 
@@ -6,6 +6,10 @@ describe("api interceptors - error classification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("clasifica errores HTTP 413 con mensaje específico de límite de 10 MB", async () => {
@@ -118,6 +122,32 @@ describe("api interceptors - error classification", () => {
 
     await expect(responseInterceptor.rejected(canceledError)).rejects.toMatchObject({
       message: "canceled",
+    });
+  });
+
+  it("encola mutaciones destructivas en cola offline cuando se produce un error de red", async () => {
+    const mutationError = {
+      isAxiosError: true,
+      name: "AxiosError",
+      message: "Network Error",
+      config: {
+        url: "/tasks/99",
+        method: "delete",
+      } as InternalAxiosRequestConfig,
+      response: undefined,
+    } as AxiosError;
+
+    const responseInterceptor = (
+      api.interceptors.response as unknown as {
+        handlers: Array<{
+          rejected: (error: AxiosError) => Promise<unknown>;
+        }>;
+      }
+    ).handlers[0];
+
+    await expect(responseInterceptor.rejected(mutationError)).rejects.toMatchObject({
+      isOfflineQueued: true,
+      message: "Sin conexión a internet. La acción se canceló",
     });
   });
 });
