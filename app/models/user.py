@@ -25,6 +25,7 @@ class Usuario(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     is_active: bool = Field(default=True)
     is_superuser: bool = Field(default=False)
+    token_version: int = Field(default=1, nullable=False)
 
     rooms:   list["Room"]  = Relationship(back_populates="owner")
     rooms_member: list["RoomMember"] = Relationship(back_populates="user")

@@ -1,3 +1,4 @@
+import asyncio
 import re
 from pathlib import Path
 from typing import ClassVar
@@ -11,6 +12,7 @@ class LocalStorageAdapter(StoragePort):
     """
     Adaptador de almacenamiento local para archivos adjuntos.
     Garantiza aislamiento de nombres, UUID keys físicas y protección contra path traversal.
+    Delegación no bloqueante de I/O de disco mediante asyncio.to_thread.
     """
 
     ALLOWED_EXTENSIONS: ClassVar[set[str]] = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
@@ -49,16 +51,17 @@ class LocalStorageAdapter(StoragePort):
 
         return target_path
 
-    def save_file(self, file_bytes: bytes, filename: str, content_type: str) -> tuple[str, int]:
+    async def save_file(self, file_bytes: bytes, filename: str, content_type: str) -> tuple[str, int]:
         """
-        Escribe los bytes en el sistema de archivos local bajo un nombre UUID opaco.
+        Escribe los bytes en el sistema de archivos local bajo un nombre UUID opaco
+        usando un hilo separado para evitar bloquear el bucle de eventos.
         Retorna (storage_key, file_size_bytes).
         """
         ext = self._sanitize_extension(filename, content_type)
         storage_key = f"{uuid4()}{ext}"
         target_path = self._resolve_and_verify_path(storage_key)
 
-        target_path.write_bytes(file_bytes)
+        await asyncio.to_thread(target_path.write_bytes, file_bytes)
         return storage_key, len(file_bytes)
 
     def get_file_path(self, storage_key: str) -> Path:
@@ -67,15 +70,19 @@ class LocalStorageAdapter(StoragePort):
         """
         return self._resolve_and_verify_path(storage_key)
 
-    def delete_file(self, storage_key: str) -> bool:
+    async def delete_file(self, storage_key: str) -> bool:
         """
-        Elimina el archivo físico de forma segura.
+        Elimina el archivo físico de forma segura en un hilo separado.
         """
         try:
             target_path = self._resolve_and_verify_path(storage_key)
-            if target_path.exists() and target_path.is_file():
-                target_path.unlink()
-                return True
+
+            def _sync_unlink() -> bool:
+                if target_path.exists() and target_path.is_file():
+                    target_path.unlink()
+                    return True
+                return False
+
+            return await asyncio.to_thread(_sync_unlink)
         except (ValueError, OSError):
             return False
-        return False

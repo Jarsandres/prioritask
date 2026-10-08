@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
 
+import sqlalchemy as sa
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 if TYPE_CHECKING:
@@ -14,6 +15,13 @@ class UserRoomGamification(SQLModel, table=True):
     __tablename__ = "userroomgamification"
     __table_args__ = (
         UniqueConstraint("room_id", "user_id", name="uq_user_room_gamification"),
+        sa.Index(
+            "ix_gamification_leaderboard_covering",
+            "room_id",
+            "lifetime_points",
+            "points_balance",
+            "user_id",
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -36,6 +44,7 @@ class PointTransaction(SQLModel, table=True):
     __tablename__ = "pointtransaction"
     __table_args__ = (
         UniqueConstraint("task_id", "user_id", "action_type", name="uq_point_tx"),
+        sa.Index("ix_point_tx_room_user_created", "room_id", "user_id", "created_at"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

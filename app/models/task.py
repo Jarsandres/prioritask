@@ -29,6 +29,23 @@ class Task(SQLModel, table=True):
             postgresql_where=sa.text("deleted_at IS NULL AND completed = false"),
             sqlite_where=sa.text("deleted_at IS NULL AND completed = 0"),
         ),
+        sa.Index(
+            "ix_task_room_deleted_completed_created",
+            "room_id",
+            "deleted_at",
+            "completed",
+            "created_at",
+        ),
+        sa.Index(
+            "ix_task_room_analytics_covering",
+            "room_id",
+            "deleted_at",
+            "completed",
+            "estado",
+            "peso",
+            "due_date",
+            "user_id",
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -104,15 +121,13 @@ class Task(SQLModel, table=True):
     def owner_id(self, value: UUID):
         self.user_id = value
 
-    def __getattribute__(self, name: str):
-        if name in ("subtasks", "comments", "attachments"):
-            dict_ = object.__getattribute__(self, "__dict__")
-            if name not in dict_:
-                return []
-        return super().__getattribute__(name)
-
 
 class TaskHistory(SQLModel, table=True):
+    __tablename__ = "taskhistory"
+    __table_args__ = (
+        sa.Index("ix_task_history_task_id_timestamp", "task_id", "timestamp"),
+    )
+
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     task_id: UUID = Field(foreign_key="task.id", index=True)
     user_id: UUID = Field(foreign_key="usuario.id", index=True)

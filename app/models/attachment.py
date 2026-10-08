@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
 
+import sqlalchemy as sa
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -11,6 +12,9 @@ if TYPE_CHECKING:
 
 class TaskAttachment(SQLModel, table=True):
     __tablename__ = "task_attachment"
+    __table_args__ = (
+        sa.Index("ix_task_attachment_task_deleted_created", "task_id", "deleted_at", "created_at"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     task_id: UUID = Field(foreign_key="task.id", index=True, nullable=False)

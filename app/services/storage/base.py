@@ -9,9 +9,9 @@ class StoragePort(ABC):
     """
 
     @abstractmethod
-    def save_file(self, file_bytes: bytes, filename: str, content_type: str) -> tuple[str, int]:
+    async def save_file(self, file_bytes: bytes, filename: str, content_type: str) -> tuple[str, int]:
         """
-        Guarda el contenido binario del archivo.
+        Guarda el contenido binario del archivo de forma asíncrona no bloqueante.
         Retorna (storage_key, size_bytes).
         """
 
@@ -23,8 +23,9 @@ class StoragePort(ABC):
         """
 
     @abstractmethod
-    def delete_file(self, storage_key: str) -> bool:
+    async def delete_file(self, storage_key: str) -> bool:
         """
-        Elimina físicamente el archivo si existe. Retorna True si fue eliminado o False si no existía.
+        Elimina físicamente el archivo si existe de forma asíncrona no bloqueante.
+        Retorna True si fue eliminado o False si no existía.
         """
 

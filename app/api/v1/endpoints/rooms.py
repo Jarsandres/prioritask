@@ -13,19 +13,25 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.rate_limit import rate_limit
 from app.db.session import get_session
 from app.models.comment import TaskComment
-from app.models.enums import CategoriaTarea, EstadoTarea, RoomMemberRole
+from app.models.enums import RoomMemberRole
 from app.models.room import Room
 from app.models.room_member import RoomMember
 from app.models.task import Task
 from app.models.user import Usuario
-from app.schemas.analytics import MemberWorkload, RoomAnalyticsResponse
+from app.schemas.analytics import RoomAnalyticsResponse
 from app.schemas.room import RoomCreate, RoomRead, RoomUpdate
 from app.schemas.room_member import (
     RoomMemberCreate,
     RoomMemberRead,
     RoomMemberUpdate,
+)
+from app.services.analytics import (
+    compute_room_analytics,
+    get_cached_room_analytics,
+    set_cached_room_analytics,
 )
 from app.services.auth import get_current_user, get_current_user_flexible
 from app.services.events import event_broadcaster
@@ -182,6 +188,8 @@ async def create_room(
 )
 async def get_rooms(
     parent_id: UUID | None = Query(None, description="Filtrar por ID de hogar padre"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, gt=0, le=100),
     current_user: Usuario = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -206,6 +214,8 @@ async def get_rooms(
 
     if parent_id is not None:
         query = query.where(Room.parent_id == parent_id)
+
+    query = query.offset(skip).limit(limit)
 
     result = await session.exec(query)
     rooms = result.all()
@@ -541,6 +551,13 @@ async def delete_room_member(
 
     await session.delete(target_member)
     await session.commit()
+
+    await event_broadcaster.broadcast(
+        room_id,
+        "MEMBER_EVICTED",
+        {"user_id": str(user_id), "room_id": str(room_id)},
+    )
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -558,107 +575,18 @@ async def get_room_analytics(
     # 1. Validar acceso (propietario o miembro activo)
     room = await _get_room_and_verify_member_access(room_id, current_user, session)
 
-    # 2. Obtener todas las tareas asociadas a la sala (respetando soft delete)
-    tasks_res = await session.exec(
-        select(Task)
-        .options(selectinload(Task.colaboradores))
-        .where(
-            Task.room_id == room.id,
-            Task.deleted_at.is_(None),
-        )
-    )
-    tasks = tasks_res.all()
+    # 2. Read-Through cache en Redis
+    cached = await get_cached_room_analytics(room.id)
+    if cached is not None:
+        return cached
 
-    # 3. Mapear miembros del hogar (propietario + RoomMember)
-    members_map: dict[UUID, str] = {}
+    # 3. Computar métricas mediante agregación SQL (sin consultas N+1)
+    analytics = await compute_room_analytics(room, session)
 
-    owner = await session.get(Usuario, room.owner_id)
-    if owner:
-        members_map[owner.id] = owner.nombre or owner.email or "Sin nombre"
+    # 4. Guardar en caché con TTL de 60s
+    await set_cached_room_analytics(room.id, analytics)
 
-    room_members_res = await session.exec(
-        select(RoomMember)
-        .options(selectinload(RoomMember.user))
-        .where(RoomMember.room_id == room.id)
-    )
-    for rm in room_members_res.all():
-        if rm.user:
-            members_map[rm.user_id] = rm.user.nombre or rm.user.email or "Sin nombre"
-        elif rm.user_id not in members_map:
-            u = await session.get(Usuario, rm.user_id)
-            members_map[rm.user_id] = (u.nombre or u.email or "Sin nombre") if u else "Sin nombre"
-
-    # Inicializar balance de carga por miembro
-    workload_by_member: dict[UUID, MemberWorkload] = {
-        uid: MemberWorkload(
-            user_id=uid,
-            nombre=nombre,
-            tareas_asignadas=0,
-            tareas_completadas=0,
-            peso_total_completado=0.0,
-        )
-        for uid, nombre in members_map.items()
-    }
-
-    # Distribución por categoría
-    distribucion_por_categoria: dict[str, int] = {cat.value: 0 for cat in CategoriaTarea}
-
-    total_activas = 0
-    total_completadas = 0
-    tareas_vencidas = 0
-    now = datetime.now(UTC)
-
-    for task in tasks:
-        is_completed = bool(task.completed or task.estado == EstadoTarea.DONE)
-        if is_completed:
-            total_completadas += 1
-        else:
-            total_activas += 1
-            if task.due_date is not None:
-                due = task.due_date if task.due_date.tzinfo else task.due_date.replace(tzinfo=UTC)
-                if due < now:
-                    tareas_vencidas += 1
-
-        cat_key = task.categoria.value if hasattr(task.categoria, "value") else str(task.categoria)
-        distribucion_por_categoria[cat_key] = distribucion_por_categoria.get(cat_key, 0) + 1
-
-        # Miembros asignados: colaboradores explícitos o el creador de la tarea
-        assigned_uids = {c.user_id for c in task.colaboradores}
-        if not assigned_uids:
-            assigned_uids = {task.user_id}
-
-        for uid in assigned_uids:
-            if uid in workload_by_member:
-                wl = workload_by_member[uid]
-                wl.tareas_asignadas += 1
-                if is_completed:
-                    wl.tareas_completadas += 1
-                    wl.peso_total_completado = round(wl.peso_total_completado + float(task.peso), 2)
-            else:
-                u = await session.get(Usuario, uid)
-                u_name = (u.nombre or u.email or "Sin nombre") if u else "Sin nombre"
-                members_map[uid] = u_name
-                wl = MemberWorkload(
-                    user_id=uid,
-                    nombre=u_name,
-                    tareas_asignadas=1,
-                    tareas_completadas=1 if is_completed else 0,
-                    peso_total_completado=round(float(task.peso), 2) if is_completed else 0.0,
-                )
-                workload_by_member[uid] = wl
-
-    total_tareas = total_activas + total_completadas
-    tasa_completitud = round((total_completadas / total_tareas) * 100.0, 2) if total_tareas > 0 else 0.0
-
-    return RoomAnalyticsResponse(
-        room_id=room.id,
-        total_tareas_activas=total_activas,
-        total_tareas_completadas=total_completadas,
-        tasa_completitud=tasa_completitud,
-        distribucion_por_categoria=distribucion_por_categoria,
-        distribucion_por_miembro=list(workload_by_member.values()),
-        tareas_vencidas=tareas_vencidas,
-    )
+    return analytics
 
 
 @router.get(
@@ -702,7 +630,7 @@ async def room_events(
                 if await request.is_disconnected():
                     break
                 try:
-                    msg = await asyncio.wait_for(queue.get(), timeout=0.2)
+                    msg = await asyncio.wait_for(queue.get(), timeout=15.0)
                     event_type = msg.get("event", "message")
                     if event_type == "close":
                         break
@@ -734,6 +662,7 @@ async def room_events(
     "/{room_id}/export",
     summary="Exportar datos del hogar (GDPR)",
     description="Genera y descarga un volcado de datos completo del hogar en formato JSON o CSV.",
+    dependencies=[Depends(rate_limit(max_requests=2, window_seconds=60))],
 )
 async def export_room_data(
     room_id: UUID,

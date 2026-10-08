@@ -1,3 +1,5 @@
+import contextlib
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -56,7 +58,7 @@ async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_sessi
     user = await session.scalar(
         select(Usuario).where(Usuario.email == payload.email)
     )
-    if not user or not auth_srv.verify_password(payload.password, user.hashed_password):
+    if not user or not await auth_srv.verify_password_async(payload.password, user.hashed_password):
         raise HTTPException(HTTP_401_UNAUTHORIZED, detail="Credenciales inválidas")
 
     access_token = auth_srv.create_access_token(
@@ -64,8 +66,13 @@ async def login(payload: UsuarioLogin, session: AsyncSession = Depends(get_sessi
         SECRET_KEY,
         is_superuser=user.is_superuser,
         role="ADMIN" if user.is_superuser else "USER",
+        token_version=user.token_version,
     )
-    refresh_token = auth_srv.create_refresh_token(user.id, SECRET_KEY)
+    refresh_token = auth_srv.create_refresh_token(
+        user.id,
+        SECRET_KEY,
+        token_version=user.token_version,
+    )
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -104,6 +111,13 @@ async def refresh_token(
                 detail="Se requiere un token de refresco válido"
             )
 
+        jti = token_data.get("jti")
+        if jti and await auth_srv.is_token_revoked(jti):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token revocado",
+            )
+
         user_id_raw = token_data.get("sub")
         if not user_id_raw:
             raise HTTPException(status_code=401, detail="Token no válido")
@@ -124,16 +138,56 @@ async def refresh_token(
             detail="Usuario inactivo o no encontrado"
         )
 
+    token_version = token_data.get("token_version")
+    if token_version is not None and token_version != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesión invalidada por cambio de versión de sesión",
+        )
+
+    # Revocar el refresh token consumido (rotación de tokens)
+    if jti:
+        exp = token_data.get("exp")
+        now = datetime.now(UTC).timestamp()
+        ttl = int(exp - now) if exp else 86400 * 7
+        await auth_srv.revoke_token(jti, max(ttl, 60))
+
     new_access_token = auth_srv.create_access_token(
         user.id,
         SECRET_KEY,
         is_superuser=user.is_superuser,
         role="ADMIN" if user.is_superuser else "USER",
+        token_version=user.token_version,
     )
-    new_refresh_token = auth_srv.create_refresh_token(user.id, SECRET_KEY)
+    new_refresh_token = auth_srv.create_refresh_token(
+        user.id,
+        SECRET_KEY,
+        token_version=user.token_version,
+    )
 
     return TokenResponse(
         access_token=new_access_token,
         refresh_token=new_refresh_token,
         token_type="bearer"
     )
+
+
+@router.post(
+    "/logout",
+    summary="Cerrar sesión",
+    description="Invalida el token JWT actual registrando su jti en la lista negra.",
+)
+async def logout(
+    token: str = Depends(auth_srv.oauth2_scheme),
+    current_user: Usuario = Depends(get_current_user),
+):
+    with contextlib.suppress(Exception):
+        payload = auth_srv.decode_token(token, SECRET_KEY, verify_exp=False)
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        now = datetime.now(UTC).timestamp()
+        ttl = int(exp - now) if exp else 3600
+        if jti:
+            await auth_srv.revoke_token(jti, max(ttl, 60))
+    return {"message": "Sesión cerrada y token revocado exitosamente"}
+

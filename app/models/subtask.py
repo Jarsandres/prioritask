@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
 
+import sqlalchemy as sa
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -10,6 +11,9 @@ if TYPE_CHECKING:
 
 class Subtask(SQLModel, table=True):
     __tablename__ = "subtask"
+    __table_args__ = (
+        sa.Index("ix_subtask_task_deleted_orden", "task_id", "deleted_at", "orden"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     task_id: UUID = Field(foreign_key="task.id", index=True, nullable=False)

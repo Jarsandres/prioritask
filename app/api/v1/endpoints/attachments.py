@@ -18,6 +18,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.v1.endpoints.tasks import _get_task_with_access
 from app.core.config import settings
+from app.core.rate_limit import rate_limit
 from app.db.session import get_session
 from app.models.attachment import TaskAttachment
 from app.models.task import Task, TaskHistory
@@ -41,6 +42,7 @@ router = APIRouter(prefix="/tasks/{task_id}/attachments", tags=["Adjuntos"])
     status_code=status.HTTP_201_CREATED,
     summary="Subir evidencia o archivo adjunto",
     description="Sube un archivo adjunto a la tarea, validando magic bytes, límites y cuota de la sala.",
+    dependencies=[Depends(rate_limit(max_requests=5, window_seconds=60))],
 )
 async def upload_task_attachment(
     task_id: UUID,
@@ -83,7 +85,7 @@ async def upload_task_attachment(
 
     # 3. Guardado desacoplado mediante el Storage Port
     safe_filename = sanitize_filename(filename)
-    storage_key, size_bytes = storage.save_file(
+    storage_key, size_bytes = await storage.save_file(
         file_bytes=file_bytes,
         filename=safe_filename,
         content_type=detected_mime,
@@ -112,7 +114,7 @@ async def upload_task_attachment(
     try:
         await session.commit()
     except Exception:
-        storage.delete_file(storage_key)
+        await storage.delete_file(storage_key)
         raise
     await session.refresh(attachment)
 
@@ -182,6 +184,7 @@ async def list_task_attachments(
     "/{attachment_id}/download",
     summary="Descargar adjunto de una tarea",
     description="Descarga el archivo físico de forma segura con cabeceras nosniff y content-disposition.",
+    dependencies=[Depends(rate_limit(max_requests=30, window_seconds=60))],
 )
 async def download_task_attachment(
     task_id: UUID,

@@ -140,7 +140,7 @@ async def get_tasks(
         tag_id: UUID | None = Query(None),
         room_id: UUID | None = Query(None),
         skip: int = Query(0, ge=0),
-        limit: int = Query(10, gt=0),
+        limit: int = Query(10, gt=0, le=100),
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
@@ -202,7 +202,7 @@ async def get_tasks_by_room(
     order_by: str | None = Query(None, description="due_date, peso o created_at"),
     is_descending: bool | None = Query(False),
     skip: int = Query(0, ge=0),
-    limit: int = Query(10, gt=0),
+    limit: int = Query(10, gt=0, le=100),
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -350,6 +350,7 @@ async def create_task(
 
     session.add(history_entry)
     await session.commit()
+    await session.refresh(new_task, ["etiquetas", "subtasks"])
 
     if new_task.room_id:
         await event_broadcaster.broadcast(
@@ -526,6 +527,7 @@ async def update_task(
         .options(
             selectinload(Task.colaboradores),
             selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta),
+            selectinload(Task.subtasks),
         )
         .where(
             Task.id == task_id,
@@ -570,7 +572,7 @@ async def update_task(
     session.add(history)
 
     await session.commit()
-    await session.refresh(task)
+    await session.refresh(task, ["etiquetas", "subtasks", "colaboradores"])
 
     if task.completed:
         await award_task_points(task, current_user, session)
@@ -652,6 +654,7 @@ async def patch_task(
             .options(
                 selectinload(Task.colaboradores),
                 selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta),
+                selectinload(Task.subtasks),
             )
             .where(
                 Task.id == task_id,
@@ -690,7 +693,7 @@ async def patch_task(
         )
         session.add(history)
         await session.commit()
-        await session.refresh(task)
+        await session.refresh(task, ["etiquetas", "subtasks", "colaboradores"])
 
         if task.completed:
             await award_task_points(task, current_user, session)
@@ -722,6 +725,7 @@ async def patch_task_status(
             .options(
                 selectinload(Task.colaboradores),
                 selectinload(Task.etiquetas).selectinload(TaskTag.etiqueta),
+                selectinload(Task.subtasks),
             )
             .where(
                 Task.id == task_id,
@@ -753,7 +757,7 @@ async def patch_task_status(
         )
         session.add(history)
         await session.commit()
-        await session.refresh(task)
+        await session.refresh(task, ["etiquetas", "subtasks", "colaboradores"])
 
         if task.completed:
             await award_task_points(task, current_user, session)
@@ -819,7 +823,7 @@ async def advance_task(
         )
 
     await session.commit()
-    await session.refresh(new_task)
+    await session.refresh(new_task, ["etiquetas", "subtasks"])
 
     if new_task.room_id:
         await event_broadcaster.broadcast(
