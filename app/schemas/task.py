@@ -96,7 +96,7 @@ class TaskAssignmentCreate(BaseModel):
     user_id: UUID
 
 class TaskAssignmentRead(BaseModel):
-    id: int
+    id: UUID
     task_id: UUID
     user_id: UUID
     asignado_por: UUID

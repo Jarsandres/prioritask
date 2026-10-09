@@ -321,6 +321,10 @@ async def delete_room(
             detail="Sala no encontrada.",
         )
 
+    tasks_res = await session.exec(select(Task).where(Task.room_id == room_id))
+    for t in tasks_res.all():
+        await session.delete(t)
+
     members_res = await session.exec(select(RoomMember).where(RoomMember.room_id == room_id))
     for m in members_res.all():
         await session.delete(m)

@@ -16,7 +16,9 @@ class Subtask(SQLModel, table=True):
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    task_id: UUID = Field(foreign_key="task.id", index=True, nullable=False)
+    task_id: UUID = Field(
+        foreign_key="task.id", ondelete="CASCADE", index=True, nullable=False
+    )
     titulo: str = Field(min_length=1, max_length=255)
     completada: bool = Field(default=False, index=True)
     orden: int = Field(default=0)

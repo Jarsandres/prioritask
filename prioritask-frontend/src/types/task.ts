@@ -115,7 +115,7 @@ export interface HistoryEntry {
 }
 
 export interface Assignment {
-  id: number;
+  id: string;
   task_id: string;
   user_id: string;
   asignado_por: string;

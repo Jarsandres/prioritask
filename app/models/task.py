@@ -62,7 +62,9 @@ class Task(SQLModel, table=True):
     deleted_at: datetime | None = Field(default=None, index=True)
 
     user_id: UUID = Field(foreign_key="usuario.id", index=True)
-    room_id: UUID = Field(foreign_key="room.id", nullable=False, index=True)
+    room_id: UUID = Field(
+        foreign_key="room.id", ondelete="CASCADE", nullable=False, index=True
+    )
 
     usuario: Optional["Usuario"] = Relationship(back_populates="tasks")
     room: Optional["Room"] = Relationship(back_populates="tasks")
@@ -70,7 +72,10 @@ class Task(SQLModel, table=True):
         back_populates="task",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    colaboradores: list["TaskAssignment"] = Relationship(back_populates="task")
+    colaboradores: list["TaskAssignment"] = Relationship(
+        back_populates="task",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
     etiquetas: list["TaskTag"] = Relationship(
         back_populates="tarea",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},

@@ -9,7 +9,6 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import asc, desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
-from sqlalchemy.sql.expression import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -106,11 +105,7 @@ async def _fetch_tasks(
         order_attr = getattr(Task, order_by)
         order_clause = desc(order_attr) if is_descending else asc(order_attr)
     else:
-        order_clause = (
-            desc(func.coalesce(Task.created_at, func.now()))
-            if is_descending
-            else asc(func.coalesce(Task.created_at, func.now()))
-        )
+        order_clause = desc(Task.created_at) if is_descending else asc(Task.created_at)
 
     result = await session.exec(
         select(Task)
