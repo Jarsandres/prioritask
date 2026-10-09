@@ -31,8 +31,9 @@ def sanitize_filename(filename: str) -> str:
     if not filename:
         return "archivo_adjunto"
 
-    # Extraer solo el nombre base sin directorios
-    base_name = Path(filename).name
+    # Extraer solo el nombre base sin directorios (Unix y Windows)
+    normalized_filename = filename.replace("\\", "/")
+    base_name = Path(normalized_filename).name
 
     # Eliminar caracteres no alfanuméricos seguros excepto guiones, guion bajo y punto
     sanitized = re.sub(r"[^\w\s\.-]", "", base_name).strip()
