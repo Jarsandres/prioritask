@@ -59,7 +59,13 @@ class TaskAssignmentService:
         return assignment
 
     @staticmethod
-    async def get_assigned_tasks(session: AsyncSession, user_id: UUID, filter_owner_id: UUID | None = None):
+    async def get_assigned_tasks(
+        session: AsyncSession,
+        user_id: UUID,
+        filter_owner_id: UUID | None = None,
+        skip: int = 0,
+        limit: int = 50,
+    ):
         filters = [
             TaskAssignment.user_id == user_id,
             Task.deleted_at.is_(None),
@@ -72,6 +78,8 @@ class TaskAssignmentService:
             select(TaskAssignment)
             .join(Task, Task.id == TaskAssignment.task_id)
             .where(*filters)
+            .offset(skip)
+            .limit(limit)
         )
         return result.all()
 

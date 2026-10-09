@@ -13,7 +13,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
-from app.models import CategoriaTarea, Room, RoomMember, Tag, TaskAssignment, TaskTag
+from app.models import CategoriaTarea, Room, RoomMember, TaskAssignment, TaskTag
 from app.models.task import EstadoTarea, Task, TaskHistory
 from app.models.user import Usuario
 from app.schemas.history import TaskHistoryRead
@@ -216,12 +216,6 @@ async def get_tasks_by_room(
         if not member_res.one_or_none():
             raise HTTPException(status_code=404, detail="Hogar no encontrado")
 
-    tag_result = await session.exec(
-        select(Tag).where(Tag.nombre == room.nombre, Tag.user_id == current_user.id)
-    )
-    tag = tag_result.one_or_none()
-    tag_id = tag.id if tag else None
-
     return await _fetch_tasks(
         session=session,
         current_user=current_user,
@@ -235,7 +229,7 @@ async def get_tasks_by_room(
         search=search,
         order_by=order_by,
         is_descending=is_descending,
-        tag_id=tag_id,
+        tag_id=None,
         room_id=room_id,
         skip=skip,
         limit=limit,
@@ -307,15 +301,15 @@ async def create_task(
             try:
                 default_room = Room(nombre="Default", owner_id=current_user.id)
                 session.add(default_room)
-                await session.commit()
+                await session.flush()
+                room_id = default_room.id
             except IntegrityError:
                 await session.rollback()
                 result = await session.exec(
                     select(Room.id).where(Room.owner_id == current_user.id, Room.nombre == "Default")
                 )
-                default_room = result.one()
-            await session.refresh(default_room)
-            room_id = default_room.id
+                first_room = result.first()
+                room_id = first_room[0] if isinstance(first_room, tuple) else first_room
 
     new_task = Task(
         titulo=payload.titulo,
@@ -330,8 +324,7 @@ async def create_task(
 
     session.add(new_task)
     try:
-        await session.commit()
-        await session.refresh(new_task)
+        await session.flush()
     except IntegrityError:
         await session.rollback()
         raise HTTPException(status_code=400, detail="Ya existe una tarea activa con este título para el usuario.")
@@ -344,7 +337,12 @@ async def create_task(
     )
 
     session.add(history_entry)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="Ya existe una tarea activa con este título para el usuario.")
+
     await session.refresh(new_task, ["etiquetas", "subtasks"])
 
     if new_task.room_id:
@@ -381,15 +379,17 @@ async def assign_task(
 @router.get("/assigned/{user_id}", response_model=list[TaskAssignmentRead], summary="Tareas asignadas", description="Obtiene las tareas asignadas a un usuario específico.")
 async def get_assigned_tasks(
         user_id: UUID,
+        skip: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=100),
         session: AsyncSession = Depends(get_session),
         current_user: Usuario = Depends(get_current_user),
 ):
     if current_user.id == user_id or getattr(current_user, "is_superuser", False):
-        return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id)
+        return await TaskAssignmentService.get_assigned_tasks(session=session, user_id=user_id, skip=skip, limit=limit)
 
     # Return assignments for user_id on tasks owned by current_user (tenant isolation for task owners)
     tasks_assigned = await TaskAssignmentService.get_assigned_tasks(
-        session=session, user_id=user_id, filter_owner_id=current_user.id
+        session=session, user_id=user_id, filter_owner_id=current_user.id, skip=skip, limit=limit
     )
     if tasks_assigned:
         return tasks_assigned
@@ -413,6 +413,8 @@ async def list_task_history(
     hasta: datetime | None = Query(None),
     room_id: UUID | None = Query(None),
     user_id: UUID | None = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -441,12 +443,11 @@ async def list_task_history(
         .join(Task, Task.id == TaskHistory.task_id)
         .where(*filters)
         .order_by(asc(TaskHistory.timestamp))
+        .offset(skip)
+        .limit(limit)
     )
     result = await session.exec(stmt)
     rows = result.all()
-
-    # Log para depuración
-    print("Resultados de la consulta:", rows)
 
     # Mapear los resultados al modelo TaskHistoryRead
     history = [

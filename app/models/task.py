@@ -46,6 +46,13 @@ class Task(SQLModel, table=True):
             "due_date",
             "user_id",
         ),
+        sa.Index(
+            "ix_task_is_recurring_completed_deleted_at_due_date",
+            "is_recurring",
+            "completed",
+            "deleted_at",
+            "due_date",
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -131,6 +138,7 @@ class TaskHistory(SQLModel, table=True):
     __tablename__ = "taskhistory"
     __table_args__ = (
         sa.Index("ix_task_history_task_id_timestamp", "task_id", "timestamp"),
+        sa.Index("ix_taskhistory_user_id_timestamp", "user_id", "timestamp"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

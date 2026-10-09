@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc
 from sqlalchemy.orm import selectinload
-from sqlmodel import func, or_, select
+from sqlmodel import delete, func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.rate_limit import rate_limit
@@ -325,9 +325,7 @@ async def delete_room(
     for t in tasks_res.all():
         await session.delete(t)
 
-    members_res = await session.exec(select(RoomMember).where(RoomMember.room_id == room_id))
-    for m in members_res.all():
-        await session.delete(m)
+    await session.exec(delete(RoomMember).where(RoomMember.room_id == room_id))
 
     await session.delete(room)
     await session.commit()

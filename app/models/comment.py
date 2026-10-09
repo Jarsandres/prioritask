@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
 
+import sqlalchemy as sa
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -11,6 +12,14 @@ if TYPE_CHECKING:
 
 class TaskComment(SQLModel, table=True):
     __tablename__ = "taskcomment"
+    __table_args__ = (
+        sa.Index(
+            "ix_taskcomment_task_id_deleted_at_created_at",
+            "task_id",
+            "deleted_at",
+            "created_at",
+        ),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     task_id: UUID = Field(

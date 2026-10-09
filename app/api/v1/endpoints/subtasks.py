@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import asc
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -27,6 +27,8 @@ router = APIRouter(prefix="/tasks/{task_id}/subtasks", tags=["Subtareas"])
 )
 async def get_subtasks(
     task_id: UUID,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user),
 ) -> list[Subtask]:
@@ -39,6 +41,8 @@ async def get_subtasks(
             Subtask.deleted_at.is_(None),
         )
         .order_by(asc(Subtask.orden), asc(Subtask.created_at))
+        .offset(skip)
+        .limit(limit)
     )
     return list(result.all())
 

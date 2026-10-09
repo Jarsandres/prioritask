@@ -7,6 +7,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Response,
     UploadFile,
     status,
@@ -149,6 +150,8 @@ async def upload_task_attachment(
 )
 async def list_task_attachments(
     task_id: UUID,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user),
 ) -> list[AttachmentRead]:
@@ -161,6 +164,8 @@ async def list_task_attachments(
             TaskAttachment.deleted_at.is_(None),
         )
         .order_by(asc(TaskAttachment.created_at))
+        .offset(skip)
+        .limit(limit)
     )
     attachments = result.all()
 
