@@ -5,9 +5,15 @@ import pytest
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.enums import CategoriaTarea, EstadoTarea, RecurrenceFrequency
+from app.models.enums import (
+    CategoriaTarea,
+    EstadoTarea,
+    RecurrenceFrequency,
+    RecurrenceMode,
+)
 from app.models.recurrence_rule import RecurrenceRule
 from app.models.room import Room
+from app.models.subtask import Subtask
 from app.models.task import Task, TaskHistory
 from app.models.user import Usuario
 from app.services.recurrence import advance_recurring_task, calculate_next_due
@@ -40,6 +46,15 @@ def test_calculate_next_due_monthly():
     base_jan31 = datetime(2026, 1, 31, 12, 0, 0, tzinfo=UTC)
     res_feb = calculate_next_due(base_jan31, RecurrenceFrequency.MONTHLY, interval=1)
     assert res_feb == datetime(2026, 2, 28, 12, 0, 0, tzinfo=UTC)
+
+    # Anti-drift recovery: Feb 28 with anchor_day_of_month=31 -> Mar 31
+    res_mar = calculate_next_due(
+        res_feb,
+        RecurrenceFrequency.MONTHLY,
+        interval=1,
+        anchor_day_of_month=31,
+    )
+    assert res_mar == datetime(2026, 3, 31, 12, 0, 0, tzinfo=UTC)
 
     # Leap year: Jan 31, 2028 -> Feb 29, 2028
     base_leap = datetime(2028, 1, 31, 12, 0, 0, tzinfo=UTC)
@@ -201,3 +216,76 @@ async def test_advance_recurring_task_success(session: AsyncSession):
     hist_res = await session.exec(select(TaskHistory).where(TaskHistory.task_id == task.id))
     history_entries = hist_res.all()
     assert any(h.action == "RECURRENCE_ADVANCED" and f"{new_task.due_date}" in (h.changes or "") for h in history_entries)
+
+
+@pytest.mark.asyncio
+async def test_advance_recurring_task_floating_mode_and_subtask_reset(session: AsyncSession):
+    """Verifica que el modo FLOATING ('every! 7 days') calcule el nuevo vencimiento desde completed_at
+    y reinicie automáticamente el checklist de subtareas activas a completada=False.
+    """
+    user = Usuario(email=f"float_user_{uuid4().hex[:6]}@example.com", hashed_password="pw")
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    room = Room(nombre=f"Float_Room_{uuid4().hex[:6]}", owner_id=user.id)
+    session.add(room)
+    await session.commit()
+    await session.refresh(room)
+
+    initial_due = datetime(2026, 5, 1, 9, 0, 0, tzinfo=UTC)
+    actual_completed_at = datetime(2026, 5, 4, 15, 30, 0, tzinfo=UTC)
+
+    task = Task(
+        titulo="Limpieza profunda de cocina",
+        categoria=CategoriaTarea.LIMPIEZA,
+        peso=4.0,
+        user_id=user.id,
+        room_id=room.id,
+        estado=EstadoTarea.TODO,
+        completed=False,
+        due_date=initial_due,
+        is_recurring=True,
+    )
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
+
+    st1 = Subtask(task_id=task.id, titulo="Desengrasar campana", completada=True, orden=0)
+    st2 = Subtask(task_id=task.id, titulo="Limpiar horno", completada=True, orden=1)
+    session.add_all([st1, st2])
+    await session.commit()
+
+    rule = RecurrenceRule(
+        task_id=task.id,
+        frequency=RecurrenceFrequency.DAILY,
+        interval=7,
+        mode=RecurrenceMode.FLOATING,
+        reset_subtasks=True,
+        next_due=datetime(2026, 5, 8, 9, 0, 0, tzinfo=UTC),
+    )
+    session.add(rule)
+    await session.commit()
+    await session.refresh(rule)
+    task.recurrence_rule = rule
+
+    new_task = await advance_recurring_task(task, session, completed_at=actual_completed_at)
+    assert new_task is not None
+
+    # En modo FLOATING (every! 7 days), completada el 4 de mayo -> vence el 11 de mayo (4 + 7), NO el 8 de mayo
+    new_due_utc = (
+        new_task.due_date.replace(tzinfo=UTC)
+        if new_task.due_date and new_task.due_date.tzinfo is None
+        else new_task.due_date
+    )
+    assert new_due_utc == datetime(2026, 5, 11, 15, 30, 0, tzinfo=UTC)
+
+    # Verificar que las subtareas se clonaron con completada=False en la nueva tarea
+    cloned_subtasks_res = await session.exec(
+        select(Subtask).where(Subtask.task_id == new_task.id).order_by(Subtask.orden)  # type: ignore[arg-type]
+    )
+    cloned_subtasks = cloned_subtasks_res.all()
+    assert len(cloned_subtasks) == 2
+    assert [s.titulo for s in cloned_subtasks] == ["Desengrasar campana", "Limpiar horno"]
+    assert all(s.completada is False for s in cloned_subtasks)
+

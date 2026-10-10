@@ -126,6 +126,13 @@ class Task(SQLModel, table=True):
         return sum(1 for s in self.subtasks if s.completada and getattr(s, "deleted_at", None) is None)
 
     @property
+    def loaded_recurrence_rule(self) -> Optional["RecurrenceRule"]:
+        """Return associated RecurrenceRule without triggering lazy load."""
+        if "recurrence_rule" not in self.__dict__:
+            return None
+        return self.recurrence_rule
+
+    @property
     def owner_id(self) -> UUID:
         return self.user_id
 

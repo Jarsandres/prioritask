@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship, SQLModel
 
-from app.models.enums import RecurrenceFrequency
+from app.models.enums import RecurrenceFrequency, RecurrenceMode
 
 if TYPE_CHECKING:
     from app.models.task import Task
@@ -17,8 +17,12 @@ class RecurrenceRule(SQLModel, table=True):
     task_id: UUID = Field(foreign_key="task.id", unique=True, index=True)
     frequency: RecurrenceFrequency = Field(nullable=False)
     interval: int = Field(default=1, ge=1, le=365)
+    mode: RecurrenceMode = Field(default=RecurrenceMode.FIXED, nullable=False)
+    anchor_day_of_month: int | None = Field(default=None, ge=1, le=31, nullable=True)
+    reset_subtasks: bool = Field(default=True, nullable=False)
     next_due: datetime = Field(nullable=False)
     end_date: datetime | None = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     task: Optional["Task"] = Relationship(back_populates="recurrence_rule")
+
