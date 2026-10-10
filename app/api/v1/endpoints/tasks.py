@@ -13,7 +13,14 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.session import get_session
-from app.models import CategoriaTarea, RecurrenceRule, Room, RoomMember, TaskAssignment, TaskTag
+from app.models import (
+    CategoriaTarea,
+    RecurrenceRule,
+    Room,
+    RoomMember,
+    TaskAssignment,
+    TaskTag,
+)
 from app.models.task import EstadoTarea, Task, TaskHistory
 from app.models.user import Usuario
 from app.schemas.history import TaskHistoryRead

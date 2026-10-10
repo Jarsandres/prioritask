@@ -3,9 +3,21 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
-from app.models.enums import CategoriaTarea, EstadoTarea, RecurrenceFrequency, RecurrenceMode
+from app.models.enums import (
+    CategoriaTarea,
+    EstadoTarea,
+    RecurrenceFrequency,
+    RecurrenceMode,
+)
 
 from .subtask import SubtaskRead
 from .tag import TagRead

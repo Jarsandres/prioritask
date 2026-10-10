@@ -530,7 +530,7 @@ class TestRoomCascadeDeletion:
             },
         )
         assert task2_resp.status_code == 201
-        task2_id = UUID(task2_resp.json()["id"])
+        _task2_id = UUID(task2_resp.json()["id"])
 
         # 4. Asignar una tarea al miembro
         assign_resp = await async_client.post(
