@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import asc
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
@@ -31,6 +31,8 @@ router = APIRouter(prefix="/tasks/{task_id}/comments", tags=["Comentarios"])
 )
 async def get_task_comments(
     task_id: UUID,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user),
 ) -> list[TaskCommentRead]:
@@ -44,6 +46,8 @@ async def get_task_comments(
             TaskComment.deleted_at.is_(None),
         )
         .order_by(asc(TaskComment.created_at))
+        .offset(skip)
+        .limit(limit)
     )
     comments = result.all()
 
@@ -77,8 +81,7 @@ async def create_task_comment(
         contenido=payload.contenido,
     )
     session.add(comment)
-    await session.commit()
-    await session.refresh(comment)
+    await session.flush()
 
     # Registro en historial de la tarea
     history = TaskHistory(
@@ -89,6 +92,7 @@ async def create_task_comment(
     )
     session.add(history)
     await session.commit()
+    await session.refresh(comment)
 
     read_comment = TaskCommentRead.model_validate(comment)
     read_comment.author_name = current_user.nombre

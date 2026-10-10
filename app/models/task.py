@@ -46,6 +46,13 @@ class Task(SQLModel, table=True):
             "due_date",
             "user_id",
         ),
+        sa.Index(
+            "ix_task_is_recurring_completed_deleted_at_due_date",
+            "is_recurring",
+            "completed",
+            "deleted_at",
+            "due_date",
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -62,7 +69,9 @@ class Task(SQLModel, table=True):
     deleted_at: datetime | None = Field(default=None, index=True)
 
     user_id: UUID = Field(foreign_key="usuario.id", index=True)
-    room_id: UUID = Field(foreign_key="room.id", nullable=False, index=True)
+    room_id: UUID = Field(
+        foreign_key="room.id", ondelete="CASCADE", nullable=False, index=True
+    )
 
     usuario: Optional["Usuario"] = Relationship(back_populates="tasks")
     room: Optional["Room"] = Relationship(back_populates="tasks")
@@ -70,7 +79,10 @@ class Task(SQLModel, table=True):
         back_populates="task",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    colaboradores: list["TaskAssignment"] = Relationship(back_populates="task")
+    colaboradores: list["TaskAssignment"] = Relationship(
+        back_populates="task",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
     etiquetas: list["TaskTag"] = Relationship(
         back_populates="tarea",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
@@ -114,6 +126,13 @@ class Task(SQLModel, table=True):
         return sum(1 for s in self.subtasks if s.completada and getattr(s, "deleted_at", None) is None)
 
     @property
+    def loaded_recurrence_rule(self) -> Optional["RecurrenceRule"]:
+        """Return associated RecurrenceRule without triggering lazy load."""
+        if "recurrence_rule" not in self.__dict__:
+            return None
+        return self.recurrence_rule
+
+    @property
     def owner_id(self) -> UUID:
         return self.user_id
 
@@ -126,6 +145,7 @@ class TaskHistory(SQLModel, table=True):
     __tablename__ = "taskhistory"
     __table_args__ = (
         sa.Index("ix_task_history_task_id_timestamp", "task_id", "timestamp"),
+        sa.Index("ix_taskhistory_user_id_timestamp", "user_id", "timestamp"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

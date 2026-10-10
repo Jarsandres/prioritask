@@ -29,6 +29,11 @@ class RecurrenceFrequency(str, Enum):
     MONTHLY = "MONTHLY"
 
 
+class RecurrenceMode(str, Enum):
+    FIXED = "FIXED"
+    FLOATING = "FLOATING"
+
+
 class TaskAction(str, Enum):
     CREATED = "CREATED"
     UPDATED = "UPDATED"

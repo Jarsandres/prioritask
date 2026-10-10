@@ -88,6 +88,7 @@ async def prioritize(
     )
     if payload and payload.task_ids:
         stmt = stmt.where(Task.id.in_(payload.task_ids))
+    stmt = stmt.limit(100)
 
     result = await session.exec(stmt)
     tasks_list = result.all()
@@ -127,6 +128,7 @@ async def group_tasks(
     )
     if payload.task_ids:
         stmt = stmt.where(Task.id.in_(payload.task_ids))
+    stmt = stmt.limit(100)
 
     tasks = (await session.exec(stmt)).all()
     if not tasks:
@@ -162,6 +164,7 @@ async def rewrite_tasks(
     )
     if payload.task_ids:
         stmt = stmt.where(Task.id.in_(payload.task_ids))
+    stmt = stmt.limit(100)
 
     tasks = (await session.exec(stmt)).all()
     if not tasks:

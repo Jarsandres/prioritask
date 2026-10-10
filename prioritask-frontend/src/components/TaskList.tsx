@@ -170,6 +170,18 @@ const TaskList = () => {
     await handleStatusChange(taskId, nextStatus);
   };
 
+  const handleAdvanceTask = async (taskId: string) => {
+    try {
+      const res = await api.post<Task>(`/tasks/${taskId}/advance`);
+      notifyUpdate();
+      const nextDueStr = res.data?.due_date ? ` (próxima: ${res.data.due_date.slice(0, 10)})` : "";
+      toast.success(`Rutina avanzada al siguiente ciclo 🔄${nextDueStr}`);
+    } catch (error) {
+      console.error("Error al avanzar la tarea recurrente:", error);
+      toast.error("Error al avanzar la tarea recurrente.");
+    }
+  };
+
   const handleClearFilters = () => {
     setEstado("");
     setCategoria("");
@@ -291,6 +303,7 @@ const TaskList = () => {
                 onComplete={handleToggleComplete}
                 onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
                 onDelete={promptDelete}
+                onAdvance={handleAdvanceTask}
                 isCompleting={completingId === tarea.id}
                 isDeleting={deletingId === tarea.id}
               />

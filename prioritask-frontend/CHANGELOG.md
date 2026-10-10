@@ -2,6 +2,16 @@
 
 All notable frontend changes are documented in this file.
 
+## 🚀 Versión 1.3.0 (Motor de Recurrencia DSL, Vista Previa en Vivo & Avance Rápido de Tareas) — [2026-10-10]
+
+### Added
+- **[FE-REC-001] Motor de Recurrencia TypeScript (`src/utils/recurrenceEngine.ts`)**: Soporte para modos `FIXED` y `FLOATING` (`every!`), parseador DSL multiidioma (español/inglés) y cálculo determinista anti-deriva.
+- **[FE-REC-002] Panel de Configuración de Recurrencia en `TaskForm.tsx`**: Selector de modo, campo DSL con chips interactivos, configuración de intervalo/frecuencia, checkbox de reseteo de subtareas y chips de previsualización en tiempo real de los siguientes 4 ciclos.
+- **[FE-REC-003] Acción de Avance Rápido en `TaskList.tsx`**: Integración del handler `onAdvance` en tarjetas de tareas recurrentes para disparar el avance de ciclo con un clic.
+- **[FE-REC-004] Suite de Pruebas Unitarias Vitest (`recurrenceEngine.test.ts`, `TaskForm.test.tsx`)**: Cobertura exhaustiva del motor matemático de recurrencia y de la interacción UI del formulario.
+
+---
+
 ## 🚀 Versión 1.2.0 (Modernización UI/UX Retro 90's, Modo Oscuro/Claro y Refactorización Arquitectónica) — [2026-09-25]
 
 ### 🎨 Sistema de Diseño y Experiencia de Usuario (UI/UX)

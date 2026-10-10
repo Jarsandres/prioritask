@@ -3,12 +3,79 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
-from app.models.enums import CategoriaTarea, EstadoTarea
+from app.models.enums import (
+    CategoriaTarea,
+    EstadoTarea,
+    RecurrenceFrequency,
+    RecurrenceMode,
+)
 
 from .subtask import SubtaskRead
 from .tag import TagRead
+
+
+class RecurrenceRuleInput(BaseModel):
+    frequency: RecurrenceFrequency = Field(
+        default=RecurrenceFrequency.WEEKLY,
+        description="Frecuencia base de repetición (DAILY, WEEKLY, MONTHLY).",
+    )
+    interval: int = Field(
+        default=1,
+        ge=1,
+        le=365,
+        description="Intervalo multiplicador entre ocurrencias (1..365).",
+    )
+    mode: RecurrenceMode = Field(
+        default=RecurrenceMode.FIXED,
+        description="Modo de recurrencia: FIXED (calendario fijo) o FLOATING (al completar).",
+    )
+    end_date: datetime | None = Field(
+        default=None,
+        description="Fecha límite opcional de la serie recurrente.",
+    )
+    anchor_day_of_month: int | None = Field(
+        default=None,
+        ge=1,
+        le=31,
+        description="Día ancla del mes (1..31) para evitar deriva en meses cortos.",
+    )
+    reset_subtasks: bool = Field(
+        default=True,
+        description="Reinicia automáticamente el checklist de subtareas al avanzar.",
+    )
+
+    @field_validator("end_date", mode="before")
+    def validate_end_date(cls, value):
+        if value:
+            try:
+                value = datetime.fromisoformat(value) if isinstance(value, str) else value
+            except ValueError:
+                raise ValueError("Formato de fecha de fin de recurrencia inválido")
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=UTC)
+        return value
+
+
+class RecurrenceRuleRead(BaseModel):
+    id: UUID
+    frequency: RecurrenceFrequency
+    interval: int
+    mode: RecurrenceMode = RecurrenceMode.FIXED
+    next_due: datetime
+    end_date: datetime | None = None
+    anchor_day_of_month: int | None = None
+    reset_subtasks: bool = True
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskCreate(BaseModel):
@@ -20,6 +87,8 @@ class TaskCreate(BaseModel):
     due_date: datetime | None = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
+    recurrence_rule: RecurrenceRuleInput | None = Field(default=None, description="Regla de recurrencia opcional al crear la tarea")
+    tag_ids: list[UUID] | None = Field(default=None, description="Lista opcional de IDs de etiquetas")
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):
@@ -48,6 +117,11 @@ class TaskRead(BaseModel):
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     deleted_at: datetime | None = Field(default=None, description="Fecha de eliminación de la tarea, si aplica.", json_schema_extra={"example": None})
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
+    recurrence_rule: RecurrenceRuleRead | None = Field(
+        default=None,
+        validation_alias=AliasChoices("loaded_recurrence_rule", "recurrence_rule"),
+        description="Regla de recurrencia activa asociada a la tarea",
+    )
     tags: list[TagRead] = Field(default_factory=list, description="Etiquetas asociadas a la tarea")
     subtasks: list[SubtaskRead] = Field(default_factory=list, description="Lista de subtareas asociadas")
     subtasks_count: int = Field(default=0, description="Cantidad total de subtareas")
@@ -73,6 +147,8 @@ class TaskUpdate(BaseModel):
     due_date: datetime | None = Field(None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
+    recurrence_rule: RecurrenceRuleInput | None = Field(default=None, description="Configuración de la regla de recurrencia")
+    tag_ids: list[UUID] | None = Field(default=None, description="Lista opcional de IDs de etiquetas")
     completed: bool | None = Field(default=None, description="Indica si la tarea está completada")
 
     @field_validator("due_date", mode="before")
@@ -96,7 +172,7 @@ class TaskAssignmentCreate(BaseModel):
     user_id: UUID
 
 class TaskAssignmentRead(BaseModel):
-    id: int
+    id: UUID
     task_id: UUID
     user_id: UUID
     asignado_por: UUID

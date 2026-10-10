@@ -136,4 +136,49 @@ describe("TaskForm Component", () => {
       );
     });
   });
+
+  it("despliega el panel de recurrencia, parsea expresiones 'cada! 7 días' (FLOATING) y envía recurrence_rule al backend", async () => {
+    const postSpy = vi.spyOn(api, "post").mockResolvedValueOnce({
+      data: { id: "recurring-task-1" },
+    });
+
+    renderTaskForm();
+
+    const titleInput = screen.getByLabelText(/Título de la tarea/i);
+    fireEvent.change(titleInput, { target: { value: "Limpieza profunda de cocina" } });
+
+    const recurringSwitch = screen.getByRole("switch");
+    fireEvent.click(recurringSwitch);
+
+    expect(screen.getByTestId("recurrence-config-panel")).toBeInTheDocument();
+
+    const dslInput = screen.getByLabelText(/Expresión rápida/i);
+    fireEvent.change(dslInput, { target: { value: "cada! 7 días" } });
+
+    const floatingRadio = screen.getByTestId("recurrence-mode-FLOATING");
+    expect(floatingRadio).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByTestId("recurrence-formatted-summary")).toHaveTextContent(
+      /Cada! 7 días \(al completar\)/i
+    );
+    expect(screen.getAllByTestId("recurrence-preview-chip").length).toBe(4);
+
+    const submitBtn = screen.getByRole("button", { name: /Crear Tarea/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(postSpy).toHaveBeenCalledWith(
+        "/tasks",
+        expect.objectContaining({
+          titulo: "Limpieza profunda de cocina",
+          is_recurring: true,
+          recurrence_rule: expect.objectContaining({
+            frequency: "DAILY",
+            interval: 7,
+            mode: "FLOATING",
+            reset_subtasks: true,
+          }),
+        })
+      );
+    });
+  });
 });

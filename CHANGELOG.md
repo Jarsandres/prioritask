@@ -3,6 +3,42 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## 🚀 Versión 1.6.0 (Motor de Recurrencia Avanzado, Modos Fijo vs. Flotante, Anti-Deriva Mensual, Clonación de Subtareas & REA Skill — Sprint 13) — [2026-10-10]
+
+### ⚡ Motor de Recurrencia, Reglas y Persistencia (Backend)
+- **[REC-ENG-010] Modos de Recurrencia Fija y Flotante (`app/models/enums.py`, `recurrence_rule.py`, `migración e5a9b1c2d3f4`)**:
+  - Incorporación del enum `RecurrenceMode` (`FIXED` vs `FLOATING`), manteniendo estricta retrocompatibilidad en `RecurrenceFrequency` (`DAILY`, `WEEKLY`, `MONTHLY`).
+  - Extensión del modelo `RecurrenceRule` con `mode: RecurrenceMode`, `anchor_day_of_month: Optional[int]` y `reset_subtasks: bool = True`.
+  - Migración Alembic `e5a9b1c2d3f4_add_recurrence_mode_and_subtask_reset.py` que aplica `ALTER TABLE recurrencerule` con valores por defecto seguros.
+- **[REC-CALC-010] Algoritmo Anti-Deriva Mensual y Catch-Up en Vencimientos (`app/services/recurrence.py`)**:
+  - Implementación de `anchor_day_of_month` en `calculate_next_due`: si una tarea se creó el 31, no queda atrapada en el 28 tras pasar por febrero y salta correctamente al 31 en meses posteriores.
+  - Avance inteligente en modo `FIXED` con catch-up secuencial cuando la tarea está en mora frente al reloj actual.
+  - Avance en modo `FLOATING` (`every!`) anclado estrictamente a la fecha y hora de finalización real (`completed_at`).
+- **[REC-SUB-010] Clonación Automática y Reseteo de Subtareas (`app/services/recurrence.py`, `app/api/v1/endpoints/tasks.py`)**:
+  - `advance_recurring_task` clona la jerarquía completa de subtareas activas (`Subtask`) hacia la nueva instancia de tarea generada, reseteando su estado a `completada=False`.
+- **[REC-API-010] Sincronización en Endpoints REST y Notificaciones SSE (`app/api/v1/endpoints/tasks.py`, `app/schemas/task.py`)**:
+  - Integración transparente de `recurrence_rule` en `create_task`, `update_task`, `patch_task` y `patch_task_status`.
+  - Endpoint `POST /api/v1/tasks/{task_id}/advance` que finaliza el ciclo actual, genera la siguiente instancia recurrente, otorga puntos de gamificación y emite eventos SSE `TASK_UPDATED` y `TASK_CREATED`.
+  - Propiedad de acceso seguro `loaded_recurrence_rule` en `Task` para prevenir excepciones `MissingGreenlet` en validaciones Pydantic asíncronas.
+
+### 🖥️ Motor DSL, Vista Previa Visual y Avance Reactivo (Frontend)
+- **[FE-REC-010] Motor de Recurrencia en TypeScript (`prioritask-frontend/src/utils/recurrenceEngine.ts`)**:
+  - Analizador sintáctico DSL tolerante a fallos para expresiones en inglés y español (`every! 7 days`, `cada 2 semanas`, `every month`).
+  - Generador de previsualización `previewNextOccurrences` con proyección de los próximos N ciclos en tiempo real.
+  - Manejo UTC puro con aritmética de fechas segura contra desfases de zona horaria (DST).
+- **[FE-UI-010] Panel Interactivo de Configuración de Recurrencia (`TaskForm.tsx`)**:
+  - Sección expandible accesible con `aria-expanded` y `aria-controls` (`data-testid="recurrence-config-panel"`).
+  - Selector táctil de modo (Calendario fijo vs. Flotante al completar), chips de sugerencias rápidas, frecuencia, intervalo y fecha de finalización.
+  - Visualización en tiempo real de los próximos 4 ciclos mediante chips de previsualización (`recurrence-preview-chip`).
+- **[FE-ACT-010] Acción de Avance Inmediato de Tareas Recurrentes (`TaskList.tsx`)**:
+  - Conexión del callback `onAdvance` en `TaskCard` llamando al endpoint `/advance`, actualizando reactivamente la lista de tareas y notificando con toast sin recarga de página.
+
+### 🛠️ Herramientas de Ingeniería Inversa (Skills)
+- **[TOOL-REA-010] Integración de la Skill Reverse-Engineer-Anything (`.agents/skills/reverse-engineer-anything/`)**:
+  - Registro de capacidades REA para inspección de binarios nativos, empaquetados Electron (`app.asar`), aplicaciones Android/JavaScript y artefactos compilados.
+
+---
+
 ## 🚀 Versión 1.5.0 (Motor de Alto Rendimiento, Escalabilidad, Redis Pub/Sub, Virtualización DOM & Web Workers — Sprint 12) — [2026-10-08]
 
 ### ⚡ Motor de Alto Rendimiento, IA y Base de Datos (Backend)

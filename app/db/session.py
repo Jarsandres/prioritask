@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -23,6 +24,18 @@ def get_engine_kwargs(database_url: str) -> dict[str, Any]:
 
 
 engine = create_async_engine(settings.DATABASE_URL, **get_engine_kwargs(settings.DATABASE_URL))
+
+
+@event.listens_for(engine.sync_engine, "connect")
+def set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
+    if engine.dialect.name == "sqlite":
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
+        cursor.execute("PRAGMA journal_mode = WAL;")
+        cursor.execute("PRAGMA busy_timeout = 5000;")
+        cursor.close()
+
+
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

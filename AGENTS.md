@@ -7,6 +7,7 @@ This project is indexed by GitNexus as **prioritask** (908 symbols, 2071 relatio
 
 ## Always Do
 
+- **MUST work on a dedicated branch.** Never commit or work directly on `main`. Always create or switch to a descriptive branch (e.g. `feature/*`, `refactor/*`, `fix/*`) before modifying any code or database state. Verify active branch with `git branch --show-current`.
 - **MUST run impact analysis before editing.** Use `impact({target: "symbolName", direction: "upstream"})` (MCP) or `node .gitnexus/run.cjs impact "symbolName" --direction upstream --repo .` (CLI fallback); report callers, processes, and risk. Never substitute grep for graph analysis.
 - **MUST analyze graph changes before committing.** Use `detect_changes({scope: "all"})` (MCP) or `node .gitnexus/run.cjs detect-changes --scope all --repo .` (CLI fallback). `partial: true` or `truncated: true` is not a clean check — a zero means unseen, not unaffected; re-run it. For regression review: `detect_changes({scope: "compare", base_ref: "main"})` or `node .gitnexus/run.cjs detect-changes --scope compare --base-ref "main" --repo .`.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
@@ -17,6 +18,7 @@ This project is indexed by GitNexus as **prioritask** (908 symbols, 2071 relatio
 
 ## Never Do
 
+- NEVER work or commit directly on the `main` branch. All work must be conducted on a dedicated feature, fix, or refactor branch.
 - NEVER edit a function, class, or method before MCP/CLI impact analysis.
 - NEVER ignore HIGH or CRITICAL risk warnings from impact analysis, and never read `UNKNOWN` as an all-clear — it means the walk could not answer, which is the one verdict that requires confirming by other means.
 - NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.

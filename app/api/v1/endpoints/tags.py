@@ -68,19 +68,35 @@ async def assign_tags_to_task(
     if not task:
         raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
+    if not payload.tag_ids:
+        return {"message": "Etiquetas asignadas correctamente"}
+
+    # 1. Validar existencia de etiquetas en bloque
+    tags_res = await session.exec(
+        select(Tag).where(Tag.id.in_(payload.tag_ids), Tag.user_id == current_user.id)
+    )
+    found_tags = {tag.id: tag for tag in tags_res.all()}
     for tag_id in payload.tag_ids:
-        tag = await session.get(Tag, tag_id)
-        if not tag or tag.user_id != current_user.id:
+        if tag_id not in found_tags:
             raise HTTPException(status_code=404, detail=f"Etiqueta ({tag_id}) no encontrada.")
 
-        existing = await session.exec(
-            select(TaskTag).where(
-                TaskTag.task_id == task_id,
-                TaskTag.tag_id == tag_id
-            )
+    # 2. Consultar relaciones existentes en una sola consulta
+    existing_res = await session.exec(
+        select(TaskTag).where(
+            TaskTag.task_id == task_id,
+            TaskTag.tag_id.in_(payload.tag_ids),
         )
-        if not existing.first():
-            session.add(TaskTag(task_id=task_id, tag_id=tag_id))
+    )
+    existing_tag_ids = {tt.tag_id for tt in existing_res.all()}
+
+    # 3. Insertar nuevos vínculos en bloque
+    new_task_tags = [
+        TaskTag(task_id=task_id, tag_id=tag_id)
+        for tag_id in dict.fromkeys(payload.tag_ids)
+        if tag_id not in existing_tag_ids
+    ]
+    if new_task_tags:
+        session.add_all(new_task_tags)
 
     await session.commit()
     return {"message": "Etiquetas asignadas correctamente"}

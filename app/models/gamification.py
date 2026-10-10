@@ -62,6 +62,15 @@ class PointTransaction(SQLModel, table=True):
 
 class HouseholdReward(SQLModel, table=True):
     __tablename__ = "householdreward"
+    __table_args__ = (
+        sa.Index(
+            "ix_householdreward_room_active_deleted_cost",
+            "room_id",
+            "is_active",
+            "deleted_at",
+            "cost_points",
+        ),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     room_id: UUID = Field(foreign_key="room.id", index=True, nullable=False)
