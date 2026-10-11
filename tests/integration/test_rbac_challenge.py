@@ -1,8 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import jwt
 import pytest
-from jose import jwt
 
 from app.models.enums import UserRole
 from app.models.user import Usuario

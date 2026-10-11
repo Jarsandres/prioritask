@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
-from jose import jwt
 
 from app.services.auth import ALGORITHM, SECRET_KEY
 from tests.utils import create_task, create_user_and_token

@@ -1,8 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import jwt
 import pytest
-from jose import jwt
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 

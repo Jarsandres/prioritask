@@ -7,7 +7,6 @@ from uuid import uuid4
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from passlib.context import CryptContext
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
@@ -32,7 +31,7 @@ from app.services.auth import (
 )
 
 # Use minimal bcrypt rounds (4) in test suite for fast password hashing
-auth_service.pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=4)
+auth_service.BCRYPT_ROUNDS = 4
 
 
 # ---------------------------------------------------------------------------

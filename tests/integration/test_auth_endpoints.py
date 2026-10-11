@@ -1,7 +1,7 @@
 from uuid import uuid4
 
+import jwt
 import pytest
-from jose import jwt
 
 from app.services.auth import ALGORITHM, SECRET_KEY
 from tests.utils import create_user_and_token
