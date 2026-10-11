@@ -1,19 +1,11 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import {
-  LuUser,
-  LuMail,
-  LuLock,
-  LuEye,
-  LuEyeOff,
-  LuCircleAlert,
-  LuSun,
-  LuMoon,
-} from "react-icons/lu";
+import { LuEye, LuEyeOff } from "react-icons/lu";
 import api from "../api";
 import { useRoom } from "../context/RoomContext";
-import { useTheme } from "../context/ThemeContext";
-import { Card, Input, Button } from "../components/ui";
+import { useToast } from "../context/ToastContext";
+import { SignInPage, GlassInputWrapper } from "../components/ui";
+import { PRIORITASK_HERO_IMAGE, PRIORITASK_TESTIMONIALS } from "./Login";
 import type { TokenResponse } from "../types/auth";
 import type { Room } from "../types/task";
 import "./Auth.css";
@@ -31,9 +23,9 @@ export default function Register() {
 
   const navigate = useNavigate();
   const { setRoomId, refreshRooms } = useRoom();
-  const { theme, toggleTheme } = useTheme();
+  const toast = useToast();
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
 
@@ -95,10 +87,12 @@ export default function Register() {
       if (
         err instanceof Error &&
         "response" in err &&
-        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        (err as { response?: { data?: { detail?: string } } }).response?.data
+          ?.detail
       ) {
         setError(
-          (err as { response: { data: { detail: string } } }).response.data.detail
+          (err as { response: { data: { detail: string } } }).response.data
+            .detail
         );
       } else {
         setError("Error al registrar la cuenta. Revisa los datos ingresados.");
@@ -108,126 +102,154 @@ export default function Register() {
     }
   };
 
+  const handleGoogleRegister = () => {
+    toast.info(
+      "El registro rápido con Google OAuth estará disponible próximamente. Completa el formulario para crear tu cuenta.",
+      { title: "Google OAuth" }
+    );
+  };
+
   return (
-    <div className="auth-container">
-      {/* Selector de tema flotante */}
-      <button
-        type="button"
-        className="auth-theme-toggle"
-        onClick={toggleTheme}
-        aria-label={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`}
-        title={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`}
-      >
-        {theme === "dark" ? <LuSun size={18} /> : <LuMoon size={18} />}
-      </button>
-
-      <Card className="auth-card" noBodyWrap={true}>
-        <div className="auth-header">
-          <div className="auth-logo-badge">
-            <img src="/logo.png" alt="Prioritask logo" className="auth-logo-img" />
-          </div>
-          <h1 className="auth-title">Crear cuenta</h1>
-          <p className="auth-subtitle">Únete a Prioritask para organizar las tareas del hogar</p>
-        </div>
-
-        <form onSubmit={handleRegister} className="auth-form" noValidate>
-          {error && (
-            <div className="auth-error-banner" role="alert">
-              <LuCircleAlert size={18} className="auth-error-icon" aria-hidden="true" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <Input
-            label="Nombre completo o alias"
+    <SignInPage
+      title={<span className="auth-title-gradient">Crear cuenta</span>}
+      description="Únete a Prioritask para organizar las tareas del hogar en equipo"
+      heroImageSrc={PRIORITASK_HERO_IMAGE}
+      testimonials={PRIORITASK_TESTIMONIALS}
+      error={error}
+      isLoading={isLoading}
+      onSignIn={handleRegister}
+      onGoogleSignIn={handleGoogleRegister}
+      footerContent={
+        <p style={{ margin: 0 }}>
+          ¿Ya tienes una cuenta?{" "}
+          <Link to="/login" className="auth-create-account-link">
+            Inicia sesión aquí
+          </Link>
+        </p>
+      }
+    >
+      <div className="animate-element animate-delay-300 auth-field-group">
+        <label htmlFor="register-username-input" className="auth-field-label">
+          Nombre completo o alias
+        </label>
+        <GlassInputWrapper>
+          <input
+            id="register-username-input"
+            name="username"
             type="text"
             placeholder="Ej. Alex Gómez"
+            className="auth-glass-input"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             disabled={isLoading}
-            leftIcon={<LuUser size={16} />}
             required
             autoComplete="name"
           />
+        </GlassInputWrapper>
+      </div>
 
-          <Input
-            label="Correo electrónico"
+      <div className="animate-element animate-delay-400 auth-field-group">
+        <label htmlFor="register-email-input" className="auth-field-label">
+          Correo electrónico
+        </label>
+        <GlassInputWrapper>
+          <input
+            id="register-email-input"
+            name="email"
             type="email"
             placeholder="nombre@ejemplo.com"
+            className="auth-glass-input"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={isLoading}
-            leftIcon={<LuMail size={16} />}
             required
             autoComplete="email"
           />
+        </GlassInputWrapper>
+      </div>
 
-          <Input
-            label="Contraseña"
-            type={showPassword ? "text" : "password"}
-            placeholder="Mínimo 6 caracteres"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={isLoading}
-            leftIcon={<LuLock size={16} />}
-            rightIcon={
-              <button
-                type="button"
-                className="auth-password-toggle"
-                onClick={() => setShowPassword((prev) => !prev)}
-                aria-label={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
-                tabIndex={-1}
-              >
-                {showPassword ? <LuEyeOff size={16} /> : <LuEye size={16} />}
-              </button>
-            }
-            required
-            autoComplete="new-password"
-          />
+      <div className="animate-element animate-delay-500 auth-field-group">
+        <label htmlFor="register-password-input" className="auth-field-label">
+          Contraseña
+        </label>
+        <GlassInputWrapper>
+          <div className="auth-password-field-inner">
+            <input
+              id="register-password-input"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Mínimo 6 caracteres"
+              className="auth-glass-input auth-glass-input-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+              required
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="auth-eye-toggle-btn"
+              aria-label={
+                showPassword ? "Ocultar contraseña" : "Ver contraseña"
+              }
+            >
+              {showPassword ? (
+                <LuEyeOff className="auth-eye-icon" size={20} />
+              ) : (
+                <LuEye className="auth-eye-icon" size={20} />
+              )}
+            </button>
+          </div>
+        </GlassInputWrapper>
+      </div>
 
-          <Input
-            label="Confirmar contraseña"
-            type={showConfirmPassword ? "text" : "password"}
-            placeholder="Repite la contraseña"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            disabled={isLoading}
-            leftIcon={<LuLock size={16} />}
-            rightIcon={
-              <button
-                type="button"
-                className="auth-password-toggle"
-                onClick={() => setShowConfirmPassword((prev) => !prev)}
-                aria-label={showConfirmPassword ? "Ocultar contraseña" : "Ver contraseña"}
-                tabIndex={-1}
-              >
-                {showConfirmPassword ? <LuEyeOff size={16} /> : <LuEye size={16} />}
-              </button>
-            }
-            required
-            autoComplete="new-password"
-          />
+      <div className="animate-element animate-delay-600 auth-field-group">
+        <label
+          htmlFor="register-confirm-password-input"
+          className="auth-field-label"
+        >
+          Confirmar contraseña
+        </label>
+        <GlassInputWrapper>
+          <div className="auth-password-field-inner">
+            <input
+              id="register-confirm-password-input"
+              name="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="Repite la contraseña"
+              className="auth-glass-input auth-glass-input-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={isLoading}
+              required
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((prev) => !prev)}
+              className="auth-eye-toggle-btn"
+              aria-label={
+                showConfirmPassword ? "Ocultar contraseña" : "Ver contraseña"
+              }
+            >
+              {showConfirmPassword ? (
+                <LuEyeOff className="auth-eye-icon" size={20} />
+              ) : (
+                <LuEye className="auth-eye-icon" size={20} />
+              )}
+            </button>
+          </div>
+        </GlassInputWrapper>
+      </div>
 
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            isLoading={isLoading}
-            className="auth-submit-btn"
-          >
-            {isLoading ? loadingMessage : "Crear cuenta"}
-          </Button>
-        </form>
-
-        <div className="auth-footer">
-          <p>
-            ¿Ya tienes una cuenta?{" "}
-            <Link to="/login" className="auth-link">
-              Inicia sesión aquí
-            </Link>
-          </p>
-        </div>
-      </Card>
-    </div>
+      <button
+        type="submit"
+        className="animate-element animate-delay-700 auth-primary-submit-btn"
+        disabled={isLoading}
+      >
+        {isLoading ? loadingMessage : "Crear cuenta"}
+      </button>
+    </SignInPage>
   );
 }
