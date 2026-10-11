@@ -1,14 +1,14 @@
 import asyncio
 import logging
-import os
 import time
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import bcrypt
+import jwt
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from jwt.exceptions import InvalidTokenError as JWTError
 from sqlmodel.ext.asyncio.session import AsyncSession  # usamos el de SQLModel
 
 from app.core.config import settings
@@ -20,9 +20,13 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuración global
 # ─────────────────────────────────────────────────────────────────────────────
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+BCRYPT_ROUNDS: int = 12
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret")
+SECRET_KEY = settings.JWT_SECRET_KEY
+if (
+    not SECRET_KEY or SECRET_KEY in ("dev-secret", "CHANGE_ME_SUPER_SECRET_KEY", "tu_clave_secreta")
+) and settings.ENVIRONMENT.strip().lower() not in ("test", "testing"):
+    raise RuntimeError("Insecure or default JWT_SECRET_KEY configured in non-test environment.")
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
@@ -116,11 +120,15 @@ async def is_token_revoked(jti: str) -> bool:
 # Utilidades de contraseña y JWT (Asíncronas y No Bloqueantes)
 # ─────────────────────────────────────────────────────────────────────────────
 def hash_password(password: str) -> str:
-    return pwd_ctx.hash(password)
+    salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return pwd_ctx.verify(password, hashed)
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 async def hash_password_async(password: str) -> str:

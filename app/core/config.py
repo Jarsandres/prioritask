@@ -1,7 +1,14 @@
 import json
 
-from pydantic import ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator, model_validator
 from pydantic_settings import BaseSettings
+
+INSECURE_JWT_SECRETS = {
+    "",
+    "dev-secret",
+    "CHANGE_ME_SUPER_SECRET_KEY",
+    "tu_clave_secreta",
+}
 
 
 class Settings(BaseSettings):
@@ -33,12 +40,10 @@ class Settings(BaseSettings):
             return v.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
         return v
 
-##Configuracion ollama IA 
-    OLLAMA_HOST: str = "http://localhost:11434" #url del servidor ollama 
-    OLLAMA_MODEL: str = "qwen2.5:7b"   #modelo a utilizar
-    OLLAMA_TIMEOUT: float = 1.0 #timeout en segundos
-      
-
+    ##Configuracion ollama IA
+    OLLAMA_HOST: str = "http://localhost:11434"  # url del servidor ollama
+    OLLAMA_MODEL: str = "qwen2.5:7b"  # modelo a utilizar
+    OLLAMA_TIMEOUT: float = 1.0  # timeout en segundos
 
     @field_validator("CORS_ORIGINS", mode="before")
     def split_origins(cls, v):
@@ -79,7 +84,28 @@ class Settings(BaseSettings):
             )
         return [orig.rstrip("/") for orig in v]
 
+    @model_validator(mode="after")
+    def validate_security_posture(self) -> "Settings":
+        env = self.ENVIRONMENT.strip().lower()
+        secret = self.JWT_SECRET_KEY.strip()
+        if env not in ("test", "testing") and (not secret or secret in INSECURE_JWT_SECRETS):
+            raise ValueError(
+                "JWT_SECRET_KEY insegura o por defecto detectada. Configure una clave criptográfica fuerte."
+            )
+        if env == "production":
+            if len(secret) < 32:
+                raise ValueError(
+                    "En producción, JWT_SECRET_KEY debe tener al menos 32 caracteres de entropía."
+                )
+            if self.DATABASE_URL.strip().lower().startswith("sqlite"):
+                raise ValueError(
+                    "En producción no se permite SQLite local (DATABASE_URL). Configure PostgreSQL."
+                )
+        return self
+
     model_config = ConfigDict(env_file=".env")
+
 
 # Crea una instancia de Settings
 settings = Settings()
+

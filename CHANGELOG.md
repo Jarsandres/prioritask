@@ -3,6 +3,49 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## ✨ Versión 1.6.2 (Rediseño Split-Screen de Autenticación 21st.dev, Glassmorphism Inputs & Escaparate de Convivencia — UI/UX Polish) — [2026-10-11]
+
+### 🎨 Experiencia de Autenticación Split-Screen, Glassmorphism & Escaparate de Convivencia (Frontend)
+- **[FE-AUTH-010] Primitiva UI `SignInPage` y Subcomponentes Glassmorphic (`prioritask-frontend/src/components/ui/SignInPage.tsx`, `src/components/ui/index.ts`)**:
+  - Implementación de `SignInPage`, `GlassInputWrapper`, `TestimonialCard` y `GoogleIcon` tipados estrictamente en TypeScript (`SignInPageProps`, `Testimonial`).
+  - Soporte dual controlado (`email`, `password`, `rememberMe` + handlers) y no controlado (`new FormData(event.currentTarget)`), además de composición flexible vía `children` para formularios multi-campo.
+  - Preservación 100% retrocompatible de los selectores y etiquetas accesibles requeridos por la suite E2E Playwright (`e2e/smoke.spec.ts`).
+- **[FE-AUTH-020] Arquitectura CSS Split-Screen, Animaciones Escalonadas y Soporte Theme Studio (`prioritask-frontend/src/auth/Auth.css`)**:
+  - Sistema de animaciones de entrada escalonadas (`@keyframes fadeSlideIn`, `slideRightIn`, `testimonialIn` con `.animate-delay-100..1400`) y respeto estricto de accesibilidad vestibular mediante `@media (prefers-reduced-motion: reduce)`.
+  - Superficies `.glass-input-wrapper` (`backdrop-filter: blur(12px)`) y `.auth-testimonial-card` (`backdrop-filter: blur(16px)`) reactivas a las 5 paletas de acento del Theme Studio (`cobalt`, `crimson`, `emerald`, `violet`, `oled`) y a los modos claro/oscuro.
+- **[FE-AUTH-030] Escaparate de Convivencia con Esencia Prioritask y Armonización de Login/Registro (`prioritask-frontend/src/auth/Login.tsx`, `src/auth/Register.tsx`)**:
+  - Curación de `PRIORITASK_TESTIMONIALS` reflejando casos de uso reales de convivencia doméstica: Piso Compartido (`🔥 Racha 14d · P1`), Vida en Pareja (`⚖️ Reparto 50/50`) y Hogar Familiar (`👏 +120 pts Kiosco`).
+  - Persistencia segura de `rememberMe` en `Login.tsx` (`prioritask-remember-email` y almacenamiento condicional de `refreshToken`) e integración con `useToast()` para acciones secundarias (`onResetPassword`, `onGoogleSignIn`).
+  - Armonización visual de `Register.tsx` reutilizando `SignInPage` y `GlassInputWrapper` con medidor de fortaleza de contraseña en vivo (`getPasswordStrength`).
+- **[QA-AUTH-010] Suite Unitaria e Integración (`prioritask-frontend/src/__tests__/SignInPage.test.tsx`)**:
+  - Incorporación de 5 tests en Vitest + React Testing Library validando renderizado de la primitiva `SignInPage`, tarjetas de convivencia con badges, toggle accesible de visibilidad de contraseña, callbacks de formulario, persistencia de `rememberMe` en `Login` y flujo de registro en `Register`.
+
+---
+
+## 🛡️ Versión 1.6.1 (Remediación de Auditoría de Seguridad Cloudflare, Migración a PyJWT/Bcrypt & Blindaje Anti-Prompt Injection — Security Patch) — [2026-10-11]
+
+### 🔒 Remediación de Vulnerabilidades, Criptografía & Blindaje IA (Backend)
+- **[SEC-AUD-010] Eliminación de Fallback de Clave Secreta JWT y Validación de Postura de Seguridad (`app/services/auth.py`, `app/core/config.py`)**:
+  - Remediación de `auth-jwt-hardcoded-secret-key-fallback` (**CRITICAL**, CWE-798 / CWE-321 / CWE-287).
+  - Reemplazo de `os.getenv("JWT_SECRET_KEY", "dev-secret")` por `settings.JWT_SECRET_KEY`, eliminando la discrepancia entre variables de entorno del SO y el archivo `.env` gestionado por Pydantic.
+  - Definición de `INSECURE_JWT_SECRETS` y validador `@model_validator(mode="after")` `validate_security_posture` en `Settings` que bloquea claves inseguras o por defecto en cualquier entorno no de prueba.
+- **[SEC-AUD-020] Mitigación de Inyección Directa de Prompts en Subsistema IA (`app/services/AI/ollama_client.py`, `reformulator.py`, `task_organizer.py`, `priority_classifier.py`)**:
+  - Remediación de `ai-prompt-injection-task-reformulation` (**MEDIUM**, OWASP LLM01 / CWE-77).
+  - Implementación de la función `sanitize_prompt_input` (eliminación de caracteres de control, saltos de línea e inyecciones de cierre, escape de `"""`, `"`, `<`, `>`, y truncamiento defensivo a 200 caracteres).
+  - Encapsulado estricto de datos de usuario entre triples comillas `"""..."""`, instrucciones explícitas de tratamiento de datos pasivos (ignorando directivas embebidas) y soporte del parámetro `system` en `generate_json` para separación de roles en Ollama.
+- **[SEC-AUD-030] Modernización de Dependencias Criptográficas (`pyproject.toml`, `requirements.txt`, `app/services/auth.py`, `tests/`)**:
+  - Remediación de `supply-chain-deprecated-crypto-libraries` (**LOW**, CWE-1104, CVE-2024-33663, CVE-2024-33664).
+  - Reemplazo completo de las librerías sin mantenimiento `python-jose` y `passlib` por `PyJWT[crypto]>=2.8.0` y `bcrypt>=4.0.1` nativo.
+  - Configuración de `BCRYPT_ROUNDS` (`12` en producción/desarrollo y `4` en `tests/conftest.py` para velocidad de ejecución sin sacrificar cobertura real).
+- **[SEC-AUD-040] Blindaje de Persistencia en Producción e Higiene de Artefactos (`app/core/config.py`, `.gitignore`, `.dockerignore`)**:
+  - Cierre definitivo de `db-sqlite-file-insecure-default`.
+  - Prohibición automática en arranque de `DATABASE_URL` basada en SQLite y exigencia de entropía mínima (`len(JWT_SECRET_KEY) >= 32` caracteres / 256 bits) cuando `ENVIRONMENT="production"`.
+  - Exclusión de artefactos locales sensibles (`*.db.bak`, `*.db-shm`, `*.db-wal`, `*export*.json` y `audit-reports/`) en `.gitignore` y `.dockerignore`.
+- **[QA-AUD-010] Suite de Regresión de Seguridad y Quality Gate (`tests/unit/test_config.py`, `test_auth_service.py`, `test_ai_services.py`)**:
+  - Incorporación de 11 nuevos casos de prueba unitarios de seguridad (validación de secretos JWT, rechazo de SQLite en producción, expiración PyJWT, hashing Bcrypt directo y neutralización de Prompt Injection), alcanzando **316 tests en verde (100% pass rate)**, **70% de cobertura global** y **0 errores en Ruff**.
+
+---
+
 ## 🚀 Versión 1.6.0 (Motor de Recurrencia Avanzado, Modos Fijo vs. Flotante, Anti-Deriva Mensual, Clonación de Subtareas & REA Skill — Sprint 13) — [2026-10-10]
 
 ### ⚡ Motor de Recurrencia, Reglas y Persistencia (Backend)

@@ -1,13 +1,15 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import jwt
 import pytest
 from fastapi import HTTPException
-from jose import jwt
 
+from app.core.config import settings
 from app.models.enums import UserRole
 from app.models.user import Usuario
 from app.services.auth import (
+    SECRET_KEY,
     create_access_token,
     get_current_admin_user,
     hash_password,
@@ -16,6 +18,16 @@ from app.services.auth import (
 )
 
 SECRET = "test-secret"
+
+
+def test_secret_key_matches_settings_and_is_not_dev_secret():
+    assert SECRET_KEY == settings.JWT_SECRET_KEY
+    assert SECRET_KEY != "dev-secret"
+
+
+def test_verify_password_invalid_hash_returns_false_cleanly():
+    assert verify_password("password", "invalid-not-a-bcrypt-hash") is False
+
 
 def test_hash_and_verify_password():
     pwd = "MiClave123!"

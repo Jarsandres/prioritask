@@ -99,10 +99,26 @@ Una vez lanzado, puedes acceder a:
 ## 🔒 Variables de entorno (.env.example)
 
 ```env
-DATABASE_URL=sqlite:///./tareas.db
-JWT_SECRET_KEY=tu_clave_secreta
+DATABASE_URL=sqlite+aiosqlite:///./prioritask.db
+
+# Seguridad (Generar clave segura con: python -c "import secrets; print(secrets.token_hex(32))")
+JWT_SECRET_KEY=CHANGE_ME_SUPER_SECRET_KEY
 CORS_ORIGINS=["http://localhost:5173"]
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# Ollama
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_TIMEOUT=1.0
 ```
+
+Antes de iniciar el servidor, genera una clave criptográfica de 256 bits (64 caracteres hexadecimales) para `JWT_SECRET_KEY`:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+> 🔐 **Postura de Seguridad en Arranque (`validate_security_posture`):** El validador de `Settings` en `app/core/config.py` bloquea automáticamente en arranque el uso de claves débiles o por defecto (`dev-secret`, `CHANGE_ME_SUPER_SECRET_KEY`, `tu_clave_secreta`, `secret`, `changeme`). Además, cuando `ENVIRONMENT=production`, exige obligatoriamente que `JWT_SECRET_KEY` tenga una longitud mínima de **32 caracteres** y que `DATABASE_URL` utilice un motor **PostgreSQL** (rechazando bases de datos locales SQLite).
 
 `CORS_ORIGINS` debe ser un array en formato JSON (o una lista separada por comas) que se convertirá en una lista en Python. Por ejemplo:
 
