@@ -21,6 +21,8 @@ Fuente de la Verdad única (Single Source of Truth) para la gobernanza, estánda
 
 ### 3. Seguridad y Multi-tenancy
 - **Zero Trust**: Todos los endpoints de datos e inferencia protegidos obligatoriamente con JWT (`Depends(get_current_user)`).
+- **Validación Criptográfica en Arranque (`validate_security_posture`)**: `Settings` bloquea claves JWT inseguras o por defecto (`INSECURE_JWT_SECRETS`), exige claves de al menos 32 caracteres (256 bits) en `ENVIRONMENT="production"` y prohíbe el uso de bases de datos SQLite en producción (CWE-798, CWE-321, CWE-287).
+- **Criptografía Moderna (`PyJWT` + `bcrypt` nativo)**: Emisión y verificación de tokens mediante `PyJWT[crypto]>=2.8.0` y hashing de contraseñas no bloqueante (`asyncio.to_thread`) directo con `bcrypt>=4.0.1` (`BCRYPT_ROUNDS=12`), erradicando dependencias obsoletas (`python-jose`, `passlib`, CVE-2024-33663, CVE-2024-33664).
 - **Aislamiento por Hogar (Multi-tenancy)**: Segregación contextual por `room_id` y control de pertenencia mediante `RoomMember`.
 - **RBAC en Convivencia**: Roles contextuales `ADMIN` y `MEMBER` (`RoomMemberRole`). Solo administradores y propietarios pueden gestionar miembros o revocar accesos.
 - **Prevención de IDOR**: Validación estricta de propiedad/membresía previa a cualquier mutación o consulta (`404` para no divulgación o `403` según matriz RBAC).
@@ -30,6 +32,7 @@ Fuente de la Verdad única (Single Source of Truth) para la gobernanza, estánda
 ### 4. Inferencia IA Local Resiliente
 - **Motor**: Ollama local (`qwen2.5:7b`) desacoplado mediante cliente HTTP asíncrono (`ollama_client.py`).
 - **Estrategia de Fallback**: Todos los servicios de IA (`priority_classifier`, `reformulator`, `task_organizer`) disponen de degradación elegante determinista ante caídas de conexión, timeouts o JSONs malformados.
+- **Blindaje Anti-Prompt Injection (OWASP LLM01 / CWE-77)**: Sanitización estricta de entradas de usuario mediante `sanitize_prompt_input` (eliminación de caracteres de control, escape de comillas y delimitadores, truncamiento a 200 caracteres), encapsulado en delimitadores estructurales `"""..."""` y separación de rol `system` en `generate_json`.
 - **Timeouts**: Timeout estricto y reintentos con backoff exponencial.
 
 ---
@@ -161,3 +164,17 @@ Fuente de la Verdad única (Single Source of Truth) para la gobernanza, estánda
 - [x] **FE-SEARCH-010**: Búsqueda multi-capa y autocompletado en `CommandPaletteModal` (0ms caché en memoria + LRU + backend fallback) y debounce optimizado a 150ms.
 - [x] **TEST-SCALE-010**: Expansión de suites de pruebas a 272 tests backend en verde (100%), suites de virtualización en Vitest y validación de calidad continua.
 - [x] **Quality Gate Consolidado**: 272 tests backend en verde (100% pass rate), cobertura >= 70%, 0 errores Ruff/ESLint, build Vite limpio en 2.48s, auditoría de rendimiento y escalabilidad APROBADA.
+
+### Sprint 13: Motor de Recurrencia Avanzado, Modos Fijo/Flotante, Remediación de Auditoría de Seguridad (v1.6.1) & Split-Screen Auth 21st.dev (v1.6.2) — [COMPLETADO ✅]
+- [x] **REC-ENG-010**: Modos de recurrencia `FIXED` vs `FLOATING` (`RecurrenceMode`), anclaje mensual `anchor_day_of_month` y flag `reset_subtasks` en `RecurrenceRule` (migración Alembic `e5a9b1c2d3f4`).
+- [x] **REC-CALC-010**: Algoritmo anti-deriva mensual (preservación de días 29/30/31 tras meses cortos), catch-up secuencial en modo `FIXED` y anclaje a `completed_at` en modo `FLOATING` (`every!`).
+- [x] **REC-SUB-010**: Clonación automática de jerarquía de subtareas activas (`Subtask`) con reseteo `completada=False` y endpoint `POST /api/v1/tasks/{task_id}/advance` con difusión SSE.
+- [x] **FE-REC-010**: Motor DSL bilingüe (`recurrenceEngine.ts`), previsualización interactiva de próximos ciclos (`previewNextOccurrences`) en `TaskForm.tsx` y avance reactivo en `TaskList.tsx`.
+- [x] **SEC-AUD-010**: Remediación crítica de `auth-jwt-hardcoded-secret-key-fallback` (CRITICAL, CWE-798/CWE-321/CWE-287) eliminando el fallback `"dev-secret"` e incorporando `validate_security_posture` en `Settings`.
+- [x] **SEC-AUD-020**: Remediación de `ai-prompt-injection-task-reformulation` (MEDIUM, OWASP LLM01 / CWE-77) mediante `sanitize_prompt_input`, delimitadores estructurales `"""..."""` y rol `system` en `OllamaClient`.
+- [x] **SEC-AUD-030**: Remediación de `supply-chain-deprecated-crypto-libraries` (LOW, CWE-1104, CVE-2024-33663/33664) migrando de `python-jose` y `passlib` a `PyJWT[crypto]>=2.8.0` y `bcrypt>=4.0.1` directo.
+- [x] **SEC-AUD-040**: Cierre de `db-sqlite-file-insecure-default` prohibiendo SQLite y exigiendo `len(JWT_SECRET_KEY) >= 32` en `ENVIRONMENT="production"`, además de blindaje en `.gitignore` y `.dockerignore`.
+- [x] **FE-AUTH-010/020/030 (v1.6.2)**: Rediseño Split-Screen 21st.dev de `Login.tsx` y `Register.tsx` mediante la primitiva `SignInPage.tsx`, inputs translúcidos `GlassInputWrapper` reactivos al Theme Studio (`Auth.css`), escaparate de convivencia doméstica con insignias de gamificación (`PRIORITASK_TESTIMONIALS`), persistencia de `rememberMe` y suite unitaria `SignInPage.test.tsx`.
+- [x] **Quality Gate Consolidado**: **316 tests backend en verde (100% pass rate)**, **cobertura >= 70%**, **22 suites unitarias frontend en Vitest (123 tests en verde)**, **0 errores Ruff/ESLint**, build Vite limpio, auditoría de seguridad Cloudflare 100% remediada y verificada.
+
+
