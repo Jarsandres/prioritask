@@ -50,6 +50,8 @@ export interface Task {
   categoria: string;
   peso: number;
   due_date?: string;
+  created_at?: string;
+  updated_at?: string;
   deleted_at?: string | null;
   room_id?: string | null;
   tags?: Tag[];

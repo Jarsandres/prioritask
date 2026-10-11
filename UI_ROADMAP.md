@@ -94,6 +94,17 @@ A partir de esta base sólida estilo Todoist, el comité define un **Roadmap en 
 
 ---
 
+### 🔄 Fase 6: Motor de Sincronización Offline, Optimistic UI & Cola de Comandos Transaccionales (Inspirado en Todoist Desktop)
+**Objetivo:** Desacoplar la interfaz de usuario de la latencia o disponibilidad de la red mediante un motor local-first inspirado en la arquitectura de `todoist-electron@9.31.0` analizada estáticamente con REA (`app.asar`).
+1. **Esquema Transaccional de Comandos y Puente IPC (`src/sync/offlineQueue.ts`)**:
+   - Contrato `SyncCommand` con `uuid` de idempotencia, `temp_id` (`temp_<uuid>`) para creaciones offline y ordenamiento causal FIFO (`timestamp`).
+   - Soporte para sobres IPC estilo Electron (`DesktopBridgeEnvelope`: `completeItem`, `uncompleteItem`, `addTask`, `quickAddAddTask`, `sendRequestSync`, `handleWakeup`) y elección de ventana líder (`isMainLogicWindow` / `setMainLogicWindow`).
+2. **Motor `OfflineSyncEngine`, Persistencia `IndexedDB` y Resolución de Conflictos (`src/sync/offlineQueue.ts`)**:
+   - Actualización optimista inmediata en memoria (`dispatchMutation` + `applyMutationToMemory`) con snapshots previos (`OptimisticSnapshot`) para *rollback* selectivo ante errores definitivos (`4xx`).
+   - Persistencia duradera mediante `IndexedDBQueueStorageAdapter` con fallback en memoria y reprocesamiento por lotes (`flushQueue`) con traducción automática `temp_id -> server_id` y resolución de conflictos (`field-merge`, `last-write-wins`, `client-wins`, `server-wins`).
+
+---
+
 ## 3. Matriz de Priorización Recomendada por el Comité
 
 | Orden | Entregable | Estado | Impacto UX | Complejidad | Archivos Principales Afectados |
@@ -104,6 +115,7 @@ A partir de esta base sólida estilo Todoist, el comité define un **Roadmap en 
 | **4º** | **Dashboard Bento Grid + Anillo de Meta Diaria (Karma)** | ✅ **Completado (v1.5.0)** | ⭐ Alto | Media | [`Dashboard.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/pages/Dashboard.tsx), [`DailyGoalRing.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/dashboard/DailyGoalRing.tsx) |
 | **5º** | **Colaboración Doméstica (Drag & Drop Avatares + Kudos) & Modo Kiosco/Nevera Digital** | ✅ **Completado (v1.5.0)** | 🔥 Muy Alto | Media | [`KitchenKioskModal.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/rooms/KitchenKioskModal.tsx), [`kudosStore.ts`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/utils/kudosStore.ts), [`RoomTasks.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/pages/RoomTasks.tsx), [`TaskCard.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/common/TaskCard.tsx) |
 | **6º** | **Split-Screen Sign-In & Register (21st.dev + Glassmorphism + Escaparate de Convivencia)** | ✅ **Completado (v1.6.2)** | 🔥 Muy Alto | Media | [`SignInPage.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/ui/SignInPage.tsx), [`Login.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/auth/Login.tsx), [`Register.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/auth/Register.tsx), [`Auth.css`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/auth/Auth.css) |
+| **7º** | **Motor de Sincronización Offline, Optimistic UI & Cola de Comandos (`OfflineSyncEngine`)** | ✅ **Completado (v1.7.0)** | 🔥 Muy Alto | Alta | [`offlineQueue.ts`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/sync/offlineQueue.ts), [`offlineQueue.test.ts`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/sync/__tests__/offlineQueue.test.ts) |
 
 
 

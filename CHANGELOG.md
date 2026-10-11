@@ -3,6 +3,24 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## 🔄 Versión 1.7.0 (Motor de Sincronización Offline, Optimistic UI, Cola de Comandos Transaccionales & Análisis REA Todoist Desktop) — [2026-10-11]
+
+### ⚡ Motor de Sincronización Offline, Optimistic UI y Cola Persistente (Frontend & Arquitectura)
+- **[REA-SYNC-010] Diagnóstico Estático de `todoist-electron@9.31.0` con REA (`app.asar`)**:
+  - Inspección estática sin ejecución sobre `app.asar` (SHA-256: `5d756871...`, 3.065 módulos JS, 86 canales IPC; Evidence IDs: `ev_a1a8042f...`, `ev_1b127198...`, `ev_57bc1908...`, `ev_8e654732...`, `ev_6c047951...`).
+  - Identificación del patrón de **Despacho por Sobres de Comando IPC (`DesktopBridgeEnvelope`)**, **Elección de Ventana Líder (`We.mainLogicWindow` vía `isMainLogicWindow`/`setMainLogicWindow`)** para prevenir condiciones de carrera sobre la cola local, y **Drenado Reactivo al Reanudar Red/Sistema (`sendRequestSync` / `handleWakeup` + `isNetworkError`)**.
+- **[FE-SYNC-010] Esquema de Comandos Transaccionales y Cola Local (`prioritask-frontend/src/sync/offlineQueue.ts`)**:
+  - Definición estricta en TypeScript de `SyncCommand`, `LocalSyncQueueState`, `OptimisticSnapshot`, `DesktopBridgeEnvelope`, `SyncBatchRequest` y `SyncBatchResponse`.
+  - Soporte nativo para generación de `uuid` de idempotencia y `temp_id` (`temp_<uuid>`) en creaciones offline (`task_create`), permitiendo encadenar mutaciones posteriores (`task_update`, `task_complete`, `task_delete`) sobre tareas aún no confirmadas por el servidor.
+- **[FE-SYNC-020] Motor `OfflineSyncEngine` con Actualización Optimista, Persistencia IndexedDB y Resolución de Conflictos (`prioritask-frontend/src/sync/offlineQueue.ts`)**:
+  - Mutación optimista inmediata en memoria (`dispatchMutation` + `applyMutationToMemory`) con captura automática de `OptimisticSnapshot` para rollback atómico ante errores permanentes (`4xx`).
+  - Adaptador de persistencia `IndexedDBQueueStorageAdapter` (`prioritask_sync_engine_db`) con fallback transparente en memoria.
+  - Reprocesamiento por lotes `flushQueue()` con traducción automática `temp_id -> server_id` (`temp_id_mapping`) y estrategias configurables de resolución de conflictos (`field-merge`, `last-write-wins`, `client-wins`, `server-wins`).
+- **[QA-SYNC-010] Suite de Pruebas Unitarias del Motor de Sincronización (`prioritask-frontend/src/sync/__tests__/offlineQueue.test.ts`)**:
+  - Cobertura automatizada en Vitest validando creaciones optimistas con `temp_id`, encadenamiento de comandos offline, mapeo a IDs definitivos del servidor tras `flushQueue()`, resolución de conflictos concurrentes mediante `field-merge` y rollback automático ante fallos definitivos.
+
+---
+
 ## ✨ Versión 1.6.2 (Rediseño Split-Screen de Autenticación 21st.dev, Glassmorphism Inputs & Escaparate de Convivencia — UI/UX Polish) — [2026-10-11]
 
 ### 🎨 Experiencia de Autenticación Split-Screen, Glassmorphism & Escaparate de Convivencia (Frontend)
