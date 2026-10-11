@@ -27,3 +27,12 @@ export type {
 
 export { Skeleton } from "./Skeleton";
 export type { SkeletonProps, SkeletonVariant } from "./Skeleton";
+
+export {
+  SignInPage,
+  GlassInputWrapper,
+  TestimonialCard,
+  GoogleIcon,
+} from "./SignInPage";
+export type { SignInPageProps, Testimonial } from "./SignInPage";
+
