@@ -1,4 +1,5 @@
 import contextlib
+import json
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -12,11 +13,13 @@ from app.core.rate_limit import rate_limit
 from app.db.session import get_session
 from app.models.user import Usuario
 from app.schemas.user import (
+    PasswordChangeRequest,
     RefreshTokenRequest,
     TokenResponse,
     UsuarioCreate,
     UsuarioLogin,
     UsuarioRead,
+    UsuarioUpdate,
 )
 from app.services import auth as auth_srv
 from app.services.auth import SECRET_KEY, get_current_user
@@ -26,6 +29,43 @@ router = APIRouter(prefix="/auth", tags=["Autenticación y Sesiones"])
 @router.get("/me", response_model=UsuarioRead, summary="Obtener información del usuario", description="Devuelve la información del usuario autenticado.")
 async def get_me(current_user: Usuario = Depends(get_current_user)):
     return current_user
+
+
+@router.patch(
+    "/me",
+    response_model=UsuarioRead,
+    summary="Actualizar perfil y preferencias del usuario",
+    description="Permite actualizar nombre, email y/o preferencias del usuario autenticado.",
+)
+async def update_me(
+    payload: UsuarioUpdate,
+    current_user: Usuario = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if payload.email is not None and payload.email != current_user.email:
+        existing_user = await session.scalar(
+            select(Usuario).where(Usuario.email == payload.email)
+        )
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="El email ya está registrado por otro usuario.",
+            )
+        current_user.email = payload.email
+
+    if payload.nombre is not None:
+        current_user.nombre = payload.nombre
+
+    if payload.preferences is not None:
+        current_prefs = current_user.preferences.copy()
+        current_prefs.update(payload.preferences)
+        current_user.preferences_json = json.dumps(current_prefs)
+
+    session.add(current_user)
+    await session.commit()
+    await session.refresh(current_user)
+    return current_user
+
 
 
 @router.post(
@@ -173,6 +213,51 @@ async def refresh_token(
 
 
 @router.post(
+    "/change-password",
+    summary="Cambiar contraseña",
+    description="Actualiza la contraseña del usuario autenticado, invalida sesiones previas y emite nuevos tokens.",
+)
+async def change_password(
+    payload: PasswordChangeRequest,
+    current_user: Usuario = Depends(auth_srv.get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    is_valid = await auth_srv.verify_password_async(
+        payload.current_password, current_user.hashed_password
+    )
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="La contraseña actual es incorrecta.",
+        )
+
+    current_user.hashed_password = await auth_srv.hash_password_async(payload.new_password)
+    current_user.token_version = (current_user.token_version or 1) + 1
+    session.add(current_user)
+    await session.commit()
+    await session.refresh(current_user)
+
+    new_token = auth_srv.create_access_token(
+        current_user.id,
+        SECRET_KEY,
+        is_superuser=current_user.is_superuser,
+        role="ADMIN" if current_user.is_superuser else "USER",
+        token_version=current_user.token_version,
+    )
+    new_refresh_token = auth_srv.create_refresh_token(
+        current_user.id,
+        SECRET_KEY,
+        token_version=current_user.token_version,
+    )
+    return {
+        "message": "Contraseña actualizada exitosamente",
+        "access_token": new_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+    }
+
+
+@router.post(
     "/logout",
     summary="Cerrar sesión",
     description="Invalida el token JWT actual registrando su jti en la lista negra.",
@@ -190,4 +275,31 @@ async def logout(
         if jti:
             await auth_srv.revoke_token(jti, max(ttl, 60))
     return {"message": "Sesión cerrada y token revocado exitosamente"}
+
+
+@router.post(
+    "/logout-all",
+    summary="Cerrar todas las sesiones activas",
+    description="Incrementa token_version para invalidar todas las sesiones activas del usuario y revoca el token actual.",
+)
+async def logout_all(
+    token: str = Depends(auth_srv.oauth2_scheme),
+    current_user: Usuario = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    current_user.token_version = (current_user.token_version or 1) + 1
+    session.add(current_user)
+    await session.commit()
+
+    with contextlib.suppress(Exception):
+        payload = auth_srv.decode_token(token, SECRET_KEY, verify_exp=False)
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        now = datetime.now(UTC).timestamp()
+        ttl = int(exp - now) if exp else 3600
+        if jti:
+            await auth_srv.revoke_token(jti, max(ttl, 60))
+
+    return {"message": "Todas las sesiones activas han sido cerradas"}
+
 

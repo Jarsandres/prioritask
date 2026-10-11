@@ -16,13 +16,13 @@
 
 .app-main-area {
   flex: 1;
-  margin-left: 220px;
+  margin-left: 244px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  width: calc(100% - 220px);
+  transition: margin-left 0.22s cubic-bezier(0.22, 1, 0.36, 1), width 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  width: calc(100% - 244px);
 }
 
 .sidebar-collapsed .app-main-area {

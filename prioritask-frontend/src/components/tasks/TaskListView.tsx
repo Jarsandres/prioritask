@@ -1,6 +1,11 @@
 import React, { useState, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Task } from "../../types/task";
+import { useTheme } from "../../context/ThemeContext";
+import {
+  getMemberInitials,
+  type QuickAssignee,
+} from "../../utils/kudosStore";
 import {
   PriorityBadge,
   StatusBadge,
@@ -15,6 +20,7 @@ import {
   LuTrash2,
   LuLoaderCircle,
   LuListChecks,
+  LuUserPlus,
 } from "react-icons/lu";
 import "./tasks.css";
 
@@ -28,6 +34,9 @@ export interface TaskListViewProps {
   completingId?: string | null;
   deletingId?: string | null;
   className?: string;
+  assigneesMap?: Record<string, QuickAssignee[]>;
+  onAssignMember?: (taskId: string, member: QuickAssignee) => void | Promise<void>;
+  activeAssigneeForClick?: QuickAssignee | null;
 }
 
 interface TaskListRowProps {
@@ -37,6 +46,9 @@ interface TaskListRowProps {
   onDelete?: (task: Task) => void;
   isCompleting: boolean;
   isDeleting: boolean;
+  assignedMembers?: QuickAssignee[];
+  onAssignMember?: (taskId: string, member: QuickAssignee) => void | Promise<void>;
+  activeAssigneeForClick?: QuickAssignee | null;
 }
 
 const TaskListRow = ({
@@ -46,8 +58,12 @@ const TaskListRow = ({
   onDelete,
   isCompleting,
   isDeleting,
+  assignedMembers = [],
+  onAssignMember,
+  activeAssigneeForClick = null,
 }: TaskListRowProps) => {
   const isDone = task.estado === "DONE";
+  const [isMemberDragOver, setIsMemberDragOver] = useState(false);
 
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchCurrentX, setTouchCurrentX] = useState<number | null>(null);
@@ -90,10 +106,68 @@ const TaskListRow = ({
       : 0;
   const clampedOffset = Math.max(-90, Math.min(90, swipeOffset));
 
+  const priorityRingClass =
+    task.peso >= 4
+      ? "priority-ring-p1"
+      : task.peso === 3
+      ? "priority-ring-p2"
+      : task.peso === 2
+      ? "priority-ring-p3"
+      : "priority-ring-p4";
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const dueDateNormalized = task.due_date ? String(task.due_date).slice(0, 10) : "";
+  const dueStatusClass =
+    !dueDateNormalized || isDone
+      ? ""
+      : dueDateNormalized < todayIso
+      ? "due-overdue"
+      : dueDateNormalized === todayIso
+      ? "due-today"
+      : "due-upcoming";
+
+  const handleMemberDragOver = (e: React.DragEvent) => {
+    if (!onAssignMember) return;
+    if (e.dataTransfer.types.includes("application/x-prioritask-member")) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "copy";
+      setIsMemberDragOver(true);
+    }
+  };
+
+  const handleMemberDragLeave = () => {
+    if (isMemberDragOver) {
+      setIsMemberDragOver(false);
+    }
+  };
+
+  const handleMemberDrop = (e: React.DragEvent) => {
+    if (!onAssignMember) return;
+    const rawMember = e.dataTransfer.getData("application/x-prioritask-member");
+    if (!rawMember) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsMemberDragOver(false);
+    try {
+      const parsed = JSON.parse(rawMember) as QuickAssignee;
+      if (parsed && parsed.userId) {
+        onAssignMember(task.id, parsed);
+      }
+    } catch {
+      // Ignorar payload inválido
+    }
+  };
+
   return (
     <div
-      className={`task-list-row ${isDone ? "task-done" : ""}`}
+      className={`task-list-row ${isDone ? "task-done" : ""} ${
+        isMemberDragOver ? "is-member-drop-target" : ""
+      }`.trim()}
       role="row"
+      onDragOver={handleMemberDragOver}
+      onDragLeave={handleMemberDragLeave}
+      onDrop={handleMemberDrop}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -116,7 +190,7 @@ const TaskListRow = ({
       <div className="d-flex align-items-center">
         <button
           type="button"
-          className={`ui-task-checkbox ${isDone ? "checked" : ""}`}
+          className={`ui-task-checkbox ${priorityRingClass} ${isDone ? "checked" : ""}`.trim()}
           onClick={() => onComplete && onComplete(task.id)}
           disabled={isCompleting || isDeleting}
           aria-label={
@@ -139,7 +213,19 @@ const TaskListRow = ({
       </div>
 
       {/* Título y descripción */}
-      <div className="task-list-title-cell">
+      <div
+        className="task-list-title-cell"
+        onClick={() => onEdit?.(task)}
+        onKeyDown={(e) => {
+          if (onEdit && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            onEdit(task);
+          }
+        }}
+        role={onEdit ? "button" : undefined}
+        tabIndex={onEdit ? 0 : undefined}
+        style={{ cursor: onEdit ? "pointer" : undefined }}
+      >
         <div className="d-flex align-items-center gap-2 flex-wrap">
           <span className="task-list-item-title">{task.titulo}</span>
           {task.is_recurring && <RecurringBadge />}
@@ -161,6 +247,43 @@ const TaskListRow = ({
                 /{task.subtasks_count ?? task.subtasks?.length ?? 0}
               </span>
             </span>
+          )}
+          {assignedMembers.map((member) => (
+            <button
+              key={member.userId}
+              type="button"
+              className="ui-task-assignee-chip"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAssignMember?.(task.id, member);
+              }}
+              title={`Asignada a ${member.label} (clic para quitar)`}
+            >
+              <span className="ui-task-assignee-initials">
+                {getMemberInitials(member.label)}
+              </span>
+              <span className="ui-task-assignee-name">{member.label}</span>
+            </button>
+          ))}
+          {activeAssigneeForClick && onAssignMember && (
+            <button
+              type="button"
+              className="ui-task-quick-assign-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAssignMember(task.id, activeAssigneeForClick);
+              }}
+              data-testid={`list-quick-assign-btn-${task.id}`}
+            >
+              <LuUserPlus size={11} />
+              <span>
+                {assignedMembers.some(
+                  (m) => m.userId === activeAssigneeForClick.userId
+                )
+                  ? `Quitar ${activeAssigneeForClick.label}`
+                  : `Asignar a ${activeAssigneeForClick.label}`}
+              </span>
+            </button>
           )}
         </div>
         {task.descripcion && (
@@ -186,7 +309,9 @@ const TaskListRow = ({
       {/* Fecha de vencimiento */}
       <div className="task-list-due-cell">
         {task.due_date ? (
-          <span className="text-muted d-flex align-items-center gap-1 small">
+          <span
+            className={`ui-task-due-date ${dueStatusClass} d-inline-flex align-items-center gap-1 small`.trim()}
+          >
             <LuCalendar size={13} aria-hidden="true" />
             <span>{task.due_date}</span>
           </span>
@@ -233,14 +358,21 @@ export const TaskListView = ({
   completingId,
   deletingId,
   className = "",
+  assigneesMap,
+  onAssignMember,
+  activeAssigneeForClick,
 }: TaskListViewProps) => {
+  const { density } = useTheme();
   const isVirtualized = tasks.length > VIRTUALIZATION_THRESHOLD;
   const parentRef = useRef<HTMLDivElement>(null);
+
+  const estimatedRowHeight =
+    density === "compact" ? 38 : density === "cozy" ? 72 : 58;
 
   const rowVirtualizer = useVirtualizer({
     count: isVirtualized ? tasks.length : 0,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 58,
+    estimateSize: () => estimatedRowHeight,
     overscan: 5,
   });
 
@@ -297,6 +429,9 @@ export const TaskListView = ({
                     onDelete={onDelete}
                     isCompleting={completingId === task.id}
                     isDeleting={deletingId === task.id}
+                    assignedMembers={assigneesMap?.[task.id]}
+                    onAssignMember={onAssignMember}
+                    activeAssigneeForClick={activeAssigneeForClick}
                   />
                 </div>
               );
@@ -314,6 +449,9 @@ export const TaskListView = ({
               onDelete={onDelete}
               isCompleting={completingId === task.id}
               isDeleting={deletingId === task.id}
+              assignedMembers={assigneesMap?.[task.id]}
+              onAssignMember={onAssignMember}
+              activeAssigneeForClick={activeAssigneeForClick}
             />
           ))}
         </div>

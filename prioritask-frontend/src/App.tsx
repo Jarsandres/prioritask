@@ -19,6 +19,7 @@ import RoomTasks from "./pages/RoomTasks";
 import { TaskUpdateProvider } from "./context/TaskUpdateContext";
 import { RoomProvider, useRoom } from "./context/RoomContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
+import { SettingsProvider, useSettings } from "./context/SettingsContext";
 import { ToastProvider } from "./context/ToastContext";
 import CreateRoom from "./pages/CreateRoom";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -35,6 +36,7 @@ const AppContent = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { activeRoom } = useRoom();
+  const { settings } = useSettings();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
@@ -44,7 +46,7 @@ const AppContent = () => {
   const { theme, toggleTheme } = useTheme();
   const hideSidebar = location.pathname === "/login" || location.pathname === "/register";
 
-  // Listener global de atajos de teclado (Ctrl+K, ?, c)
+  // Listener global de atajos de teclado (Ctrl+K, Ctrl+,, ?, c)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -62,8 +64,15 @@ const AppContent = () => {
         return;
       }
 
-      // Si el foco está dentro de un campo de texto, ignorar atajos simples
-      if (isInput) return;
+      // Ctrl+, o Cmd+, para abrir Configuración y Perfil (Todoist Desktop)
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault();
+        navigate("/profile");
+        return;
+      }
+
+      // Si el foco está dentro de un campo de texto o los atajos de una tecla están desactivados, ignorar
+      if (isInput || !settings.general.enableSingleKeyShortcuts) return;
 
       // ? para ventana de ayuda de atajos
       if (e.key === "?" || (e.shiftKey && e.key === "/")) {
@@ -82,7 +91,7 @@ const AppContent = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate]);
+  }, [navigate, settings.general.enableSingleKeyShortcuts]);
 
   const toggleSidebarCollapse = () => {
     setIsSidebarCollapsed((prev) => {
@@ -157,6 +166,7 @@ const AppContent = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/rooms/create" element={<CreateRoom />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/analytics" element={<Dashboard />} />
             <Route path="/tasks" element={<TaskList />} />
             <Route path="/tasks/create" element={<TaskForm />} />
             <Route path="/tasks/edit/:taskId" element={<TaskForm />} />
@@ -216,15 +226,17 @@ function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <ToastProvider>
-          <TaskUpdateProvider>
-            <RoomProvider>
-              <ErrorBoundary>
-                <AppContent />
-              </ErrorBoundary>
-            </RoomProvider>
-          </TaskUpdateProvider>
-        </ToastProvider>
+        <SettingsProvider>
+          <ToastProvider>
+            <TaskUpdateProvider>
+              <RoomProvider>
+                <ErrorBoundary>
+                  <AppContent />
+                </ErrorBoundary>
+              </RoomProvider>
+            </TaskUpdateProvider>
+          </ToastProvider>
+        </SettingsProvider>
       </ThemeProvider>
     </BrowserRouter>
   );

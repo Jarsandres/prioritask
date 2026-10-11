@@ -33,6 +33,11 @@ export const FilterBar = ({
     busqueda || estado || categoria || fechaLimite
   );
 
+  const todayIso = new Date().toISOString().split("T")[0];
+  const nextWeekDate = new Date();
+  nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+  const nextWeekIso = nextWeekDate.toISOString().split("T")[0];
+
   const countTotal = totalTasks.length;
   const countTodo = totalTasks.filter((t) => t.estado === "TODO").length;
   const countInProgress = totalTasks.filter(
@@ -89,6 +94,36 @@ export const FilterBar = ({
             onClick={() => onEstadoChange("DONE")}
           >
             Completadas ({countDone})
+          </button>
+        </div>
+
+        {/* Vistas Temporales Rápidas Estilo Todoist (Hoy / Próx. 7 días) */}
+        <div
+          className="filter-status-chips"
+          role="group"
+          aria-label="Vistas temporales rápidas"
+        >
+          <button
+            type="button"
+            className={`filter-chip ${fechaLimite === todayIso ? "active" : ""}`}
+            onClick={() =>
+              onFechaLimiteChange(fechaLimite === todayIso ? "" : todayIso)
+            }
+            title="Filtrar tareas que vencen hoy o antes"
+          >
+            📅 Hoy
+          </button>
+          <button
+            type="button"
+            className={`filter-chip ${fechaLimite === nextWeekIso ? "active" : ""}`}
+            onClick={() =>
+              onFechaLimiteChange(
+                fechaLimite === nextWeekIso ? "" : nextWeekIso
+              )
+            }
+            title="Filtrar tareas de los próximos 7 días"
+          >
+            🗓️ Próx. 7 días
           </button>
         </div>
 

@@ -295,7 +295,7 @@ export const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                 key={t.id}
                 type="button"
                 className="task-calendar-chip btn btn-sm bg-white border text-start d-flex align-items-center gap-2 shadow-xs"
-                onClick={() => setSelectedTask(t)}
+                onClick={() => (onEdit ? onEdit(t) : setSelectedTask(t))}
                 title="Haz clic para ver o asignar fecha"
               >
                 <CategoryIcon category={t.categoria} size={14} />
@@ -350,7 +350,7 @@ export const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                         key={task.id}
                         type="button"
                         className={`task-calendar-card ${isDone ? "is-done" : ""}`}
-                        onClick={() => setSelectedTask(task)}
+                        onClick={() => (onEdit ? onEdit(task) : setSelectedTask(task))}
                         title={`${task.titulo} (${task.categoria})`}
                       >
                         <div className="d-flex align-items-center gap-1 w-100 overflow-hidden">

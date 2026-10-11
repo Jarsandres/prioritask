@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, Suspense, lazy } from "react";
+import { useEffect, useState, useCallback, useMemo, Suspense, lazy } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { useRoom } from "../context/RoomContext";
@@ -8,6 +8,7 @@ import EmptyState from "../components/common/EmptyState";
 import TaskCard from "../components/common/TaskCard";
 import ConfirmModal from "../components/ConfirmModal";
 import RoomMembersModal from "../components/RoomMembersModal";
+import KitchenKioskModal from "../components/rooms/KitchenKioskModal";
 import ModalSkeleton from "../components/ui/ModalSkeleton";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Button } from "../components/ui/Button";
@@ -15,9 +16,18 @@ import TaskViewSwitcher, { type TaskViewMode } from "../components/tasks/TaskVie
 import TaskListView from "../components/tasks/TaskListView";
 import TaskKanbanBoard from "../components/tasks/TaskKanbanBoard";
 import TaskCalendarView from "../components/tasks/TaskCalendarView";
+import QuickAddTaskBar from "../components/tasks/QuickAddTaskBar";
+import TaskPeekDrawer from "../components/tasks/TaskPeekDrawer";
 import { useRoomEvents, type RoomSyncEvent } from "../hooks/useRoomEvents";
 import { usePixelConfetti } from "../hooks/usePixelConfetti";
 import { cacheManager } from "../services/cacheManager";
+import {
+  getRoomTaskAssignees,
+  toggleMemberTaskAssignmentLocal,
+  getMemberInitials,
+  type QuickAssignee,
+  type KudosEmoji,
+} from "../utils/kudosStore";
 import type { Task, Room, TaskStatus, Subtask } from "../types/task";
 import type { GamificationOverview } from "../types/gamification";
 import {
@@ -30,6 +40,9 @@ import {
   LuFlame,
   LuTrophy,
   LuDownload,
+  LuMonitor,
+  LuCrown,
+  LuX,
 } from "react-icons/lu";
 import "../components/tasks/tasks.css";
 
@@ -56,8 +69,14 @@ const RoomTasks = () => {
   const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
   const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isKioskModalOpen, setIsKioskModalOpen] = useState(false);
   const [gamification, setGamification] = useState<GamificationOverview | null>(() => cachedGamification);
   const [loading, setLoading] = useState<boolean>(() => !cachedData);
+
+  const [assigneesMap, setAssigneesMap] = useState<Record<string, QuickAssignee[]>>(() =>
+    roomId ? getRoomTaskAssignees(roomId) : {}
+  );
+  const [activeAssigneeForClick, setActiveAssigneeForClick] = useState<QuickAssignee | null>(null);
 
   const [viewMode, setViewMode] = useState<TaskViewMode>(() => {
     return (localStorage.getItem("tasks_view_mode") as TaskViewMode) || "grid";
@@ -66,14 +85,27 @@ const RoomTasks = () => {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [peekTask, setPeekTask] = useState<Task | null>(null);
 
   const handleChangeViewMode = (mode: TaskViewMode) => {
-    setViewMode(mode);
+    const docWithTransition = document as Document & {
+      startViewTransition?: (cb: () => void) => void;
+    };
+    if (typeof docWithTransition.startViewTransition === "function") {
+      docWithTransition.startViewTransition(() => {
+        setViewMode(mode);
+      });
+    } else {
+      setViewMode(mode);
+    }
     localStorage.setItem("tasks_view_mode", mode);
   };
 
   useEffect(() => {
     setRoomId(roomId ?? null);
+    if (roomId) {
+      setAssigneesMap(getRoomTaskAssignees(roomId));
+    }
   }, [roomId, setRoomId]);
 
   // Carga inicial y cambio de sala con entrega SWR instantánea (0ms de espera visual)
@@ -364,19 +396,105 @@ const RoomTasks = () => {
     notifyUpdate();
     try {
       const res = await api.get<Room[]>("/rooms");
-      const stillMember = res.data.some((r) => r.id === roomId);
-      if (!stillMember) {
+      const found = res.data.find((r) => r.id === roomId);
+      if (!found) {
         navigate("/dashboard");
+      } else {
+        setCurrentRoom(found);
       }
     } catch {
       navigate("/dashboard");
     }
   };
 
+  // Lista unificada de convivientes para asignación rápida Drag & Drop o Clic accesible
+  const assignableMembers = useMemo<QuickAssignee[]>(() => {
+    const list: QuickAssignee[] = [];
+    const seen = new Set<string>();
+
+    if (currentRoom?.owner_id) {
+      const ownerLabel = currentRoom.owner
+        ? currentRoom.owner.split("@")[0]
+        : "Anfitrión";
+      list.push({
+        userId: currentRoom.owner_id,
+        label: ownerLabel,
+        role: "ADMIN",
+        isOwner: true,
+      });
+      seen.add(currentRoom.owner_id);
+    }
+
+    if (currentRoom?.members) {
+      for (const m of currentRoom.members) {
+        if (!seen.has(m.user_id)) {
+          const display =
+            m.user_nombre ||
+            (m.user_email ? m.user_email.split("@")[0] : `Miembro ${m.user_id.slice(0, 4)}`);
+          list.push({
+            userId: m.user_id,
+            label: display,
+            role: m.role,
+            isOwner: m.user_id === currentRoom.owner_id,
+          });
+          seen.add(m.user_id);
+        }
+      }
+    }
+
+    if (list.length === 0) {
+      list.push({
+        userId: "self-owner",
+        label: "Tú (Hogar)",
+        role: "ADMIN",
+        isOwner: true,
+      });
+    }
+
+    return list;
+  }, [currentRoom]);
+
+  const handleAssignMemberToTask = useCallback(
+    async (taskId: string, member: QuickAssignee) => {
+      const effRoomId = roomId || "default";
+      const { added, allMap } = toggleMemberTaskAssignmentLocal(effRoomId, taskId, member);
+      setAssigneesMap({ ...allMap });
+
+      if (added) {
+        toast.success(`Tarea asignada a ${member.label} 👤`);
+        try {
+          await api.post("/tasks/assign", {
+            task_id: taskId,
+            user_id: member.userId,
+          });
+        } catch {
+          // Mantener asignación optimista local incluso si el ID es de sesión local
+        }
+      } else {
+        toast.info(`Asignación de ${member.label} retirada`);
+        try {
+          await api.delete(`/tasks/${taskId}/assignees/${member.userId}`);
+        } catch {
+          // Ignorar error de red en desvinculación optimista
+        }
+      }
+    },
+    [roomId, toast]
+  );
+
+  const handleKudosReaction = useCallback(
+    (_taskId: string, emoji: KudosEmoji, deltaPoints: number) => {
+      if (deltaPoints > 0) {
+        toast.success(`¡Kudo ${emoji} enviado! (+${deltaPoints} pts de reconocimiento)`);
+      }
+    },
+    [toast]
+  );
+
   return (
     <div className="container-fluid py-2">
       {/* Cabecera y acciones */}
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
         <div>
           <div className="d-flex align-items-center gap-2 mb-1">
             <Link
@@ -440,6 +558,17 @@ const RoomTasks = () => {
           <Button
             variant="secondary"
             size="md"
+            leftIcon={<LuMonitor className="text-primary" size={16} />}
+            onClick={() => setIsKioskModalOpen(true)}
+            title="Abrir Modo Kiosco / Tablet de Cocina (Always-On Display + Pomodoro)"
+            data-testid="open-kiosk-mode-btn"
+          >
+            Modo Kiosco
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="md"
             leftIcon={<LuTrophy className="text-warning" size={16} />}
             onClick={() => setIsGamificationModalOpen(true)}
             title="Ver tabla de clasificación y tienda de recompensas"
@@ -484,6 +613,90 @@ const RoomTasks = () => {
         </div>
       </div>
 
+      {/* Barra de Asignación Rápida Drag & Drop de Convivientes (Fase 4 Roadmap) */}
+      <div
+        className="room-member-avatars-bar mb-3"
+        data-testid="room-member-avatars-bar"
+        aria-label="Asignación rápida de convivientes"
+      >
+        <span className="room-member-bar-label">
+          <LuUsers size={14} className="text-primary" />
+          <span>Asignación rápida (arrastra a una tarea o haz clic):</span>
+        </span>
+
+        <div className="room-member-avatars-list">
+          {assignableMembers.map((member) => {
+            const isSelected = activeAssigneeForClick?.userId === member.userId;
+            return (
+              <button
+                key={member.userId}
+                type="button"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(
+                    "application/x-prioritask-member",
+                    JSON.stringify(member)
+                  );
+                  e.dataTransfer.setData("text/plain", member.userId);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+                onClick={() =>
+                  setActiveAssigneeForClick((prev) =>
+                    prev?.userId === member.userId ? null : member
+                  )
+                }
+                className={`room-member-avatar-pill ${isSelected ? "active" : ""}`}
+                title={`Arrastra sobre una tarea o haz clic para asignar a ${member.label}`}
+                aria-pressed={isSelected}
+                data-testid={`member-avatar-${member.userId}`}
+              >
+                <span className="room-member-avatar-circle">
+                  {member.isOwner ? (
+                    <LuCrown size={11} />
+                  ) : (
+                    getMemberInitials(member.label)
+                  )}
+                </span>
+                <span className="room-member-avatar-name">{member.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {activeAssigneeForClick && (
+          <div
+            className="room-member-active-hint"
+            data-testid="active-assignee-banner"
+          >
+            <span>
+              Modo clic activo para <strong>{activeAssigneeForClick.label}</strong>
+            </span>
+            <button
+              type="button"
+              className="room-member-hint-close"
+              onClick={() => setActiveAssigneeForClick(null)}
+              aria-label="Cancelar modo asignación rápida"
+            >
+              <LuX size={12} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Barra de creación rápida inline (Todoist Quick-Add) */}
+      <QuickAddTaskBar
+        roomId={roomId || null}
+        onTaskCreated={(createdTask) => {
+          setTasks((prev) => {
+            const exists = prev.some((t) => t.id === createdTask.id);
+            const updated = exists ? prev : [createdTask, ...prev];
+            if (roomId) cacheManager.setRoomTasks(roomId, updated);
+            return updated;
+          });
+          notifyUpdate();
+        }}
+      />
+
       {/* Renderizado de vistas */}
       {loading ? (
         <div className="row g-3">
@@ -524,11 +737,15 @@ const RoomTasks = () => {
               <TaskCard
                 task={task}
                 onComplete={handleToggleComplete}
-                onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+                onEdit={(t) => setPeekTask(t)}
                 onDelete={promptDelete}
                 onAdvance={handleAdvanceTask}
                 isCompleting={completingId === task.id}
                 isDeleting={deletingId === task.id}
+                assignedMembers={assigneesMap[task.id] || []}
+                onAssignMember={handleAssignMemberToTask}
+                activeAssigneeForClick={activeAssigneeForClick}
+                onKudosReaction={handleKudosReaction}
               />
             </div>
           ))}
@@ -537,16 +754,19 @@ const RoomTasks = () => {
         <TaskListView
           tasks={tasks}
           onComplete={handleToggleComplete}
-          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
           completingId={completingId}
           deletingId={deletingId}
+          assigneesMap={assigneesMap}
+          onAssignMember={handleAssignMemberToTask}
+          activeAssigneeForClick={activeAssigneeForClick}
         />
       ) : viewMode === "calendar" ? (
         <TaskCalendarView
           tasks={tasks}
           onComplete={handleToggleComplete}
-          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
           completingId={completingId}
           deletingId={deletingId}
@@ -555,12 +775,48 @@ const RoomTasks = () => {
         <TaskKanbanBoard
           tasks={tasks}
           onStatusChange={handleStatusChange}
-          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
           completingId={completingId}
           deletingId={deletingId}
+          assigneesMap={assigneesMap}
+          onAssignMember={handleAssignMemberToTask}
+          activeAssigneeForClick={activeAssigneeForClick}
+          onKudosReaction={handleKudosReaction}
         />
       )}
+
+      {/* Slide-Over Task Peek Drawer (Edición y detalle sin cambio de página) */}
+      <TaskPeekDrawer
+        task={peekTask}
+        isOpen={Boolean(peekTask)}
+        onClose={() => setPeekTask(null)}
+        onComplete={handleToggleComplete}
+        onDelete={promptDelete}
+        onAdvance={handleAdvanceTask}
+        onKudosReaction={handleKudosReaction}
+        onTaskUpdated={(updated) => {
+          setTasks((prev) =>
+            prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+          );
+          if (roomId) {
+            cacheManager.updateTaskInCache(roomId, updated);
+          }
+          setPeekTask(updated);
+        }}
+      />
+
+      {/* Modo Kiosco / Tablet de Cocina (Always-On Display + Pomodoro) */}
+      <KitchenKioskModal
+        isOpen={isKioskModalOpen}
+        onClose={() => setIsKioskModalOpen(false)}
+        roomName={roomName || "Mi Hogar"}
+        tasks={tasks}
+        onToggleComplete={handleToggleComplete}
+        isLiveConnected={isLiveConnected}
+        assigneesMap={assigneesMap}
+        onKudosReaction={handleKudosReaction}
+      />
 
       {/* Modal de Convivientes del Hogar */}
       {isMembersModalOpen && roomId && (
