@@ -2,6 +2,15 @@
 
 All notable frontend changes are documented in this file.
 
+## 🔄 Versión 1.7.0 (Motor de Sincronización Offline, Optimistic UI, Cola de Comandos Transaccionales & Puente IPC Todoist) — [2026-10-11]
+
+### Added
+- **[FE-SYNC-010] Esquema Tipado de Comandos Transaccionales y Sobre IPC (`src/sync/offlineQueue.ts`)**: Interfaces `SyncCommand`, `LocalSyncQueueState`, `OptimisticSnapshot`, `DesktopBridgeEnvelope` (observado en `preload.js` y `electron.js` de Todoist Desktop 9.31.0 mediante REA), `SyncBatchRequest` y `SyncBatchResponse`.
+- **[FE-SYNC-020] Motor `OfflineSyncEngine` y Persistencia IndexedDB (`src/sync/offlineQueue.ts`)**: Registro optimista inmediato en memoria (`dispatchMutation`), persistencia FIFO en `IndexedDBQueueStorageAdapter` con fallback en memoria, coordinación de ventana líder (`isMainLogicWindow`), reprocesamiento por lotes (`flushQueue`) con traducción `temp_id -> server_id` y simulador/resolución de conflictos (`field-merge`, `last-write-wins`, `client-wins`, `server-wins`) con rollback automático ante errores permanentes.
+- **[QA-SYNC-010] Suite Unitaria del Motor de Sincronización (`src/sync/__tests__/offlineQueue.test.ts`)**: Pruebas en Vitest validando el flujo completo de creación optimista offline con `temp_id`, completado dependiente en cola, reconciliación de IDs en `flushQueue()`, resolución de conflictos `field-merge` y reversión de snapshots.
+
+---
+
 ## ✨ Versión 1.6.2 (Rediseño Split-Screen de Autenticación 21st.dev, Glassmorphism Inputs & Escaparate de Convivencia — UI/UX Polish) — [2026-10-11]
 
 ### Added
