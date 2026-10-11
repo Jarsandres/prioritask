@@ -16,6 +16,9 @@ cython_debug/
 
 # SQLite database files
 *.db
+*.db.bak
+*.db-shm
+*.db-wal
 *.sqlite3
 
 # Environmentss
@@ -79,4 +82,5 @@ TEST_READY.md
 usuarios_db_export.json
 *export*.json
 
-
+# Security audit outputs
+audit-reports/
