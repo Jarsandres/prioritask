@@ -16,6 +16,8 @@ import TaskKanbanBoard from "./tasks/TaskKanbanBoard";
 import TaskCalendarView from "./tasks/TaskCalendarView";
 import { useRoomEvents } from "../hooks/useRoomEvents";
 import FilterBar from "./tasks/FilterBar";
+import QuickAddTaskBar from "./tasks/QuickAddTaskBar";
+import TaskPeekDrawer from "./tasks/TaskPeekDrawer";
 import {
   LuPlus,
   LuSparkles,
@@ -40,6 +42,7 @@ const TaskList = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [peekTask, setPeekTask] = useState<Task | null>(null);
 
   const navigate = useNavigate();
   const { version, notifyUpdate } = useTaskUpdate();
@@ -78,7 +81,16 @@ const TaskList = () => {
   const { isConnected: isLiveConnected } = useRoomEvents(roomId, handleLiveEvent);
 
   const handleChangeViewMode = (mode: TaskViewMode) => {
-    setViewMode(mode);
+    const docWithTransition = document as Document & {
+      startViewTransition?: (cb: () => void) => void;
+    };
+    if (typeof docWithTransition.startViewTransition === "function") {
+      docWithTransition.startViewTransition(() => {
+        setViewMode(mode);
+      });
+    } else {
+      setViewMode(mode);
+    }
     localStorage.setItem("tasks_view_mode", mode);
   };
 
@@ -248,6 +260,17 @@ const TaskList = () => {
         totalTasks={tareas}
       />
 
+      {/* Entrada Rápida Inline Estilo Todoist */}
+      <QuickAddTaskBar
+        roomId={roomId}
+        onTaskCreated={(newTask) =>
+          setTareas((prev) =>
+            prev.some((t) => t.id === newTask.id) ? prev : [newTask, ...prev]
+          )
+        }
+        className="mb-3"
+      />
+
       {/* Renderizado de vistas */}
       {loading ? (
         <div className="row g-3">
@@ -301,7 +324,7 @@ const TaskList = () => {
               <TaskCard
                 task={tarea}
                 onComplete={handleToggleComplete}
-                onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+                onEdit={(t) => setPeekTask(t)}
                 onDelete={promptDelete}
                 onAdvance={handleAdvanceTask}
                 isCompleting={completingId === tarea.id}
@@ -314,7 +337,7 @@ const TaskList = () => {
         <TaskListView
           tasks={tareas}
           onComplete={handleToggleComplete}
-          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
           completingId={completingId}
           deletingId={deletingId}
@@ -323,7 +346,7 @@ const TaskList = () => {
         <TaskCalendarView
           tasks={tareas}
           onComplete={handleToggleComplete}
-          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
           completingId={completingId}
           deletingId={deletingId}
@@ -332,12 +355,28 @@ const TaskList = () => {
         <TaskKanbanBoard
           tasks={tareas}
           onStatusChange={handleStatusChange}
-          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
           completingId={completingId}
           deletingId={deletingId}
         />
       )}
+
+      {/* Slide-Over Task Peek Drawer (Edición y detalle sin cambio de ruta) */}
+      <TaskPeekDrawer
+        task={peekTask}
+        isOpen={Boolean(peekTask)}
+        onClose={() => setPeekTask(null)}
+        onComplete={handleToggleComplete}
+        onDelete={promptDelete}
+        onAdvance={handleAdvanceTask}
+        onTaskUpdated={(updated) => {
+          setTareas((prev) =>
+            prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+          );
+          setPeekTask(updated);
+        }}
+      />
 
       {/* Modal de confirmación para eliminar */}
       <ConfirmModal

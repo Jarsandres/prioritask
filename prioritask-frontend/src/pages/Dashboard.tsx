@@ -1,15 +1,26 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useContext, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
 import { useRoom } from "../context/RoomContext";
+import { useTheme } from "../context/ThemeContext";
+import { ToastActionsContext } from "../context/ToastContext";
 import EmptyState from "../components/common/EmptyState";
 import AIHealthBadge from "../components/common/AIHealthBadge";
+import { PriorityBadge, CategoryIcon } from "../components/common/Badges";
 import RoomMembersModal from "../components/RoomMembersModal";
+import KitchenKioskModal from "../components/rooms/KitchenKioskModal";
+import DailyGoalRing from "../components/dashboard/DailyGoalRing";
+import TaskPeekDrawer from "../components/tasks/TaskPeekDrawer";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { cacheManager } from "../services/cacheManager";
+import {
+  getRoomTaskAssignees,
+  type QuickAssignee,
+  type KudosEmoji,
+} from "../utils/kudosStore";
 import type { Task, Room } from "../types/task";
 import {
   LuPlus,
@@ -20,6 +31,8 @@ import {
   LuUsers,
   LuHistory,
   LuArrowRight,
+  LuCalendar,
+  LuMonitor,
 } from "react-icons/lu";
 import "../components/tasks/tasks.css";
 
@@ -30,8 +43,12 @@ const Dashboard = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(() => cachedAllTasks.length === 0);
   const [selectedMemberModalRoom, setSelectedMemberModalRoom] = useState<Room | null>(null);
+  const [peekTask, setPeekTask] = useState<Task | null>(null);
+  const [isKioskModalOpen, setIsKioskModalOpen] = useState(false);
   const { version, notifyUpdate } = useTaskUpdate();
   const { roomId, setRoomId } = useRoom();
+  const { getRoomBranding } = useTheme();
+  const toastCtx = useContext(ToastActionsContext);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -125,6 +142,81 @@ const Dashboard = () => {
   const porcentajeCompletado =
     totalTareas > 0 ? Math.round((tareasCompletadas / totalTareas) * 100) : 0;
 
+  const handleToggleComplete = async (taskId: string) => {
+    const target = tareas.find((t) => t.id === taskId);
+    if (!target) return;
+    const nextStatus = target.estado === "DONE" ? "TODO" : "DONE";
+
+    setTareas((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, estado: nextStatus } : t))
+    );
+    setPeekTask((prev) =>
+      prev && prev.id === taskId ? { ...prev, estado: nextStatus } : prev
+    );
+
+    try {
+      await api.patch(`/tasks/${taskId}/status`, { estado: nextStatus });
+      notifyUpdate();
+    } catch {
+      setTareas((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, estado: target.estado } : t))
+      );
+      setPeekTask((prev) =>
+        prev && prev.id === taskId ? { ...prev, estado: target.estado } : prev
+      );
+    }
+  };
+
+  const dashboardAssigneesMap = useMemo<Record<string, QuickAssignee[]>>(() => {
+    const map: Record<string, QuickAssignee[]> = {};
+    const roomIds = new Set<string>();
+    if (roomId) roomIds.add(roomId);
+    rooms.forEach((r) => roomIds.add(r.id));
+    tareas.forEach((t) => {
+      if (t.room_id) roomIds.add(t.room_id);
+    });
+    roomIds.forEach((rId) => {
+      Object.assign(map, getRoomTaskAssignees(rId));
+    });
+    return map;
+  }, [roomId, rooms, tareas]);
+
+  const handleKudosReaction = useCallback(
+    (taskId: string, emoji: KudosEmoji, addedPoints: number) => {
+      if (addedPoints <= 0) return;
+      const target = tareas.find((t) => t.id === taskId);
+      const taskTitle = target?.titulo || "la tarea";
+      toastCtx?.toast.success(
+        `¡Kudo ${emoji} enviado en "${taskTitle}"! (+${addedPoints} micro-puntos de reconocimiento)`,
+        { duration: 2200 }
+      );
+    },
+    [tareas, toastCtx]
+  );
+
+  // Enfoque de Hoy (Todoist "Today / Focus" summary)
+  const focusTasks = useMemo(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const pending = tareas.filter((t) => t.estado !== "DONE");
+    const roomFiltered = roomId
+      ? pending.filter((t) => !t.room_id || t.room_id === roomId)
+      : pending;
+    const pool = roomFiltered.length > 0 ? roomFiltered : pending;
+
+    return [...pool]
+      .sort((a, b) => {
+        const aDueStr = a.due_date ? String(a.due_date).slice(0, 10) : "";
+        const bDueStr = b.due_date ? String(b.due_date).slice(0, 10) : "";
+        const aDueTodayOrOverdue = Boolean(aDueStr && aDueStr <= todayStr);
+        const bDueTodayOrOverdue = Boolean(bDueStr && bDueStr <= todayStr);
+        if (aDueTodayOrOverdue !== bDueTodayOrOverdue) {
+          return aDueTodayOrOverdue ? -1 : 1;
+        }
+        return (b.peso ?? 2) - (a.peso ?? 2);
+      })
+      .slice(0, 4);
+  }, [tareas, roomId]);
+
   return (
     <div className="container-fluid py-2">
       {/* Cabecera Principal del Dashboard */}
@@ -140,6 +232,16 @@ const Dashboard = () => {
 
         <div className="d-flex align-items-center gap-2 flex-wrap">
           <AIHealthBadge />
+          <Button
+            variant="secondary"
+            size="md"
+            leftIcon={<LuMonitor className="text-primary" size={16} />}
+            onClick={() => setIsKioskModalOpen(true)}
+            title="Abrir Modo Kiosco / Tablet de Cocina"
+            data-testid="dashboard-kiosk-mode-btn"
+          >
+            Modo Kiosco
+          </Button>
           <Link to="/tasks/create">
             <Button variant="primary" size="md" leftIcon={<LuPlus size={16} />}>
               Nueva Tarea
@@ -234,6 +336,104 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* Bento Grid: Anillo de Meta Diaria (Karma) & Balance de Carga Doméstica */}
+      {!loading && <DailyGoalRing tasks={tareas} className="mb-4" />}
+
+      {/* Enfoque de Hoy (Todoist "Mi Día" Quick Focus Widget) */}
+      {!loading && focusTasks.length > 0 && (
+        <Card
+          title="Enfoque de Hoy"
+          subtitle="Tareas prioritarias y con vencimiento cercano en tu hogar activo"
+          icon={<LuClock size={20} className="text-success" />}
+          headerActions={
+            <Link to="/tasks">
+              <Button variant="outline" size="sm" rightIcon={<LuArrowRight size={14} />}>
+                Ver bandeja completa
+              </Button>
+            </Link>
+          }
+          className="mb-4"
+        >
+          <div className="d-flex flex-column gap-2" data-testid="dashboard-today-focus">
+            {focusTasks.map((t) => {
+              const peso = t.peso ?? 2;
+              const ringClass =
+                peso >= 4
+                  ? "priority-ring-p1"
+                  : peso === 3
+                    ? "priority-ring-p2"
+                    : peso === 2
+                      ? "priority-ring-p3"
+                      : "priority-ring-p4";
+              const todayStr = new Date().toISOString().split("T")[0];
+              const dueStr = t.due_date ? String(t.due_date).slice(0, 10) : null;
+              const isOverdue = Boolean(dueStr && dueStr < todayStr);
+              const isToday = Boolean(dueStr && dueStr === todayStr);
+
+              return (
+                <div
+                  key={t.id}
+                  className="todoist-focus-row"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setPeekTask(t)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setPeekTask(t);
+                    }
+                  }}
+                >
+                  <div className="todoist-focus-left">
+                    <button
+                      type="button"
+                      className={`ui-task-checkbox ${ringClass}`}
+                      aria-label={`Completar tarea: ${t.titulo}`}
+                      data-testid={`focus-complete-${t.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleComplete(t.id);
+                      }}
+                    />
+                    <div className="todoist-focus-content">
+                      <span className="todoist-focus-title">{t.titulo}</span>
+                      <div className="todoist-focus-submeta">
+                        <span className="badge rounded-pill bg-light text-dark border d-inline-flex align-items-center gap-1 px-2 py-0 small">
+                          <CategoryIcon category={t.categoria} size={11} />
+                          <span style={{ fontSize: "10px", fontWeight: 600 }}>
+                            {t.categoria || "OTRO"}
+                          </span>
+                        </span>
+                        {dueStr && (
+                          <span
+                            className={`ui-task-due-date ${
+                              isOverdue
+                                ? "due-overdue"
+                                : isToday
+                                  ? "due-today"
+                                  : "due-upcoming"
+                            }`}
+                          >
+                            <LuCalendar size={12} aria-hidden="true" />
+                            <span>
+                              {isOverdue ? "Vencida · " : isToday ? "Hoy · " : ""}
+                              {dueStr}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="todoist-focus-right">
+                    <PriorityBadge peso={peso} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Explorador de Hogares */}
       <Card
         title="Explorador de Hogares"
@@ -283,9 +483,12 @@ const Dashboard = () => {
           />
         ) : (
           <div className="room-grid">
-            {rooms.map((room) => {
+            {rooms.map((room, idx) => {
               const isSelected = room.id === roomId;
               const memberCount = room.members?.length || 1;
+              const branding = getRoomBranding
+                ? getRoomBranding(room.id, idx)
+                : { icon: "🏠", color: "#2563eb" };
 
               return (
                 <div
@@ -294,8 +497,20 @@ const Dashboard = () => {
                 >
                   <div>
                     <div className="ui-room-header">
-                      <div className="ui-room-avatar">
-                        <LuHouse size={22} />
+                      <div
+                        className="ui-room-avatar"
+                        style={{
+                          backgroundColor: `${branding.color}18`,
+                          color: branding.color,
+                        }}
+                      >
+                        {branding.icon && branding.icon !== "🏠" ? (
+                          <span style={{ fontSize: "20px", lineHeight: 1 }}>
+                            {branding.icon}
+                          </span>
+                        ) : (
+                          <LuHouse size={22} />
+                        )}
                       </div>
                       <div className="ui-room-info">
                         <h4 className="ui-room-title" title={room.nombre}>
@@ -359,6 +574,32 @@ const Dashboard = () => {
           </div>
         )}
       </Card>
+
+      {/* Slide-Over Task Peek Drawer */}
+      <TaskPeekDrawer
+        task={peekTask}
+        isOpen={Boolean(peekTask)}
+        onClose={() => setPeekTask(null)}
+        onComplete={handleToggleComplete}
+        onKudosReaction={handleKudosReaction}
+        onTaskUpdated={(updated) => {
+          setTareas((prev) =>
+            prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+          );
+          setPeekTask(updated);
+        }}
+      />
+
+      {/* Modo Kiosco / Tablet de Cocina (Always-On Display + Pomodoro) */}
+      <KitchenKioskModal
+        isOpen={isKioskModalOpen}
+        onClose={() => setIsKioskModalOpen(false)}
+        roomName={rooms.find((r) => r.id === roomId)?.nombre || "Panel del Hogar"}
+        tasks={tareas}
+        onToggleComplete={handleToggleComplete}
+        assigneesMap={dashboardAssigneesMap}
+        onKudosReaction={handleKudosReaction}
+      />
 
       {/* Modal de Convivientes */}
       {selectedMemberModalRoom && (

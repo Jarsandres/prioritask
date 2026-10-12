@@ -48,6 +48,11 @@ const SHORTCUTS: ShortcutItem[] = [
     description: "Cerrar modales, menús desplegables y paletas abiertas",
     category: "Navegación",
   },
+  {
+    keys: ["Ctrl", ","],
+    description: "Abrir configuración y perfil",
+    category: "Navegación",
+  },
 ];
 
 export const KeyboardShortcutsModal = ({

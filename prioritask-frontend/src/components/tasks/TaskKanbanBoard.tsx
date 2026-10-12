@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Task, TaskStatus } from "../../types/task";
+import type { QuickAssignee, KudosEmoji } from "../../utils/kudosStore";
 import TaskCard from "../common/TaskCard";
 import "./tasks.css";
 
@@ -14,6 +15,10 @@ export interface TaskKanbanBoardProps {
   completingId?: string | null;
   deletingId?: string | null;
   className?: string;
+  assigneesMap?: Record<string, QuickAssignee[]>;
+  onAssignMember?: (taskId: string, member: QuickAssignee) => void | Promise<void>;
+  activeAssigneeForClick?: QuickAssignee | null;
+  onKudosReaction?: (taskId: string, emoji: KudosEmoji, deltaPoints: number) => void;
 }
 
 interface KanbanColumnConfig {
@@ -38,6 +43,10 @@ interface KanbanCardItemProps {
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void | Promise<void>;
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
+  assignedMembers?: QuickAssignee[];
+  onAssignMember?: (taskId: string, member: QuickAssignee) => void | Promise<void>;
+  activeAssigneeForClick?: QuickAssignee | null;
+  onKudosReaction?: (taskId: string, emoji: KudosEmoji, deltaPoints: number) => void;
 }
 
 const KanbanCardItem = ({
@@ -50,6 +59,10 @@ const KanbanCardItem = ({
   onStatusChange,
   onEdit,
   onDelete,
+  assignedMembers,
+  onAssignMember,
+  activeAssigneeForClick,
+  onKudosReaction,
 }: KanbanCardItemProps) => {
   return (
     <div
@@ -72,6 +85,10 @@ const KanbanCardItem = ({
         onDelete={onDelete}
         isCompleting={completingId === task.id}
         isDeleting={deletingId === task.id}
+        assignedMembers={assignedMembers}
+        onAssignMember={onAssignMember}
+        activeAssigneeForClick={activeAssigneeForClick}
+        onKudosReaction={onKudosReaction}
       />
 
       {/* Botones de acción rápida para pantallas táctiles y móviles */}
@@ -147,6 +164,10 @@ interface KanbanColumnProps {
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void | Promise<void>;
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
+  assigneesMap?: Record<string, QuickAssignee[]>;
+  onAssignMember?: (taskId: string, member: QuickAssignee) => void | Promise<void>;
+  activeAssigneeForClick?: QuickAssignee | null;
+  onKudosReaction?: (taskId: string, emoji: KudosEmoji, deltaPoints: number) => void;
 }
 
 const KanbanColumn = ({
@@ -163,6 +184,10 @@ const KanbanColumn = ({
   onStatusChange,
   onEdit,
   onDelete,
+  assigneesMap,
+  onAssignMember,
+  activeAssigneeForClick,
+  onKudosReaction,
 }: KanbanColumnProps) => {
   const isVirtualized = columnTasks.length > VIRTUALIZATION_THRESHOLD;
   const parentRef = useRef<HTMLDivElement>(null);
@@ -242,6 +267,10 @@ const KanbanColumn = ({
                     onStatusChange={onStatusChange}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    assignedMembers={assigneesMap?.[task.id]}
+                    onAssignMember={onAssignMember}
+                    activeAssigneeForClick={activeAssigneeForClick}
+                    onKudosReaction={onKudosReaction}
                   />
                 </div>
               );
@@ -262,6 +291,10 @@ const KanbanColumn = ({
               onStatusChange={onStatusChange}
               onEdit={onEdit}
               onDelete={onDelete}
+              assignedMembers={assigneesMap?.[task.id]}
+              onAssignMember={onAssignMember}
+              activeAssigneeForClick={activeAssigneeForClick}
+              onKudosReaction={onKudosReaction}
             />
           ))}
         </div>
@@ -278,6 +311,10 @@ export const TaskKanbanBoard = ({
   completingId,
   deletingId,
   className = "",
+  assigneesMap,
+  onAssignMember,
+  activeAssigneeForClick,
+  onKudosReaction,
 }: TaskKanbanBoardProps) => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeDropColumn, setActiveDropColumn] = useState<TaskStatus | null>(null);
@@ -289,6 +326,9 @@ export const TaskKanbanBoard = ({
   };
 
   const handleDragOver = (e: React.DragEvent, columnStatus: TaskStatus) => {
+    if (e.dataTransfer?.types?.includes("application/x-prioritask-member")) {
+      return;
+    }
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     if (activeDropColumn !== columnStatus) {
@@ -301,6 +341,9 @@ export const TaskKanbanBoard = ({
   };
 
   const handleDrop = async (e: React.DragEvent, targetStatus: TaskStatus) => {
+    if (e.dataTransfer?.types?.includes("application/x-prioritask-member")) {
+      return;
+    }
     e.preventDefault();
     setActiveDropColumn(null);
     const taskId = e.dataTransfer.getData("text/plain") || draggedTaskId;
@@ -335,6 +378,10 @@ export const TaskKanbanBoard = ({
             onStatusChange={onStatusChange}
             onEdit={onEdit}
             onDelete={onDelete}
+            assigneesMap={assigneesMap}
+            onAssignMember={onAssignMember}
+            activeAssigneeForClick={activeAssigneeForClick}
+            onKudosReaction={onKudosReaction}
           />
         );
       })}
