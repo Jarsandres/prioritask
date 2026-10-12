@@ -118,7 +118,7 @@ def _extract_candidate_fields(cmd: SyncCommandIn) -> dict[str, Any]:
             candidates[key] = val if isinstance(val, EstadoTarea) else EstadoTarea(val)
         elif key == "peso":
             if isinstance(val, bool):
-                raise ValueError("El peso debe ser mayor a 0 y menor a 100")
+                raise TypeError("El peso debe ser mayor a 0 y menor a 100")
             peso_val = float(val)
             if not math.isfinite(peso_val) or peso_val <= 0 or peso_val >= 100:
                 raise ValueError("El peso debe ser mayor a 0 y menor a 100")
@@ -205,7 +205,7 @@ async def sync_batch(
                 )
                 raw_peso = cmd.args.get("peso", 1.0)
                 if isinstance(raw_peso, bool):
-                    raise ValueError("El peso debe ser mayor a 0 y menor a 100")
+                    raise TypeError("El peso debe ser mayor a 0 y menor a 100")
                 peso = float(raw_peso)
                 if not math.isfinite(peso) or peso <= 0 or peso >= 100:
                     raise ValueError("El peso debe ser mayor a 0 y menor a 100")

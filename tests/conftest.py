@@ -18,8 +18,9 @@ from app import models as _app_models  # noqa: F401
 from app.core.rate_limit import rate_limiter
 from app.db.session import get_session
 from app.main import app
-from app.models.enums import CategoriaTarea
+from app.models.enums import CategoriaTarea, RoomMemberRole
 from app.models.room import Room
+from app.models.room_member import RoomMember
 from app.models.task import Task
 from app.models.task_assignment import TaskAssignment
 from app.models.user import Usuario
@@ -283,3 +284,19 @@ async def task_assigned_b(
     await session.commit()
     await session.refresh(task)
     return task
+
+
+@pytest_asyncio.fixture
+async def room_member_b(
+    session: AsyncSession, user_b: Usuario, room_owner_a: Room
+) -> RoomMember:
+    """User B as a member in room_owner_a."""
+    member = RoomMember(
+        room_id=room_owner_a.id,
+        user_id=user_b.id,
+        role=RoomMemberRole.MEMBER,
+    )
+    session.add(member)
+    await session.commit()
+    await session.refresh(member)
+    return member

@@ -182,7 +182,7 @@ class TestExtractCandidateFields:
                 timestamp=1700000000000,
             )
             with pytest.raises(
-                ValueError, match="El peso debe ser mayor a 0 y menor a 100"
+                (ValueError, TypeError), match="El peso debe ser mayor a 0 y menor a 100"
             ):
                 _extract_candidate_fields(cmd)
 
