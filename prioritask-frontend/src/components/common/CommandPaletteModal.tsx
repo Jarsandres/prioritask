@@ -779,7 +779,8 @@ export const CommandPaletteModal = ({
             ref={inputRef}
             type="text"
             className="command-palette-input"
-            placeholder="Buscar tareas, > comando, # hogar, @ etiqueta o !p1..."
+            placeholder="Buscar tareas, cambiar de hogar o ejecutar acción..."
+            aria-description="Usa > para comandos, # para hogar, @ para etiqueta o !p1 para prioridad"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
