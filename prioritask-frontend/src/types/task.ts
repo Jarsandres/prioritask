@@ -62,6 +62,10 @@ export interface Task {
   subtasks_completed_count?: number;
   comments_count?: number;
   attachments_count?: number;
+  completed?: boolean;
+  reminder_at?: string | null;
+  version?: number;
+  field_hlc?: Record<string, string>;
 }
 
 export type { TaskAttachment } from "./attachment";

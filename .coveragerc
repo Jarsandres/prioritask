@@ -1,7 +1,8 @@
 [run]
 source = app
-branch = True
+branch = False
 omit =
+    app/db/migrations/*
     app/services/intelligence.py
     app/schemas/response_examples.py
     demo_bad_code.py

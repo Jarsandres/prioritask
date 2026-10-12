@@ -85,6 +85,7 @@ class TaskCreate(BaseModel):
     estado: EstadoTarea = Field(default=EstadoTarea.TODO, description="Estado inicial de la tarea.", json_schema_extra={"example": "TODO"})
     peso: float = Field(default=1.0, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
     due_date: datetime | None = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
+    reminder_at: datetime | None = Field(default=None, description="Fecha y hora de recordatorio opcional")
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
     recurrence_rule: RecurrenceRuleInput | None = Field(default=None, description="Regla de recurrencia opcional al crear la tarea")
@@ -104,6 +105,17 @@ class TaskCreate(BaseModel):
                 raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
         return value
 
+    @field_validator("reminder_at", mode="before")
+    def validate_reminder_at(cls, value):
+        if value:
+            try:
+                value = datetime.fromisoformat(value) if isinstance(value, str) else value
+            except ValueError:
+                raise ValueError("Formato de fecha de recordatorio inválido")
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=UTC)
+        return value
+
 class TaskRead(BaseModel):
     id: UUID = Field(description="Identificador único de la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
     titulo: str = Field(description="Título de la tarea.", json_schema_extra={"example": "Comprar comida"})
@@ -111,12 +123,17 @@ class TaskRead(BaseModel):
     categoria: CategoriaTarea = Field(description="Categoría de la tarea.", json_schema_extra={"example": "OTRO"})
     estado: EstadoTarea = Field(description="Estado actual de la tarea.", json_schema_extra={"example": "TODO"})
     peso: float = Field(gt=0, lt=100, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
+    completed: bool = Field(default=False, description="Indica si la tarea está completada")
     due_date: datetime | None = Field(default=None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
+    reminder_at: datetime | None = Field(default=None, description="Fecha y hora de recordatorio opcional")
     created_at: datetime = Field(description="Fecha de creación de la tarea.", json_schema_extra={"example": "2025-05-27T12:00:00"})
+    updated_at: datetime | None = Field(default=None, description="Fecha de última actualización de la tarea.")
     user_id: UUID = Field(description="Identificador del usuario asociado a la tarea.", json_schema_extra={"example": "123e4567-e89b-12d3-a456-426614174000"})
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     deleted_at: datetime | None = Field(default=None, description="Fecha de eliminación de la tarea, si aplica.", json_schema_extra={"example": None})
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
+    version: int = Field(default=1, description="Versión OCC de la tarea")
+    field_hlc: dict[str, str] = Field(default_factory=dict, description="Mapa HLC por campo")
     recurrence_rule: RecurrenceRuleRead | None = Field(
         default=None,
         validation_alias=AliasChoices("loaded_recurrence_rule", "recurrence_rule"),
@@ -145,11 +162,14 @@ class TaskUpdate(BaseModel):
     estado: EstadoTarea | None = Field(None, description="Estado actual de la tarea.", json_schema_extra={"example": "TODO"})
     peso: float | None = Field(None, description="Peso o importancia de la tarea.", json_schema_extra={"example": 1.0})
     due_date: datetime | None = Field(None, description="Fecha límite para completar la tarea.", json_schema_extra={"example": "2025-06-01T12:00:00"})
+    reminder_at: datetime | None = Field(default=None, description="Fecha y hora de recordatorio opcional")
     room_id: UUID | None = Field(default=None, description="Hogar asociado", json_schema_extra={"example": None})
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
     recurrence_rule: RecurrenceRuleInput | None = Field(default=None, description="Configuración de la regla de recurrencia")
     tag_ids: list[UUID] | None = Field(default=None, description="Lista opcional de IDs de etiquetas")
     completed: bool | None = Field(default=None, description="Indica si la tarea está completada")
+    expected_version: int | None = Field(default=None, description="Versión esperada para control de concurrencia optimista")
+    field_hlc: dict[str, str] | None = Field(default=None, description="Relojes HLC por campo")
 
     @field_validator("due_date", mode="before")
     def validate_due_date(cls, value):
@@ -163,6 +183,17 @@ class TaskUpdate(BaseModel):
                 value = value.replace(tzinfo=UTC)
             if value < datetime.now(UTC) and not os.getenv("ALLOW_PAST_DUE_DATES"):
                 raise ValueError("La fecha límite no puede ser anterior a la fecha actual")
+        return value
+
+    @field_validator("reminder_at", mode="before")
+    def validate_reminder_at(cls, value):
+        if value:
+            try:
+                value = datetime.fromisoformat(value) if isinstance(value, str) else value
+            except ValueError:
+                raise ValueError("Formato de fecha de recordatorio inválido")
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=UTC)
         return value
 
     model_config = ConfigDict(extra="forbid")

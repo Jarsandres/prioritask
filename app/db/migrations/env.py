@@ -21,7 +21,7 @@ from app.models.room import Room  # noqa: F401
 from app.models.room_member import RoomMember  # noqa: F401
 from app.models.subtask import Subtask  # noqa: F401
 from app.models.tag import Tag  # noqa: F401
-from app.models.task import Task, TaskHistory  # noqa: F401
+from app.models.task import ProcessedSyncCommand, Task, TaskHistory  # noqa: F401
 from app.models.task_assignment import TaskAssignment  # noqa: F401
 from app.models.task_tag import TaskTag  # noqa: F401
 from app.models.user import Usuario  # noqa: F401

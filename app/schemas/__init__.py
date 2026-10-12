@@ -15,6 +15,13 @@ from .gamification import (
 )
 from .search import SearchResultItem, TaskSearchResponse
 from .subtask import SubtaskBase, SubtaskCreate, SubtaskRead, SubtaskUpdate
+from .sync import (
+    SyncBatchRequest,
+    SyncBatchResponse,
+    SyncCommandError,
+    SyncCommandIn,
+    SyncCommandType,
+)
 
 __all__ = [
     "GamificationOverview",
@@ -30,10 +37,16 @@ __all__ = [
     "SubtaskCreate",
     "SubtaskRead",
     "SubtaskUpdate",
+    "SyncBatchRequest",
+    "SyncBatchResponse",
+    "SyncCommandError",
+    "SyncCommandIn",
+    "SyncCommandType",
     "TaskCommentBase",
     "TaskCommentCreate",
     "TaskCommentRead",
     "TaskCommentUpdate",
     "TaskSearchResponse",
 ]
+
 

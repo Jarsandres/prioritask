@@ -20,7 +20,7 @@ from .room import Room
 from .room_member import RoomMember
 from .subtask import Subtask
 from .tag import Tag
-from .task import Task, TaskHistory
+from .task import ProcessedSyncCommand, Task, TaskHistory
 from .task_assignment import TaskAssignment
 from .task_tag import TaskTag
 from .user import Usuario
@@ -30,6 +30,7 @@ __all__ = [
     "EstadoTarea",
     "HouseholdReward",
     "PointTransaction",
+    "ProcessedSyncCommand",
     "RecurrenceFrequency",
     "RecurrenceMode",
     "RecurrenceRule",

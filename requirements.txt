@@ -2,6 +2,8 @@
 fastapi>=0.115.0
 uvicorn[standard]~=0.30
 PyJWT[crypto]>=2.8.0
+cryptography>=46.0.6
+sqlparse>=0.5.4
 sqlmodel~=0.0.24
 aiosqlite~=0.21
 pydantic-settings~=2.1

@@ -357,6 +357,7 @@ async def create_task(
         categoria=payload.categoria,
         peso=payload.peso,
         due_date=payload.due_date,
+        reminder_at=payload.reminder_at,
         is_recurring=is_recurring_flag,
         user_id=current_user.id,
         room_id=room_id,
@@ -632,10 +633,13 @@ async def update_task(
     if not is_owner and not is_collaborator:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
 
+    if task_in.expected_version is not None and task.version != task_in.expected_version:
+        raise HTTPException(status_code=409, detail="Conflicto de versión de la tarea")
+
     raw_dump = task_in.model_dump(exclude_unset=True)
     changes: dict[str, Any] = {}
     for field, new_value in raw_dump.items():
-        if field in {"recurrence_rule", "tag_ids"}:
+        if field in {"recurrence_rule", "tag_ids", "expected_version", "field_hlc"}:
             continue
         old_value = getattr(task, field)
         if new_value != old_value:
@@ -652,6 +656,9 @@ async def update_task(
     if rule_changed:
         changes["recurrence_rule"] = raw_dump.get("recurrence_rule") or {"is_recurring": task.is_recurring}
 
+    if isinstance(task_in.field_hlc, dict):
+        task.field_hlc = {**(task.field_hlc or {}), **task_in.field_hlc}
+
     if not changes:
         return task
 
@@ -660,6 +667,7 @@ async def update_task(
     elif "estado" in changes:
         task.completed = (task.estado == EstadoTarea.DONE)
 
+    task.version = (task.version or 1) + 1
     task.updated_at = datetime.now(UTC)
     session.add(task)
 
@@ -774,11 +782,17 @@ async def patch_task(
         if not is_owner and not is_collaborator:
             raise HTTPException(status_code=404, detail="Tarea no encontrada.")
 
+        if payload.expected_version is not None and task.version != payload.expected_version:
+            raise HTTPException(status_code=409, detail="Conflicto de versión de la tarea")
+
         update_data = payload.model_dump(exclude_unset=True)
         for key, value in update_data.items():
-            if key in {"recurrence_rule", "tag_ids"}:
+            if key in {"recurrence_rule", "tag_ids", "expected_version", "field_hlc"}:
                 continue
             setattr(task, key, value)
+
+        if isinstance(payload.field_hlc, dict):
+            task.field_hlc = {**(task.field_hlc or {}), **payload.field_hlc}
 
         await _sync_task_recurrence_rule(
             session=session,
@@ -793,6 +807,7 @@ async def patch_task(
         elif "estado" in update_data and update_data["estado"] is not None:
             task.completed = (update_data["estado"] == EstadoTarea.DONE)
 
+        task.version = (task.version or 1) + 1
         task.updated_at = datetime.now(UTC)
 
         session.add(task)
@@ -858,6 +873,7 @@ async def patch_task_status(
 
         task.estado = payload.estado
         task.completed = (payload.estado == EstadoTarea.DONE)
+        task.version = (task.version or 1) + 1
         task.updated_at = datetime.now(UTC)
 
         session.add(task)

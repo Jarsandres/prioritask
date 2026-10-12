@@ -18,7 +18,6 @@ import {
   LuChevronDown,
   LuChevronRight,
   LuHash,
-  LuChartBar,
   LuStar,
 } from "react-icons/lu";
 import { useTheme } from "../context/ThemeContext";
@@ -222,23 +221,6 @@ const Sidebar = ({
                   aria-hidden="true"
                 />
                 <span className="nav-label">Asignar</span>
-              </NavLink>
-            </li>
-          )}
-          {visibleModules.analytics && (
-            <li>
-              <NavLink
-                to="/analytics"
-                onClick={handleNavClick}
-                className={({ isActive }) => (isActive ? "active" : "")}
-                title="Analíticas"
-              >
-                <LuChartBar
-                  size={18}
-                  className="nav-icon-blue"
-                  aria-hidden="true"
-                />
-                <span className="nav-label">Analíticas</span>
               </NavLink>
             </li>
           )}
