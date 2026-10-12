@@ -321,3 +321,220 @@ async def test_sync_batch_anti_idor_prevents_cross_tenant_mutation_and_deletion(
     assert verify_data["titulo"] == "Tarea Privada de Usuario A"
     assert verify_data["completed"] is False
     assert verify_data["version"] == 1
+
+
+@pytest.mark.asyncio
+async def test_sync_batch_uncomplete_and_owner_delete_and_collaborator_delete_rejected(
+    async_client: AsyncClient,
+    user_a_headers: dict[str, str],
+    user_b_headers: dict[str, str],
+    task_assigned_b,
+):
+    task_id = str(task_assigned_b.id)
+    complete_uuid = str(uuid4())
+    uncomplete_uuid = str(uuid4())
+    collab_delete_uuid = str(uuid4())
+    owner_delete_uuid = str(uuid4())
+
+    # Colaborador B puede completar y descompletar, pero NO eliminar la tarea del owner A
+    collab_res = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "2026-01-01T00:00:00Z",
+            "commands": [
+                {
+                    "uuid": complete_uuid,
+                    "type": "task_complete",
+                    "args": {"id": task_id},
+                    "timestamp": 1700000100000,
+                },
+                {
+                    "uuid": uncomplete_uuid,
+                    "type": "task_uncomplete",
+                    "args": {"id": task_id},
+                    "timestamp": 1700000101000,
+                },
+                {
+                    "uuid": collab_delete_uuid,
+                    "type": "task_delete",
+                    "args": {"id": task_id},
+                    "timestamp": 1700000102000,
+                },
+            ],
+        },
+        headers=user_b_headers,
+    )
+    assert collab_res.status_code == 200
+    collab_data = collab_res.json()
+    assert collab_data["full_sync"] is False
+    assert collab_data["sync_status"][complete_uuid] == "ok"
+    assert collab_data["sync_status"][uncomplete_uuid] == "ok"
+    assert collab_data["sync_status"][collab_delete_uuid]["error_code"] in (403, 404)
+
+    # Owner A elimina la tarea exitosamente mediante sync/batch
+    owner_res = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "2026-01-01T00:00:00Z",
+            "commands": [
+                {
+                    "uuid": owner_delete_uuid,
+                    "type": "task_delete",
+                    "args": {"id": task_id},
+                    "timestamp": 1700000103000,
+                }
+            ],
+        },
+        headers=user_a_headers,
+    )
+    assert owner_res.status_code == 200
+    owner_data = owner_res.json()
+    assert owner_data["sync_status"][owner_delete_uuid] == "ok"
+
+    # La tarea eliminada con soft-delete ya no debe estar accesible
+    get_res = await async_client.get(
+        f"/api/v1/tasks/{task_id}",
+        headers=user_a_headers,
+    )
+    assert get_res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_sync_batch_validation_errors_and_command_uuid_collision_across_users(
+    async_client: AsyncClient,
+    user_a_headers: dict[str, str],
+    user_c_headers: dict[str, str],
+    room_owner_a,
+):
+    shared_cmd_uuid = str(uuid4())
+    short_title_uuid = str(uuid4())
+    missing_id_update_uuid = str(uuid4())
+    missing_id_delete_uuid = str(uuid4())
+    invalid_weight_uuid = str(uuid4())
+    invalid_room_uuid = str(uuid4())
+
+    # 1. Usuario A ejecuta un task_create válido (con recurrencia, due_date numérico y sin room_id explícito)
+    res_a = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "commands": [
+                {
+                    "uuid": shared_cmd_uuid,
+                    "type": "task_create",
+                    "args": {
+                        "titulo": "Tarea Recurrente Sincronizada",
+                        "descripcion": "Con regla semanal",
+                        "categoria": "LIMPIEZA",
+                        "estado": "DONE",
+                        "peso": 2.5,
+                        "due_date": 1700000200000,
+                        "recurrence_rule": {
+                            "frequency": "WEEKLY",
+                            "interval": 1,
+                        },
+                    },
+                    "timestamp": 1700000200000,
+                    "hlc_timestamp": "1700000200000:0000:nodeA",
+                }
+            ],
+        },
+        headers=user_a_headers,
+    )
+    assert res_a.status_code == 200
+    assert res_a.json()["sync_status"][shared_cmd_uuid] == "ok"
+    created_task_id = res_a.json()["items"][0]["id"]
+
+    # 2. Usuario C intenta reutilizar el mismo command.uuid -> 403 FORBIDDEN
+    res_c = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "commands": [
+                {
+                    "uuid": shared_cmd_uuid,
+                    "type": "task_create",
+                    "args": {"titulo": "Intento Colision UUID"},
+                    "timestamp": 1700000201000,
+                }
+            ],
+        },
+        headers=user_c_headers,
+    )
+    assert res_c.status_code == 200
+    collision_status = res_c.json()["sync_status"][shared_cmd_uuid]
+    assert collision_status["error_code"] == 403
+    assert collision_status["error_tag"] == "FORBIDDEN"
+
+    # 3. Errores de validación (título corto, sin ID, peso inválido, room inexistente) y conflicto sin HLC
+    lww_conflict_uuid = str(uuid4())
+    res_err = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "commands": [
+                {
+                    "uuid": short_title_uuid,
+                    "type": "task_create",
+                    "args": {"titulo": "ab"},
+                    "timestamp": 1700000202000,
+                },
+                {
+                    "uuid": invalid_room_uuid,
+                    "type": "task_create",
+                    "args": {
+                        "titulo": "Tarea en hogar fantasma",
+                        "room_id": str(uuid4()),
+                    },
+                    "timestamp": 1700000202500,
+                },
+                {
+                    "uuid": missing_id_update_uuid,
+                    "type": "task_update",
+                    "args": {"titulo": "Sin ID"},
+                    "timestamp": 1700000203000,
+                },
+                {
+                    "uuid": missing_id_delete_uuid,
+                    "type": "task_delete",
+                    "args": {},
+                    "timestamp": 1700000204000,
+                },
+                {
+                    "uuid": invalid_weight_uuid,
+                    "type": "task_update",
+                    "args": {
+                        "id": created_task_id,
+                        "peso": 150.0,
+                    },
+                    "timestamp": 1700000205000,
+                },
+                {
+                    "uuid": lww_conflict_uuid,
+                    "type": "task_update",
+                    "args": {
+                        "id": created_task_id,
+                        "descripcion": "Actualizada por LWW timestamp",
+                        "categoria": "COMPRA",
+                        "estado": "TODO",
+                        "is_recurring": False,
+                        "expected_updated_at": "2020-01-01T00:00:00Z",
+                    },
+                    "timestamp": 9999999999000,
+                    "base_version": 0,
+                },
+            ],
+        },
+        headers=user_a_headers,
+    )
+    assert res_err.status_code == 200
+    err_status = res_err.json()["sync_status"]
+    assert err_status[short_title_uuid]["error_code"] == 422
+    assert err_status[short_title_uuid]["error_tag"] == "VALIDATION_ERROR"
+    assert err_status[invalid_room_uuid]["error_code"] == 404
+    assert err_status[invalid_room_uuid]["error_tag"] == "ENTITY_NOT_FOUND"
+    assert err_status[missing_id_update_uuid]["error_code"] == 422
+    assert err_status[missing_id_delete_uuid]["error_code"] == 422
+    assert err_status[invalid_weight_uuid]["error_code"] == 422
+    assert err_status[lww_conflict_uuid]["error_code"] == 409
+    assert err_status[lww_conflict_uuid]["error_tag"] == "CONFLICT_STALE_TIMESTAMP"

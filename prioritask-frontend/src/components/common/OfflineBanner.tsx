@@ -20,7 +20,7 @@ export const OfflineBanner = () => {
   const { toast } = useToast();
   const { notifyUpdate } = useTaskUpdate();
   const isSyncingRef = useRef(false);
-  const lastAutoSyncAttemptRef = useRef<number>(0);
+  const lastAutoSyncAttemptRef = useRef<number>(Date.now());
 
   // Consultar periódicamente o ante cambios de red el conteo de mutaciones encoladas
   const refreshPendingCount = useCallback(async () => {
