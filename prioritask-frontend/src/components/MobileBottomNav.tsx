@@ -10,9 +10,13 @@ import "./MobileBottomNav.css";
 
 interface MobileBottomNavProps {
   onOpenMenu: () => void;
+  onOpenQuickAdd?: () => void;
 }
 
-const MobileBottomNav = ({ onOpenMenu }: MobileBottomNavProps) => {
+const MobileBottomNav = ({
+  onOpenMenu,
+  onOpenQuickAdd,
+}: MobileBottomNavProps) => {
   const location = useLocation();
 
   // Comprobar si la sección de tareas está activa (incluyendo tareas de una sala)
@@ -52,6 +56,12 @@ const MobileBottomNav = ({ onOpenMenu }: MobileBottomNavProps) => {
         to="/tasks/create"
         className="mobile-nav-create-wrapper"
         aria-label="Crear nueva tarea"
+        onClick={(e) => {
+          if (onOpenQuickAdd) {
+            e.preventDefault();
+            onOpenQuickAdd();
+          }
+        }}
       >
         <div className="mobile-nav-create-btn">
           <LuPlus size={24} aria-hidden="true" />

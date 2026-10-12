@@ -15,7 +15,8 @@ import {
   getTriggerSuggestions,
   type NlpSuggestionItem,
 } from "../../utils/nlpTaskParser";
-import type { Task } from "../../types/task";
+import { toggleMemberTaskAssignmentLocal } from "../../utils/kudosStore";
+import type { Task, Tag } from "../../types/task";
 import {
   LuPlus,
   LuCalendar,
@@ -29,6 +30,8 @@ import {
   LuLoaderCircle,
   LuTag,
   LuWand,
+  LuHash,
+  LuUser,
 } from "react-icons/lu";
 import "./tasks.css";
 
@@ -74,7 +77,7 @@ export const QuickAddTaskBar: React.FC<QuickAddTaskBarProps> = ({
   defaultOpen = false,
   className = "",
 }) => {
-  const { roomId: contextRoomId, activeRoom } = useRoom();
+  const { rooms, roomId: contextRoomId, activeRoom } = useRoom();
   const { notifyUpdate } = useTaskUpdate();
   const { toast } = useToast();
 
@@ -87,6 +90,7 @@ export const QuickAddTaskBar: React.FC<QuickAddTaskBarProps> = ({
   const [peso, setPeso] = useState<number>(2);
   const [dueDate, setDueDate] = useState<string>("");
   const [recurrenceExpr, setRecurrenceExpr] = useState<string>("");
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showRecurrenceMenu, setShowRecurrenceMenu] = useState(false);
   const [activeSuggestionIdx, setActiveSuggestionIdx] = useState(0);
@@ -101,11 +105,41 @@ export const QuickAddTaskBar: React.FC<QuickAddTaskBarProps> = ({
 
   const todayStr = new Date().toISOString().split("T")[0];
 
+  // Cargar etiquetas disponibles al abrir el compositor
+  useEffect(() => {
+    if (!isOpen) return;
+    const controller = new AbortController();
+    Promise.resolve(
+      api.get<Tag[]>("/tags", { signal: controller.signal })
+    )
+      .then((res) => {
+        if (res && Array.isArray(res.data)) {
+          setAvailableTags(res.data);
+        }
+      })
+      .catch(() => {
+        // Silencioso en caso de desconexión o test sin mock de /tags
+      });
+    return () => controller.abort();
+  }, [isOpen]);
+
+  const nlpContext = useMemo(
+    () => ({
+      rooms,
+      tags: availableTags,
+      members: activeRoom?.members || [],
+    }),
+    [rooms, availableTags, activeRoom]
+  );
+
   // Análisis NLP en tiempo real sobre el título escrito
-  const nlpResult = useMemo(() => parseNaturalTaskInput(titulo), [titulo]);
+  const nlpResult = useMemo(
+    () => parseNaturalTaskInput(titulo, nlpContext),
+    [titulo, nlpContext]
+  );
   const triggerData = useMemo(
-    () => (dismissedTrigger ? null : getTriggerSuggestions(titulo)),
-    [titulo, dismissedTrigger]
+    () => (dismissedTrigger ? null : getTriggerSuggestions(titulo, nlpContext)),
+    [titulo, nlpContext, dismissedTrigger]
   );
 
   const prevNlpRef = useRef<{
@@ -256,6 +290,15 @@ export const QuickAddTaskBar: React.FC<QuickAddTaskBarProps> = ({
     setActiveSuggestionIdx(0);
   };
 
+  const normalizeTagKey = (val: string): string =>
+    val
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanTitle = (nlpResult.cleanTitle || titulo).trim();
@@ -263,6 +306,40 @@ export const QuickAddTaskBar: React.FC<QuickAddTaskBarProps> = ({
 
     setIsSubmitting(true);
     try {
+      const resolvedTagIds: string[] = [...(nlpResult.tagIds || [])];
+      if (nlpResult.tags && nlpResult.tags.length > 0) {
+        for (const tagName of nlpResult.tags) {
+          const normName = normalizeTagKey(tagName);
+          if (normName.length < 2) continue;
+          const existing = availableTags.find(
+            (t) => normalizeTagKey(t.nombre) === normName
+          );
+          if (existing) {
+            if (!resolvedTagIds.includes(existing.id)) {
+              resolvedTagIds.push(existing.id);
+            }
+          } else {
+            try {
+              const tagRes = await api.post<Tag>("/tags", { nombre: tagName });
+              const createdTag = tagRes?.data;
+              if (createdTag && createdTag.id) {
+                if (!resolvedTagIds.includes(createdTag.id)) {
+                  resolvedTagIds.push(createdTag.id);
+                }
+                setAvailableTags((prev) =>
+                  prev.some((t) => t.id === createdTag.id)
+                    ? prev
+                    : [...prev, createdTag]
+                );
+              }
+            } catch {
+              // Si está offline o falla la creación de etiqueta, continuar sin bloquear la tarea
+            }
+          }
+        }
+      }
+
+      const targetRoom = (nlpResult.roomId || effectiveRoomId) || undefined;
       const payload: Record<string, unknown> = {
         titulo: cleanTitle,
         descripcion: descripcion.trim() || undefined,
@@ -270,7 +347,8 @@ export const QuickAddTaskBar: React.FC<QuickAddTaskBarProps> = ({
         peso,
         estado: "TODO",
         due_date: dueDate || null,
-        room_id: effectiveRoomId || undefined,
+        room_id: targetRoom,
+        tag_ids: resolvedTagIds.length > 0 ? resolvedTagIds : undefined,
         is_recurring: Boolean(parsedRecurrence),
       };
 
@@ -305,6 +383,28 @@ export const QuickAddTaskBar: React.FC<QuickAddTaskBarProps> = ({
       }
 
       const res = await api.post<Task>("/tasks", payload);
+      if (nlpResult.assigneeId && res.data?.id) {
+        const assigneeLabel =
+          nlpResult.assigneeName ||
+          activeRoom?.members?.find((m) => m.user_id === nlpResult.assigneeId)
+            ?.user_nombre ||
+          nlpResult.assigneeId;
+        toggleMemberTaskAssignmentLocal(
+          targetRoom || "default",
+          res.data.id,
+          {
+            userId: nlpResult.assigneeId,
+            label: assigneeLabel,
+          }
+        );
+        api
+          .post("/tasks/assign", {
+            task_id: res.data.id,
+            user_id: nlpResult.assigneeId,
+          })
+          .catch(() => {});
+      }
+
       if (onTaskCreated && res.data) {
         onTaskCreated(res.data);
       }
@@ -464,6 +564,9 @@ export const QuickAddTaskBar: React.FC<QuickAddTaskBarProps> = ({
                 {tok.type === "priority" && <LuFlag size={11} />}
                 {tok.type === "category" && <LuTag size={11} />}
                 {tok.type === "recurrence" && <LuRepeat size={11} />}
+                {tok.type === "tag" && <LuHash size={11} />}
+                {tok.type === "room" && <LuHouse size={11} />}
+                {tok.type === "assignee" && <LuUser size={11} />}
                 <span>{tok.label}</span>
               </span>
             ))}
@@ -705,8 +808,23 @@ export const QuickAddTaskBar: React.FC<QuickAddTaskBarProps> = ({
         {/* 6. Enlace al Formulario Completo */}
         <Link
           to="/tasks/create"
+          state={{
+            prefill: {
+              titulo: nlpResult.cleanTitle || titulo,
+              descripcion: descripcion.trim(),
+              categoria,
+              peso,
+              dueDate,
+              roomId: (nlpResult.roomId || effectiveRoomId) || null,
+              tagIds: nlpResult.tagIds || [],
+              tags: nlpResult.tags || [],
+              assigneeId: nlpResult.assigneeId || null,
+              recurrenceExpr,
+            },
+          }}
           className="todoist-attr-pill ms-auto text-decoration-none"
           title="Abrir formulario avanzado con subtareas y etiquetas"
+          data-testid="quick-add-full-form-link"
         >
           <LuMaximize2 size={12} />
           <span className="d-none d-sm-inline">Formulario completo</span>

@@ -5,13 +5,30 @@ import {
   type RecurrenceRuleConfig,
 } from "./recurrenceEngine";
 
-export type NlpTokenType = "date" | "priority" | "category" | "recurrence";
+export type NlpTokenType =
+  | "date"
+  | "priority"
+  | "category"
+  | "recurrence"
+  | "tag"
+  | "room"
+  | "assignee";
 
 export interface NlpDetectedToken {
   type: NlpTokenType;
   raw: string;
   label: string;
   value: string | number;
+}
+
+export interface NlpParseContext {
+  rooms?: Array<{ id: string; nombre: string }>;
+  tags?: Array<{ id: string; nombre: string }>;
+  members?: Array<{
+    user_id: string;
+    user_nombre?: string | null;
+    user_email?: string | null;
+  }>;
 }
 
 export interface NlpParsedTaskResult {
@@ -22,6 +39,12 @@ export interface NlpParsedTaskResult {
   categoria?: string;
   recurrenceExpr?: string;
   recurrenceRule?: RecurrenceRuleConfig;
+  tags?: string[];
+  tagIds?: string[];
+  roomId?: string;
+  roomName?: string;
+  assigneeId?: string;
+  assigneeName?: string;
 }
 
 export interface NlpSuggestionItem {
@@ -53,15 +76,19 @@ const PRIORITY_MAP: Record<string, { peso: number; code: string; label: string }
   "!1": { peso: 5, code: "P1", label: "Urgente" },
   "!!!": { peso: 5, code: "P1", label: "Urgente" },
   "#urgente": { peso: 5, code: "P1", label: "Urgente" },
+  "!urgente": { peso: 5, code: "P1", label: "Urgente" },
   p2: { peso: 4, code: "P2", label: "Alta" },
   "!2": { peso: 4, code: "P2", label: "Alta" },
   "!!": { peso: 4, code: "P2", label: "Alta" },
+  "!alta": { peso: 4, code: "P2", label: "Alta" },
   p3: { peso: 3, code: "P3", label: "Media" },
   "!3": { peso: 3, code: "P3", label: "Media" },
+  "!media": { peso: 3, code: "P3", label: "Media" },
   p4: { peso: 2, code: "P4", label: "Media-Baja" },
   "!4": { peso: 2, code: "P4", label: "Media-Baja" },
   p5: { peso: 1, code: "P5", label: "Baja" },
   "!5": { peso: 1, code: "P5", label: "Baja" },
+  "!baja": { peso: 1, code: "P5", label: "Baja" },
 };
 
 const WEEKDAY_MAP: Record<string, number> = {
@@ -104,6 +131,84 @@ const MONTH_MAP: Record<string, number> = {
   diciembre: 11,
 };
 
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function normalizeMatchKey(value: string): string {
+  return normalizeText(value).replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+}
+
+function findMatchingRoom(
+  rawQuery: string,
+  rooms?: Array<{ id: string; nombre: string }>,
+  allowPartial = true
+): { id: string; nombre: string } | undefined {
+  if (!rooms || rooms.length === 0) return undefined;
+  const qKey = normalizeMatchKey(rawQuery);
+  if (!qKey) return undefined;
+
+  const exact = rooms.find((r) => normalizeMatchKey(r.nombre) === qKey);
+  if (exact) return exact;
+
+  if (!allowPartial) return undefined;
+
+  const prefixOrFirstWord = rooms.find((r) => {
+    const rKey = normalizeMatchKey(r.nombre);
+    const firstWord = rKey.split(" ")[0];
+    return rKey.startsWith(`${qKey} `) || firstWord === qKey;
+  });
+  if (prefixOrFirstWord) return prefixOrFirstWord;
+
+  return rooms.find((r) => normalizeMatchKey(r.nombre).includes(qKey));
+}
+
+function findMatchingMember(
+  rawQuery: string,
+  members?: Array<{
+    user_id: string;
+    user_nombre?: string | null;
+    user_email?: string | null;
+  }>
+):
+  | {
+      user_id: string;
+      user_nombre?: string | null;
+      user_email?: string | null;
+    }
+  | undefined {
+  if (!members || members.length === 0) return undefined;
+  const qKey = normalizeMatchKey(rawQuery);
+  if (!qKey) return undefined;
+
+  return members.find((m) => {
+    if (m.user_nombre) {
+      const nameKey = normalizeMatchKey(m.user_nombre);
+      const firstWord = nameKey.split(" ")[0];
+      if (
+        nameKey === qKey ||
+        firstWord === qKey ||
+        nameKey.startsWith(`${qKey} `)
+      ) {
+        return true;
+      }
+    }
+    if (m.user_email) {
+      const emailPrefix = m.user_email.split("@")[0] || "";
+      const emailKey = normalizeMatchKey(emailPrefix.replace(/\./g, " "));
+      const rawEmailNorm = normalizeText(emailPrefix);
+      if (emailKey === qKey || rawEmailNorm === qKey) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
 function addDaysToBase(baseDate: Date, days: number): string {
   const d = new Date(
     Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + days)
@@ -122,15 +227,22 @@ function getNextWeekdayIso(baseDate: Date, targetDow: number): string {
 
 /**
  * Parsea un título de tarea en lenguaje natural al estilo Todoist,
- * extrayendo tokens de fecha, prioridad (P1..P5, !!), categoría (#limpieza, #compras...)
+ * extrayendo tokens de fecha, prioridad (P1..P5, !!, !alta), categoría (#limpieza, #compras...),
+ * etiquetas (@tag), hogar/habitación (~cocina o #cocina), asignado (+miembro)
  * y expresiones de recurrencia DSL (cada! 7 días, cada semana, etc.).
  */
 export function parseNaturalTaskInput(
   rawInput: string,
-  baseDate: Date = new Date()
+  baseDateOrContext: Date | NlpParseContext = new Date(),
+  maybeContext?: NlpParseContext
 ): NlpParsedTaskResult {
+  const baseDate =
+    baseDateOrContext instanceof Date ? baseDateOrContext : new Date();
+  const context: NlpParseContext | undefined =
+    baseDateOrContext instanceof Date ? maybeContext : baseDateOrContext;
+
   if (!rawInput || !rawInput.trim()) {
-    return { cleanTitle: "", tokens: [] };
+    return { cleanTitle: "", tokens: [], tags: [], tagIds: [] };
   }
 
   let working = rawInput;
@@ -140,6 +252,12 @@ export function parseNaturalTaskInput(
   let categoria: string | undefined;
   let recurrenceExpr: string | undefined;
   let recurrenceRule: RecurrenceRuleConfig | undefined;
+  const tags: string[] = [];
+  const tagIds: string[] = [];
+  let roomId: string | undefined;
+  let roomName: string | undefined;
+  let assigneeId: string | undefined;
+  let assigneeName: string | undefined;
 
   // 1. Detectar expresiones de recurrencia al estilo Todoist ("cada! 7 días", "cada semana", "every! 3 days", etc.)
   const recurrenceRegex =
@@ -234,13 +352,83 @@ export function parseNaturalTaskInput(
     }
   }
 
-  // 3. Evaluar palabras individuales para fechas simples (hoy, mañana, lunes..domingo), prioridades (p1..p5, !!) y categorías (#limpieza...)
-  const words = working.split(/\s+/).filter(Boolean);
+  // 3. Evaluar palabras individuales y tokens entrecomillados (~"Habitación Principal", +"María José")
+  const words = working.match(/(?:[~+]["'][^"']+["']|\S+)/g) || [];
   const keptWords: string[] = [];
 
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     const lower = word.toLowerCase();
+
+    // Etiquetas (@tag) — RN-04: 1..30 chars alfanuméricos/guiones/underscores, normalizadas en minúsculas, sin duplicados, máx 10
+    if (word.startsWith("@") && word.length > 1) {
+      const tagMatch = /^@([a-zA-Z0-9áéíóúñÁÉÍÓÚÑ_-]{1,30})$/.exec(word);
+      if (tagMatch) {
+        const normalizedTag = tagMatch[1].toLowerCase();
+        if (!tags.includes(normalizedTag) && tags.length < 10) {
+          tags.push(normalizedTag);
+          tokens.push({
+            type: "tag",
+            raw: word,
+            label: `@${normalizedTag}`,
+            value: normalizedTag,
+          });
+          const matchedTagObj = context?.tags?.find(
+            (t) => normalizeMatchKey(t.nombre) === normalizeMatchKey(normalizedTag)
+          );
+          if (matchedTagObj && !tagIds.includes(matchedTagObj.id)) {
+            tagIds.push(matchedTagObj.id);
+          }
+        }
+        continue;
+      }
+    }
+
+    // Habitaciones explícitas con ~ (~cocina, ~"Habitación Principal", ~habitacion_principal) — RN-03
+    if (word.startsWith("~") && word.length > 1) {
+      const rawRoomToken = word.slice(1).replace(/^["']|["']$/g, "").trim();
+      if (roomId === undefined && rawRoomToken) {
+        const matchedRoom = findMatchingRoom(rawRoomToken, context?.rooms, true);
+        if (matchedRoom) {
+          roomId = matchedRoom.id;
+          roomName = matchedRoom.nombre;
+          tokens.push({
+            type: "room",
+            raw: word,
+            label: `~${matchedRoom.nombre}`,
+            value: matchedRoom.id,
+          });
+          continue;
+        }
+      }
+      keptWords.push(word);
+      continue;
+    }
+
+    // Asignación a miembros del hogar (+nombre, +"María José", +maria_jose) — RN-05
+    if (word.startsWith("+") && word.length > 1) {
+      const rawMemberToken = word.slice(1).replace(/^["']|["']$/g, "").trim();
+      if (assigneeId === undefined && rawMemberToken) {
+        const matchedMember = findMatchingMember(rawMemberToken, context?.members);
+        if (matchedMember) {
+          assigneeId = matchedMember.user_id;
+          const displayName =
+            matchedMember.user_nombre ||
+            matchedMember.user_email?.split("@")[0] ||
+            matchedMember.user_id;
+          assigneeName = displayName;
+          tokens.push({
+            type: "assignee",
+            raw: word,
+            label: `+${displayName}`,
+            value: matchedMember.user_id,
+          });
+          continue;
+        }
+      }
+      keptWords.push(word);
+      continue;
+    }
 
     // Categorías (#limpieza, #compras, etc.)
     if (categoria === undefined && lower in CATEGORY_MAP) {
@@ -255,7 +443,7 @@ export function parseNaturalTaskInput(
       continue;
     }
 
-    // Prioridades (p1..p5, !1..!5, !!, !!!, #urgente)
+    // Prioridades (p1..p5, !1..!5, !!, !!!, #urgente, !alta, !media, !baja)
     if (peso === undefined && lower in PRIORITY_MAP) {
       const prioInfo = PRIORITY_MAP[lower];
       peso = prioInfo.peso;
@@ -266,6 +454,23 @@ export function parseNaturalTaskInput(
         value: prioInfo.peso,
       });
       continue;
+    }
+
+    // Desambiguación de #token contra habitaciones del usuario cuando no es categoría ni prioridad — RN-03
+    if (word.startsWith("#") && word.length > 1 && roomId === undefined) {
+      const rawHashRoom = word.slice(1).trim();
+      const matchedRoom = findMatchingRoom(rawHashRoom, context?.rooms, true);
+      if (matchedRoom) {
+        roomId = matchedRoom.id;
+        roomName = matchedRoom.nombre;
+        tokens.push({
+          type: "room",
+          raw: word,
+          label: `~${matchedRoom.nombre}`,
+          value: matchedRoom.id,
+        });
+        continue;
+      }
     }
 
     // Fechas de una palabra ("hoy", "mañana", días de la semana)
@@ -324,8 +529,16 @@ export function parseNaturalTaskInput(
     categoria,
     recurrenceExpr,
     recurrenceRule,
+    tags,
+    tagIds,
+    roomId,
+    roomName,
+    assigneeId,
+    assigneeName,
   };
 }
+
+export const parseTaskInput = parseNaturalTaskInput;
 
 export const NLP_QUICK_SUGGESTIONS: NlpSuggestionItem[] = [
   {
@@ -421,16 +634,43 @@ export const NLP_QUICK_SUGGESTIONS: NlpSuggestionItem[] = [
   },
 ];
 
+const DEFAULT_TAG_SUGGESTIONS: NlpSuggestionItem[] = [
+  {
+    id: "tag-default-urgente",
+    type: "tag",
+    token: "@urgente",
+    label: "@urgente",
+    description: "Etiqueta rápida",
+  },
+  {
+    id: "tag-default-hogar",
+    type: "tag",
+    token: "@hogar",
+    label: "@hogar",
+    description: "Etiqueta rápida",
+  },
+  {
+    id: "tag-default-pendiente",
+    type: "tag",
+    token: "@pendiente",
+    label: "@pendiente",
+    description: "Etiqueta rápida",
+  },
+];
+
 /**
- * Detecta si el cursor al final del texto está escribiendo un comando rápido (#, !, /)
+ * Detecta si el cursor al final del texto está escribiendo un comando rápido (#, !, /, @, ~, +)
  * y devuelve sugerencias filtradas para el menú flotante estilo 21st.dev / Todoist.
  */
-export function getTriggerSuggestions(input: string): {
+export function getTriggerSuggestions(
+  input: string,
+  context?: NlpParseContext
+): {
   triggerWord: string;
   suggestions: NlpSuggestionItem[];
 } | null {
   if (!input) return null;
-  const match = /(?:^|\s)([#!/][a-zA-Z0-9áéíóúñÁÉÍÓÚÑ!]*)$/.exec(input);
+  const match = /(?:^|\s)([#!/~@+][a-zA-Z0-9áéíóúñÁÉÍÓÚÑ!_-]*)$/.exec(input);
   if (!match) return null;
 
   const rawTrigger = match[1];
@@ -495,6 +735,95 @@ export function getTriggerSuggestions(input: string): {
       : null;
   }
 
+  if (triggerWord.startsWith("@")) {
+    const query = normalizeText(triggerWord.slice(1));
+    const sourceTags: NlpSuggestionItem[] =
+      context?.tags && context.tags.length > 0
+        ? context.tags.map((t) => {
+            const slug = t.nombre
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, "_");
+            return {
+              id: `tag-${t.id}`,
+              type: "tag",
+              token: `@${slug}`,
+              label: `@${t.nombre}`,
+              description: "Etiqueta",
+            };
+          })
+        : DEFAULT_TAG_SUGGESTIONS;
+
+    const filtered = query
+      ? sourceTags.filter(
+          (item) =>
+            normalizeText(item.token).includes(query) ||
+            normalizeText(item.label).includes(query)
+        )
+      : sourceTags;
+
+    return filtered.length > 0
+      ? { triggerWord: rawTrigger, suggestions: filtered }
+      : null;
+  }
+
+  if (triggerWord.startsWith("~")) {
+    const rooms = context?.rooms || [];
+    if (rooms.length === 0) return null;
+    const query = normalizeMatchKey(triggerWord.slice(1));
+    const roomSuggestions: NlpSuggestionItem[] = rooms.map((r) => {
+      const trimmed = r.nombre.trim();
+      const hasSpaces = /\s/.test(trimmed);
+      return {
+        id: `room-${r.id}`,
+        type: "room",
+        token: hasSpaces ? `~"${trimmed}"` : `~${trimmed.toLowerCase()}`,
+        label: `~${trimmed}`,
+        description: "Hogar / Sala",
+      };
+    });
+    const filtered = query
+      ? roomSuggestions.filter((item) =>
+          normalizeMatchKey(item.label).includes(query)
+        )
+      : roomSuggestions;
+    return filtered.length > 0
+      ? { triggerWord: rawTrigger, suggestions: filtered }
+      : null;
+  }
+
+  if (triggerWord.startsWith("+")) {
+    const members = context?.members || [];
+    if (members.length === 0) return null;
+    const query = normalizeMatchKey(triggerWord.slice(1));
+    const memberSuggestions: NlpSuggestionItem[] = members.map((m) => {
+      const displayName = (
+        m.user_nombre ||
+        m.user_email?.split("@")[0] ||
+        m.user_id
+      ).trim();
+      const hasSpaces = /\s/.test(displayName);
+      return {
+        id: `assignee-${m.user_id}`,
+        type: "assignee",
+        token: hasSpaces ? `+"${displayName}"` : `+${displayName.toLowerCase()}`,
+        label: `+${displayName}`,
+        description: m.user_email || "Miembro del hogar",
+      };
+    });
+    const filtered = query
+      ? memberSuggestions.filter(
+          (item) =>
+            normalizeMatchKey(item.label).includes(query) ||
+            normalizeMatchKey(item.description).includes(query)
+        )
+      : memberSuggestions;
+    return filtered.length > 0
+      ? { triggerWord: rawTrigger, suggestions: filtered }
+      : null;
+  }
+
   return null;
 }
+
 

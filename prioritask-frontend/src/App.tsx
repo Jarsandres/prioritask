@@ -31,6 +31,8 @@ import "./App.css";
 // Lazy loading diferido de modales pesados globales (Sprint 10 Code-Splitting)
 const CommandPaletteModal = lazy(() => import("./components/common/CommandPaletteModal"));
 const KeyboardShortcutsModal = lazy(() => import("./components/common/KeyboardShortcutsModal"));
+const GlobalQuickAddModal = lazy(() => import("./components/tasks/GlobalQuickAddModal"));
+import type { QuickAddPrefill } from "./components/tasks/GlobalQuickAddModal";
 
 const AppContent = () => {
   const location = useLocation();
@@ -40,13 +42,50 @@ const AppContent = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddPrefill, setQuickAddPrefill] = useState<QuickAddPrefill | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     return localStorage.getItem("sidebar_collapsed") === "true";
   });
   const { theme, toggleTheme } = useTheme();
   const hideSidebar = location.pathname === "/login" || location.pathname === "/register";
 
-  // Listener global de atajos de teclado (Ctrl+K, Ctrl+,, ?, c)
+  // Soporte de invocación por URL / Deep-link (?quickAdd=1&content=...&description=...&date=...&priority=...&roomId=...)
+  useEffect(() => {
+    if (!location.search || hideSidebar) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("quickAdd") === "1" || params.get("quick_add") === "1") {
+      const rawPrio = params.get("priority")?.toLowerCase();
+      let parsedPrio: number | undefined;
+      if (rawPrio) {
+        const asNum = Number(rawPrio);
+        if (!Number.isNaN(asNum) && asNum >= 1 && asNum <= 5) {
+          parsedPrio = asNum;
+        } else if (rawPrio === "urgent" || rawPrio === "urgente" || rawPrio === "p1") {
+          parsedPrio = 5;
+        } else if (rawPrio === "high" || rawPrio === "alta" || rawPrio === "p2") {
+          parsedPrio = 4;
+        } else if (rawPrio === "medium" || rawPrio === "media" || rawPrio === "p3") {
+          parsedPrio = 3;
+        } else if (rawPrio === "low" || rawPrio === "baja" || rawPrio === "p5") {
+          parsedPrio = 1;
+        }
+      }
+
+      setQuickAddPrefill({
+        content: params.get("content") || params.get("text") || undefined,
+        description: params.get("description") || params.get("comment") || undefined,
+        date: params.get("date") || undefined,
+        priority: parsedPrio,
+        categoria: params.get("categoria")?.toUpperCase() || undefined,
+        roomId: params.get("roomId") || params.get("room_id") || undefined,
+      });
+      setIsQuickAddOpen(true);
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, hideSidebar, navigate]);
+
+  // Listener global de atajos de teclado (Ctrl+K, Ctrl+,, Ctrl+Space, ?, c)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -61,6 +100,16 @@ const AppContent = () => {
       if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      // Ctrl+Space para ventana flotante de Captura Rápida (Todoist Desktop quick_add)
+      if (e.ctrlKey && (e.code === "Space" || e.key === " ")) {
+        if (!hideSidebar) {
+          e.preventDefault();
+          setQuickAddPrefill(null);
+          setIsQuickAddOpen((prev) => !prev);
+        }
         return;
       }
 
@@ -81,17 +130,25 @@ const AppContent = () => {
         return;
       }
 
-      // 'c' para crear nueva tarea rápidamente
-      if (e.key === "c" || e.key === "C") {
-        e.preventDefault();
-        navigate("/tasks/create");
+      // 'c' para abrir Captura Rápida Global sin desmontar la vista activa
+      if (
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        (e.key === "c" || e.key === "C")
+      ) {
+        if (!hideSidebar) {
+          e.preventDefault();
+          setQuickAddPrefill(null);
+          setIsQuickAddOpen(true);
+        }
         return;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate, settings.general.enableSingleKeyShortcuts]);
+  }, [navigate, hideSidebar, settings.general.enableSingleKeyShortcuts]);
 
   const toggleSidebarCollapse = () => {
     setIsSidebarCollapsed((prev) => {
@@ -99,6 +156,11 @@ const AppContent = () => {
       localStorage.setItem("sidebar_collapsed", String(next));
       return next;
     });
+  };
+
+  const openGlobalQuickAdd = () => {
+    setQuickAddPrefill(null);
+    setIsQuickAddOpen(true);
   };
 
   return (
@@ -149,6 +211,7 @@ const AppContent = () => {
           onClose={() => setMobileOpen(false)}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={toggleSidebarCollapse}
+          onOpenQuickAdd={openGlobalQuickAdd}
         />
       )}
 
@@ -183,7 +246,10 @@ const AppContent = () => {
 
       {/* Navegación ergonómica inferior en móvil (Thumb Zone) */}
       {!hideSidebar && (
-        <MobileBottomNav onOpenMenu={() => setMobileOpen(true)} />
+        <MobileBottomNav
+          onOpenMenu={() => setMobileOpen(true)}
+          onOpenQuickAdd={openGlobalQuickAdd}
+        />
       )}
 
       {/* Banner flotante de conectividad Offline-First */}
@@ -191,6 +257,20 @@ const AppContent = () => {
 
       {/* Anunciador universal para lectores de pantalla (NVDA / TalkBack / VoiceOver) */}
       <ScreenReaderAnnouncer />
+
+      {/* Modal Flotante de Captura Rápida Global (Todoist Desktop quick_add) */}
+      {!hideSidebar && isQuickAddOpen && (
+        <Suspense fallback={<ModalSkeleton />}>
+          <GlobalQuickAddModal
+            isOpen={isQuickAddOpen}
+            onClose={() => {
+              setIsQuickAddOpen(false);
+              setQuickAddPrefill(null);
+            }}
+            prefill={quickAddPrefill}
+          />
+        </Suspense>
+      )}
 
       {/* Modales Globales de Paleta de Comandos y Atajos (Lazy Loaded) */}
       {isCommandPaletteOpen && (
@@ -206,6 +286,7 @@ const AppContent = () => {
               }
             }}
             onOpenShortcuts={() => setIsShortcutsOpen(true)}
+            onOpenQuickAdd={openGlobalQuickAdd}
           />
         </Suspense>
       )}

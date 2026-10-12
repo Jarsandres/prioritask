@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import CommandPaletteModal from "../CommandPaletteModal";
+import { ThemeProvider } from "../../../context/ThemeContext";
+import { ToastProvider } from "../../../context/ToastContext";
+import { TaskUpdateProvider } from "../../../context/TaskUpdateContext";
 import { cacheManager, searchLRUCache, QueryLRUCache } from "../../../services/cacheManager";
 import api from "../../../api";
 import type { Task } from "../../../types/task";
@@ -10,6 +13,19 @@ const mockUseRoom = vi.fn();
 vi.mock("../../../context/RoomContext", () => ({
   useRoom: () => mockUseRoom(),
 }));
+
+const renderPalette = () =>
+  render(
+    <MemoryRouter>
+      <ThemeProvider>
+        <ToastProvider>
+          <TaskUpdateProvider>
+            <CommandPaletteModal isOpen={true} onClose={vi.fn()} />
+          </TaskUpdateProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    </MemoryRouter>
+  );
 
 describe("CommandPaletteModal (Multi-Tier Instant Search & LRU Cache)", () => {
   beforeEach(() => {
@@ -54,18 +70,14 @@ describe("CommandPaletteModal (Multi-Tier Instant Search & LRU Cache)", () => {
     cacheManager.setRoomTasks("room-1", [cachedTask]);
 
     // Mock API search
-    vi.spyOn(api, "get").mockResolvedValueOnce({
+    vi.spyOn(api, "get").mockResolvedValue({
       data: {
         total_matches: 0,
         results: [],
       },
     });
 
-    render(
-      <MemoryRouter>
-        <CommandPaletteModal isOpen={true} onClose={vi.fn()} />
-      </MemoryRouter>
-    );
+    renderPalette();
 
     const input = screen.getByPlaceholderText(
       "Buscar tareas, cambiar de hogar o ejecutar acción..."
@@ -95,11 +107,9 @@ describe("CommandPaletteModal (Multi-Tier Instant Search & LRU Cache)", () => {
       },
     ]);
 
-    render(
-      <MemoryRouter>
-        <CommandPaletteModal isOpen={true} onClose={vi.fn()} />
-      </MemoryRouter>
-    );
+    vi.spyOn(api, "get").mockResolvedValue({ data: [] });
+
+    renderPalette();
 
     const input = screen.getByPlaceholderText(
       "Buscar tareas, cambiar de hogar o ejecutar acción..."
@@ -134,11 +144,7 @@ describe("CommandPaletteModal (Multi-Tier Instant Search & LRU Cache)", () => {
       },
     });
 
-    render(
-      <MemoryRouter>
-        <CommandPaletteModal isOpen={true} onClose={vi.fn()} />
-      </MemoryRouter>
-    );
+    renderPalette();
 
     const input = screen.getByPlaceholderText(
       "Buscar tareas, cambiar de hogar o ejecutar acción..."

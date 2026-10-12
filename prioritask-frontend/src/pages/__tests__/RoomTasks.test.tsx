@@ -157,11 +157,15 @@ describe("RoomTasks — Integración con useTasksState, Vista Lista Todoist y Ev
         "data-priority",
         "p3"
       );
+      expect(api.patch).toHaveBeenCalledWith("/tasks/rt-1", { peso: 2 });
+      expect(screen.getByTestId("task-item-rt-1")).not.toHaveAttribute(
+        "aria-busy",
+        "true"
+      );
     });
-    expect(api.patch).toHaveBeenCalledWith("/tasks/rt-1", { peso: 2 });
 
     // Completar con barra espaciadora -> actualización optimista inmediata
-    fireEvent.keyDown(item1, { key: " " });
+    fireEvent.keyDown(screen.getByTestId("task-item-rt-1"), { key: " " });
 
     await waitFor(() => {
       expect(api.patch).toHaveBeenCalledWith("/tasks/rt-1/status", {
