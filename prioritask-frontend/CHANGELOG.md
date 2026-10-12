@@ -2,6 +2,26 @@
 
 All notable frontend changes are documented in this file.
 
+## 🎯 Versión 1.9.0 (Store Normalizado O(1) `useTasksState`, Primitiva `TaskItem` WAI-ARIA con Roving TabIndex & Paridad Optimista en `RoomTasks`) — [2026-10-12]
+
+### Added
+- **[FE-STORE-010] Store Normalizado O(1) y Mutaciones Optimistas (`src/hooks/useTasksState.ts`)**: Diccionario indexado `byId: Record<string, Task>` + `ids: string[]`, separación de estado de UI (`focusedTaskId`, `selectedTaskIds`, `activeOverlay`, `lastError`), mutaciones optimistas (`toggleCompleteOptimistic`, `updateTaskOptimistic`, `setPriorityOptimistic`, `deleteTaskOptimistic`) con seguimiento de operaciones concurrentes en vuelo (`inFlightRef`) y rollback selectivo por campo, y conciliación en vivo O(1) (`reconcileLiveEvent`) para `TASK_CREATED`, `TASK_UPDATED`, `TASK_DELETED`, `SUBTASK_TOGGLED`, `SUBTASK_CREATED`, `COMMENT_ADDED`, `COMMENT_DELETED`, `ATTACHMENT_ADDED`, `ATTACHMENT_DELETED`, `completeItem` y `uncompleteItem`.
+- **[FE-TASK-010] Primitiva `TaskItem` Accesible con Roving TabIndex y Prioridades P1–P4 (`src/components/tasks/TaskItem.tsx`, `src/components/tasks/TaskListView.tsx`, `src/components/common/KeyboardShortcutsModal.tsx`)**: Componente de fila con semántica WAI-ARIA (`role="listitem"`, `role="checkbox"`, `aria-checked`, `aria-busy`), anillos y badges de prioridad P1–P4 (`pesoToPriorityLevel`), botón de avance de ciclo recurrente (`onAdvance`), navegación espacial por teclado (`↑`, `↓`, `Home`, `End`) y atajos rápidos estilo Todoist (`Espacio`/`x`, `e`/`Enter`, `1`–`4`, `Shift+Espacio`/`s`, `Supr`).
+- **[FE-PARITY-010] Unificación de `TaskList.tsx` y `RoomTasks.tsx` (`src/components/TaskList.tsx`, `src/pages/RoomTasks.tsx`)**: Migración de `RoomTasks.tsx` y `TaskList.tsx` al store normalizado `useTasksState`, integrando caché L1 SWR (`cacheManager`), confeti (`usePixelConfetti`) y sincronización reactiva de `TaskPeekDrawer` sobre `byId`.
+- **[FE-SEC-010] Blindaje contra Prototype Pollution y Hardening de Web Workers / Web Locks (`src/hooks/useTasksState.ts`, `src/sync/tabCoordinator.ts`, `public/sw-reminders.js`)**: Validación de identificadores seguros con `isSafeEntityId`, helper `hasOwnKey` (`Object.prototype.hasOwnProperty.call`) compatible con target ES2020 para mitigar colisiones sobre `Object.prototype`, restricción Same-Origin en URLs y allowlist de acciones de notificación en `sw-reminders.js`, y guardia defensiva de Web Lock en `TabLeaderCoordinator`.
+- **[FE-CLEANUP-010] Higiene de Sesión Integral y Purga de Datos de Cliente (`src/services/sessionCleanup.ts`, `src/components/Sidebar.tsx`, `src/pages/Profile.tsx`)**: Módulo unificado `clearClientSessionData` para revocación segura de tokens, purga de cachés SWR en memoria (`cacheManager.clear()`), vaciado de bases de datos IndexedDB (`prioritask_sync_engine_db`, `prioritask_reminders_db`) y limpieza de `localStorage`/`sessionStorage` ante cierre de sesión.
+- **[QA-TASK-010] Suites Unitarias e Integración (`src/hooks/__tests__/useTasksState.test.ts`, `src/components/tasks/__tests__/TaskItem.test.tsx`, `src/pages/__tests__/RoomTasks.test.tsx`)**: Cobertura de normalización, rollbacks concurrentes por campo, eventos SSE de subtareas/comentarios/adjuntos, atajos de teclado P1–P4 y avance de tareas recurrentes.
+
+---
+
+## 🚀 Versión 1.8.0 (Settings Workspace Estilo Todoist, HLC/OCC Batch Sync, Coordinación Multi-Pestaña & Recordatorios Accionables) — [2026-10-12]
+
+### Added
+- **[FE-SET-010] Settings Workspace & Profile Center (`src/context/SettingsContext.tsx`, `src/pages/Profile.tsx`, `src/components/Sidebar.tsx`)**: Centro de configuración estilo Todoist con 7 secciones (`Cuenta`, `General`, `Apariencia y Tema`, `Barra Lateral y Navegación`, `Productividad y Karma`, `Recordatorios y Notificaciones`, `Atajos y Acerca de`), buscador instantáneo de preferencias y visibilidad configurable de enlaces del Sidebar.
+- **[FE-HLC-010 / FE-TAB-010 / FE-REM-010] Sincronización Distribuida (`src/sync/hlc.ts`, `src/sync/tabCoordinator.ts`, `src/notifications/reminderScheduler.ts`)**: Reloj Lógico Híbrido (`HybridLogicalClock`), coordinador multi-pestaña con líder único (`TabLeaderCoordinator`) y planificador de recordatorios accionables en segundo plano (`BackgroundReminderScheduler`).
+
+---
+
 ## 🔄 Versión 1.7.0 (Motor de Sincronización Offline, Optimistic UI, Cola de Comandos Transaccionales & Puente IPC Todoist) — [2026-10-11]
 
 ### Added

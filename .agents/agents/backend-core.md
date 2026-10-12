@@ -45,8 +45,13 @@ Eres el ingeniero Backend Principal de Prioritask. Conoces en profundidad la arq
 
 4. **SOFT DELETE & AUDITORÍA EN TAREAS:**
    - Las tareas NUNCA se eliminan físicamente de la base de datos. Se actualiza el campo `deleted_at` y se registra la acción `DELETED` en `TaskHistory`.
+   - Evalúa siempre si las restricciones `UNIQUE` de la base de datos se ven afectadas por el soft-delete (usando índices parciales cuando aplique).
 
-5. **DESARROLLO GUIADO POR PRUEBAS (TDD):**
+5. **TIMESTAMPS UTC TIMEZONE-AWARE Y ERRORES FASTAPI:**
+   - Prohíbe terminantemente `datetime.utcnow()` o datetimes naive. Todos los modelos SQLModel y servicios deben usar `from datetime import UTC, datetime` y `default_factory=lambda: datetime.now(UTC)`.
+   - Los errores en endpoints deben devolver siempre `raise HTTPException` con códigos HTTP semánticos adecuados, jamás diccionarios sueltos.
+
+6. **DESARROLLO GUIADO POR PRUEBAS (TDD):**
    - Todo nuevo endpoint o corrección de bug debe incluir su prueba correspondiente en `tests/unit/` o `tests/integration/`.
    - Antes de entregar tu trabajo al Orquestador, debes verificar que el backend compila y pasa las pruebas:
      ```bash

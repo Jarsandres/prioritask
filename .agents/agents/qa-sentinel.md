@@ -50,8 +50,9 @@ Eres el ingeniero de QA, SDET y Auditor de Seguridad de Prioritask. Tu misión e
   ```
 - Comprobar resiliencia ante fallos en llamadas de IA (Ollama): timeouts, desconexiones o respuestas malformadas deben activar fallbacks deterministas con HTTP 200, jamás excepciones 500 no capturadas.
 
-### 4. Estilo, Linting y Tipado
+### 4. Estilo, Linting, Tipado y Convenciones Backend
 - Backend: `ruff check app/ tests/` sin advertencias ni errores.
+- Verificar uso estricto de `datetime.now(UTC)` (prohibido `datetime.utcnow()` o datetimes naive) y uso de `raise HTTPException` en lugar de diccionarios sueltos de error.
 - Frontend: `npm run lint` y `npm run build` en `prioritask-frontend/` sin errores de TypeScript ni sintaxis.
 
 ### 5. Verificación de Grafo Arquitectónico (GitNexus)

@@ -105,6 +105,20 @@ A partir de esta base sólida estilo Todoist, el comité define un **Roadmap en 
 
 ---
 
+### ⚡ Fase 7: Store Normalizado O(1) `useTasksState`, Primitiva `TaskItem` con Roving TabIndex & Settings Workspace (Inspirado en Todoist Renderer)
+**Objetivo:** Consolidar la arquitectura del renderer de Todoist (`todoist-electron@9.31.0`) en las vistas de tareas (`TaskList.tsx` y `RoomTasks.tsx`) y en el centro de configuración (`Profile.tsx`).
+1. **Store Normalizado O(1) y Mutaciones Optimistas con Rollback por Campo (`src/hooks/useTasksState.ts`)**:
+   - Estado indexado `byId: Record<string, Task>` + `ids: string[]` desacoplado del estado efímero de UI (`focusedTaskId`, `selectedTaskIds`, `activeOverlay`, `lastError`).
+   - Mutaciones optimistas instantáneas (`toggleCompleteOptimistic`, `updateTaskOptimistic`, `setPriorityOptimistic`, `deleteTaskOptimistic`) con contador de operaciones en vuelo (`inFlightRef`) y reversión atómica por campo ante fallos de red.
+   - Conciliación en vivo O(1) (`reconcileLiveEvent`) para todos los eventos SSE y del puente IPC (`TASK_CREATED`, `TASK_UPDATED`, `TASK_DELETED`, `SUBTASK_TOGGLED`, `SUBTASK_CREATED`, `COMMENT_ADDED`, `COMMENT_DELETED`, `ATTACHMENT_ADDED`, `ATTACHMENT_DELETED`).
+2. **Primitiva `TaskItem` WAI-ARIA, Prioridades P1–P4 y Roving TabIndex (`src/components/tasks/TaskItem.tsx`, `TaskListView.tsx`)**:
+   - Semántica `role="listitem"` y `role="checkbox"` (`aria-checked`, `aria-busy`), anillos y banderas cromáticas P1–P4 (`#dc2626`, `#d97706`, `#2563eb`, `#64748b`).
+   - Navegación espacial por teclado (*roving tabindex*: `↑`, `↓`, `Home`, `End`) y atajos rápidos (`Espacio`/`x` completar, `e`/`Enter` abrir Peek Drawer, `1`–`4` prioridad instantánea, `Shift+Espacio`/`s` selección múltiple, `Supr` eliminar) sin robar el foco de inputs activos.
+3. **Centro de Ajustes Todoist (`src/context/SettingsContext.tsx`, `src/pages/Profile.tsx`)**:
+   - Workspace de 7 secciones con buscador instantáneo de preferencias, personalización de módulos visibles en el Sidebar y sincronización con el backend.
+
+---
+
 ## 3. Matriz de Priorización Recomendada por el Comité
 
 | Orden | Entregable | Estado | Impacto UX | Complejidad | Archivos Principales Afectados |
@@ -116,6 +130,4 @@ A partir de esta base sólida estilo Todoist, el comité define un **Roadmap en 
 | **5º** | **Colaboración Doméstica (Drag & Drop Avatares + Kudos) & Modo Kiosco/Nevera Digital** | ✅ **Completado (v1.5.0)** | 🔥 Muy Alto | Media | [`KitchenKioskModal.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/rooms/KitchenKioskModal.tsx), [`kudosStore.ts`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/utils/kudosStore.ts), [`RoomTasks.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/pages/RoomTasks.tsx), [`TaskCard.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/common/TaskCard.tsx) |
 | **6º** | **Split-Screen Sign-In & Register (21st.dev + Glassmorphism + Escaparate de Convivencia)** | ✅ **Completado (v1.6.2)** | 🔥 Muy Alto | Media | [`SignInPage.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/ui/SignInPage.tsx), [`Login.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/auth/Login.tsx), [`Register.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/auth/Register.tsx), [`Auth.css`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/auth/Auth.css) |
 | **7º** | **Motor de Sincronización Offline, Optimistic UI & Cola de Comandos (`OfflineSyncEngine`)** | ✅ **Completado (v1.7.0)** | 🔥 Muy Alto | Alta | [`offlineQueue.ts`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/sync/offlineQueue.ts), [`offlineQueue.test.ts`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/sync/__tests__/offlineQueue.test.ts) |
-
-
-
+| **8º** | **Store Normalizado O(1) `useTasksState`, `TaskItem` Roving TabIndex & Settings Workspace** | ✅ **Completado (v1.9.0)** | 🔥 Muy Alto | Media-Alta | [`useTasksState.ts`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/hooks/useTasksState.ts), [`TaskItem.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/tasks/TaskItem.tsx), [`TaskListView.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/tasks/TaskListView.tsx), [`TaskList.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/components/TaskList.tsx), [`RoomTasks.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/pages/RoomTasks.tsx), [`Profile.tsx`](file:///c:/Users/jarsa/Documents/antigravity/prioritask/prioritask-frontend/src/pages/Profile.tsx) |

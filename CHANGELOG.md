@@ -3,6 +3,30 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## 🎯 Versión 1.9.0 (Store Normalizado O(1) `useTasksState`, Primitiva `TaskItem` WAI-ARIA con Roving TabIndex, Prioridades P1–P4 & Paridad Optimista en `RoomTasks`) — [2026-10-12]
+
+### ⚡ Arquitectura Frontend Estilo Todoist Renderer, Accesibilidad WAI-ARIA & Conciliación SSE Unificada
+- **[REA-UI-030] Extracción de Patrones de Estado y UI desde `todoist-electron@9.31.0` (`app.asar`)**:
+  - Normalización de entidades en diccionarios O(1) (`byId` + `ids`), separación entre estado de dominio y estado de UI/overlays, *roving tabindex* WAI-ARIA y sistema de prioridades cromáticas P1–P4 (`#dc2626`, `#d97706`, `#2563eb`, `#64748b`).
+- **[FE-STORE-010] Store Normalizado O(1) y Mutaciones Optimistas con Rollback por Campo (`prioritask-frontend/src/hooks/useTasksState.ts`)**:
+  - Hook reactivo basado en `useReducer` con `byId`, `ids`, `pendingById` y `ui` (`focusedTaskId`, `selectedTaskIds`, `activeOverlay`, `lastError`).
+  - Mutaciones optimistas instantáneas (`toggleCompleteOptimistic`, `updateTaskOptimistic`, `setPriorityOptimistic`, `deleteTaskOptimistic`) con contador de operaciones concurrentes en vuelo (`inFlightRef`) y reversión atómica por campo sin pisar cambios paralelos.
+  - Conciliación en vivo O(1) (`reconcileLiveEvent`) para todos los eventos SSE y del puente IPC (`TASK_CREATED`, `TASK_UPDATED`, `TASK_DELETED`, `SUBTASK_TOGGLED`, `SUBTASK_CREATED`, `COMMENT_ADDED`, `COMMENT_DELETED`, `ATTACHMENT_ADDED`, `ATTACHMENT_DELETED`, `completeItem`, `uncompleteItem`).
+- **[FE-TASK-010] Primitiva `TaskItem` WAI-ARIA y Atajos de Teclado Estilo Todoist (`prioritask-frontend/src/components/tasks/TaskItem.tsx`, `TaskListView.tsx`, `KeyboardShortcutsModal.tsx`)**:
+  - Semántica accesible (`role="listitem"`, `role="checkbox"`, `aria-checked`, `aria-busy`), anillos y chips P1–P4, avance de ciclo recurrente (`onAdvance`), navegación espacial con `↑`/`↓`/`Home`/`End` y atajos de una tecla (`Espacio`/`x`, `e`/`Enter`, `1`–`4`, `Shift+Espacio`/`s`, `Supr`).
+- **[FE-PARITY-010] Consolidación en `TaskList.tsx` y `RoomTasks.tsx` (`prioritask-frontend/src/components/TaskList.tsx`, `src/pages/RoomTasks.tsx`)**:
+  - Integración completa de `RoomTasks.tsx` y `TaskList.tsx` sobre `useTasksState`, preservando caché L1 SWR (`cacheManager`), celebración de confeti (`usePixelConfetti`) y vinculación en vivo de `TaskPeekDrawer` con `byId`.
+- **[SEC-AUD-040 / BE-SYNC-020] Blindaje de Sincronización por Lotes, Anti-HLC Poisoning & Aislamiento por Savepoint (`app/schemas/sync.py`, `app/api/v1/endpoints/sync.py`, `app/api/v1/endpoints/tasks.py`, `app/schemas/user.py`)**:
+  - Validación estricta de HLC canónico (`_HLC_REGEX`) con cota de deriva temporal futura máxima (`+5 min`) en `validate_hlc_timestamp`, filtrado de campos mutables en `field_hlc` (`_MUTABLE_TASK_FIELDS`), y rechazo de marcas arbitrarias futuras (Anti-HLC Poisoning).
+  - Aislamiento transaccional por comando mediante Savepoint (`await session.begin_nested()`) en `POST /api/v1/sync/batch` ante `IntegrityError` en `task_create`.
+  - Validación de rango y finitud en `peso` (`math.isfinite`, rechazo de `NaN`/`Inf`/booleanos), límite de descripción (`<= 500` caracteres), cota de preferencias de usuario (máximo 32 claves, `<= 16 KB`) y autorización unificada para propietarios de hogares (`Room.owner_id == current_user.id`) en `_get_task_with_access`.
+- **[FE-SEC-010] Higiene de Sesión Integral y Blindaje contra Prototype Pollution (`prioritask-frontend/src/services/sessionCleanup.ts`, `src/hooks/useTasksState.ts`, `src/sync/tabCoordinator.ts`, `public/sw-reminders.js`)**:
+  - Función centralizada `clearClientSessionData` en `sessionCleanup.ts` para revocación e invalidación completa de cachés, IndexedDB y tokens al cerrar sesión.
+  - Protección contra Prototype Pollution en `useTasksState.ts` mediante `isSafeEntityId` y helper `hasOwnKey` (`Object.prototype.hasOwnProperty.call`) compatible con ES2020.
+  - Restricción Same-Origin en URLs de Service Worker (`sw-reminders.js`), allowlist de acciones de notificación y guardia de Web Lock en `TabLeaderCoordinator`.
+
+---
+
 ## 🚀 Versión 1.8.0 (Concurrencia HLC/OCC, Endpoint Batch Sync, Coordinación Multi-Pestaña con Líder Único & Recordatorios Accionables en Segundo Plano) — [2026-10-12]
 
 ### ⚡ Sincronización Distribuida Offline-First, Concurrencia HLC/OCC, Coordinación Multi-Pestaña & Recordatorios (Backend & Frontend)

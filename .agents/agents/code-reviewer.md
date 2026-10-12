@@ -6,7 +6,7 @@ tools:
   - grep_search
   - list_dir
   - run_command
-mainAgent: false
+mainAgent: true
 subagent: true
 model: inherit
 commandExecutionPolicy: sandbox
