@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -19,6 +20,18 @@ INITIAL_BACKOFF = 0.5  # segundos
 
 _async_client: httpx.AsyncClient | None = None
 _client_lock = asyncio.Lock()
+
+
+def sanitize_prompt_input(text: str, max_length: int = 200) -> str:
+    """Sanitiza y trunca texto de entrada de usuario antes de interpolarlo en un prompt de LLM."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"[\x00-\x1f\x7f-\x9f]+", " ", str(text))
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = cleaned.replace('"""', "'''")
+    cleaned = cleaned.replace('"', '\\"')
+    cleaned = cleaned.replace("<", "&lt;").replace(">", "&gt;")
+    return cleaned[:max_length].strip()
 
 
 def get_ollama_client() -> httpx.AsyncClient:
@@ -40,7 +53,11 @@ async def close_ollama_client() -> None:
         _async_client = None
 
 
-async def generate_json(prompt: str, model: str = OLLAMA_MODEL) -> dict[str, Any] | None:
+async def generate_json(
+    prompt: str,
+    model: str = OLLAMA_MODEL,
+    system: str | None = None,
+) -> dict[str, Any] | None:
     """Envía un prompt a la API de Ollama local solicitando respuesta estructurada en JSON.
 
     Implementa:
@@ -49,7 +66,8 @@ async def generate_json(prompt: str, model: str = OLLAMA_MODEL) -> dict[str, Any
     3. Reintentos automáticos con backoff exponencial.
     4. Pool de conexiones persistente con httpx.AsyncClient singleton.
     """
-    cache_key = build_cache_key(model, prompt)
+    cache_prompt = f"{system}::{prompt}" if system is not None else prompt
+    cache_key = build_cache_key(model, cache_prompt)
     cached_value = await ai_cache.get(cache_key)
     if cached_value is not None:
         logger.debug("Hit en caché IA para key %s", cache_key)
@@ -62,12 +80,14 @@ async def generate_json(prompt: str, model: str = OLLAMA_MODEL) -> dict[str, Any
         return None
 
     url = f"{OLLAMA_HOST.rstrip('/')}/api/generate"
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "prompt": prompt,
         "stream": False,
         "format": "json",
     }
+    if system is not None:
+        payload["system"] = system
 
     client = get_ollama_client()
 

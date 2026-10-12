@@ -32,6 +32,7 @@ Prioritask es una API REST desarrollada con FastAPI que permite gestionar tareas
 | `POST /api/v1/tasks/ai/suggest`    | Sugiere tareas contextuales con IA (**Protegido con JWT**)        |
 | `POST /api/v1/auth/login`          | Autenticación mediante JWT con soporte para refresh tokens       |
 | `CRUD /api/v1/tasks`               | Gestión integral de tareas con soft delete e historial de eventos |
+| `POST /api/v1/sync/batch`          | Sincronización transaccional por lotes offline-first con idempotencia, OCC y fusión por campo HLC |
 
 ---
 
@@ -99,10 +100,26 @@ Una vez lanzado, puedes acceder a:
 ## 🔒 Variables de entorno (.env.example)
 
 ```env
-DATABASE_URL=sqlite:///./tareas.db
-JWT_SECRET_KEY=tu_clave_secreta
+DATABASE_URL=sqlite+aiosqlite:///./prioritask.db
+
+# Seguridad (Generar clave segura con: python -c "import secrets; print(secrets.token_hex(32))")
+JWT_SECRET_KEY=CHANGE_ME_SUPER_SECRET_KEY
 CORS_ORIGINS=["http://localhost:5173"]
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# Ollama
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_TIMEOUT=1.0
 ```
+
+Antes de iniciar el servidor, genera una clave criptográfica de 256 bits (64 caracteres hexadecimales) para `JWT_SECRET_KEY`:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+> 🔐 **Postura de Seguridad en Arranque (`validate_security_posture`):** El validador de `Settings` en `app/core/config.py` bloquea automáticamente en arranque el uso de claves débiles o por defecto (`dev-secret`, `CHANGE_ME_SUPER_SECRET_KEY`, `tu_clave_secreta`, `secret`, `changeme`). Además, cuando `ENVIRONMENT=production`, exige obligatoriamente que `JWT_SECRET_KEY` tenga una longitud mínima de **32 caracteres** y que `DATABASE_URL` utilice un motor **PostgreSQL** (rechazando bases de datos locales SQLite).
 
 `CORS_ORIGINS` debe ser un array en formato JSON (o una lista separada por comas) que se convertirá en una lista en Python. Por ejemplo:
 
@@ -117,7 +134,7 @@ CORS_ORIGINS=["http://localhost:5173","https://miapp.com"]
 ## 🖥️ Frontend
 
 La carpeta `prioritask-frontend` contiene la interfaz SPA desarrollada con React, TypeScript y Vite.
-Incorpora un **sistema de diseño Retro 90's mobile-first**, barra de navegación dock ergonómica (`MobileBottomNav`), **soporte completo de modo Claro/Oscuro** persistente y arquitectura basada en componentes comunes (`TaskCard`, `RetroWindow`).
+Incorpora un **sistema de diseño Retro 90's mobile-first**, barra de navegación dock ergonómica (`MobileBottomNav`), **soporte completo de modo Claro/Oscuro** persistente, arquitectura basada en componentes comunes (`TaskCard`, `RetroWindow`), **motor de sincronización offline-first con Reloj Lógico Híbrido (HLC)** (`OfflineSyncEngine` + `HybridLogicalClock`), **coordinador multi-pestaña de líder único para SSE** (`TabLeaderCoordinator`) y **notificaciones accionables en segundo plano** (`BackgroundReminderScheduler` + Service Worker `sw-reminders.js`).
 
 ```bash
 cd prioritask-frontend

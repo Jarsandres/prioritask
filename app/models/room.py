@@ -31,6 +31,12 @@ class Room(SQLModel, table=True):
         index=True,
     )
 
-    tasks: list["Task"] = Relationship(back_populates="room")
-    members: list["RoomMember"] = Relationship(back_populates="room")
+    tasks: list["Task"] = Relationship(
+        back_populates="room",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    members: list["RoomMember"] = Relationship(
+        back_populates="room",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
 

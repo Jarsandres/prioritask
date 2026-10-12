@@ -15,7 +15,9 @@ class RoomMember(SQLModel, table=True):
     __tablename__ = "roommember"
 
     user_id: UUID = Field(foreign_key="usuario.id", primary_key=True)
-    room_id: UUID = Field(foreign_key="room.id", primary_key=True)
+    room_id: UUID = Field(
+        foreign_key="room.id", ondelete="CASCADE", primary_key=True
+    )
     joined_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     role: RoomMemberRole = Field(default=RoomMemberRole.MEMBER)
 

@@ -15,10 +15,10 @@ dependencies = [
 
   # ─── Configuración & Seguridad ───────────────────────────────────────
   "pydantic-settings~=2.1",
-  "python-jose[cryptography]>=3.3.0",   # JWT
-  "rsa>=4.9",
-  "passlib[bcrypt]==1.7.*",           # hashing de contraseñas
-  "bcrypt==4.0.1",
+  "PyJWT[crypto]>=2.8.0",             # JWT
+  "cryptography>=46.0.6",
+  "sqlparse>=0.5.4",
+  "bcrypt>=4.0.1",                    # hashing de contraseñas
 
   # ─── IA / Background Jobs ────────────────────────────────────────────
   "httpx>=0.27.0",
@@ -49,6 +49,7 @@ addopts = "-q"
 [tool.coverage.report]
 fail_under = 70
 omit = [
+    "app/db/migrations/*",
     "app/services/intelligence.py",
     "app/schemas/response_examples.py",
     "demo_bad_code.py",

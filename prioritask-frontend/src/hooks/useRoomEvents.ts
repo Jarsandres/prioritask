@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "../context/ToastContext";
 import { announce } from "../components/common/ScreenReaderAnnouncer";
 import { cacheManager } from "../services/cacheManager";
+import { TabLeaderCoordinator } from "../sync/tabCoordinator";
 import type { Task, Subtask } from "../types/task";
 
 export type RoomEventType =
@@ -26,14 +27,14 @@ export interface RoomSyncEvent<T = unknown> {
   roomId: string;
   timestamp: number;
   sourceTabId?: string;
+  leaderTabId?: string | null;
 }
 
 export interface UseRoomEventsReturn {
   isConnected: boolean;
   lastEvent: RoomSyncEvent | null;
+  isLeader?: boolean;
 }
-
-const TAB_ID = `tab_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
 const getUserIdFromToken = (): string | null => {
   if (typeof window === "undefined") return null;
@@ -43,7 +44,10 @@ const getUserIdFromToken = (): string | null => {
     const base64Url = token.split(".")[1];
     if (!base64Url) return null;
     const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(window.atob(base64));
+    const payload = JSON.parse(window.atob(base64)) as {
+      sub?: string;
+      user_id?: string;
+    };
     return payload.sub || payload.user_id || null;
   } catch {
     return null;
@@ -56,6 +60,7 @@ export const useRoomEvents = (
 ): UseRoomEventsReturn => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [lastEvent, setLastEvent] = useState<RoomSyncEvent | null>(null);
+  const [isLeader, setIsLeader] = useState<boolean>(false);
 
   const { toast } = useToast();
 
@@ -70,19 +75,48 @@ export const useRoomEvents = (
   }, [onEvent]);
 
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const coordinatorRef = useRef<TabLeaderCoordinator | null>(null);
 
   const handleIncomingEvent = useCallback(
-    (eventType: RoomEventType, data: unknown, isFromBroadcast = false) => {
-      if (eventType === "ping") return;
-
+    (
+      eventType: RoomEventType,
+      data: unknown,
+      isFromBroadcast = false,
+      incomingSourceTabId?: string,
+      incomingLeaderTabId?: string | null
+    ) => {
       const currentRoomId = roomId || "";
+      const activeTabId = coordinatorRef.current?.tabId;
+      const activeLeaderId =
+        incomingLeaderTabId ?? coordinatorRef.current?.getLeaderTabId() ?? null;
+
+      if (eventType === "ping") {
+        setIsConnected(true);
+        if (!isFromBroadcast && broadcastChannelRef.current && activeTabId) {
+          try {
+            const pingPayload: RoomSyncEvent = {
+              type: "ping",
+              data: null,
+              roomId: currentRoomId,
+              timestamp: Date.now(),
+              sourceTabId: activeTabId,
+              leaderTabId: activeLeaderId,
+            };
+            broadcastChannelRef.current.postMessage(pingPayload);
+          } catch {
+            // Ignorar fallo de transmisión en BroadcastChannel
+          }
+        }
+        return;
+      }
 
       const eventPayload: RoomSyncEvent = {
         type: eventType,
         data,
         roomId: currentRoomId,
         timestamp: Date.now(),
-        sourceTabId: TAB_ID,
+        sourceTabId: incomingSourceTabId ?? activeTabId,
+        leaderTabId: activeLeaderId,
       };
 
       setLastEvent(eventPayload);
@@ -252,7 +286,7 @@ export const useRoomEvents = (
         duration: 3500,
       });
 
-      // Si el evento provino del SSE de esta pestaña, propagar a otras pestañas
+      // Si el evento provino del SSE de esta pestaña líder, propagar a las pestañas seguidoras
       if (!isFromBroadcast && broadcastChannelRef.current) {
         try {
           broadcastChannelRef.current.postMessage(eventPayload);
@@ -267,14 +301,22 @@ export const useRoomEvents = (
   useEffect(() => {
     if (!roomId) {
       setIsConnected(false);
+      setIsLeader(false);
       return;
     }
 
     const token = localStorage.getItem("token");
     if (!token) {
       setIsConnected(false);
+      setIsLeader(false);
       return;
     }
+
+    const coordinator = new TabLeaderCoordinator({
+      lockName: `prioritask_sse_leader_${roomId}`,
+      channelName: `prioritask_coordinator_${roomId}`,
+    });
+    coordinatorRef.current = coordinator;
 
     // Inicializar canal BroadcastChannel para sincronización inter-pestañas
     let channel: BroadcastChannel | null = null;
@@ -285,22 +327,39 @@ export const useRoomEvents = (
 
         channel.onmessage = (ev: MessageEvent<RoomSyncEvent>) => {
           const syncEvent = ev.data;
-          // Ignorar eventos generados por esta misma pestaña o de otra sala
           if (
             !syncEvent ||
-            syncEvent.sourceTabId === TAB_ID ||
+            syncEvent.sourceTabId === coordinator.tabId ||
             syncEvent.roomId !== roomId
           ) {
             return;
           }
-          handleIncomingEvent(syncEvent.type, syncEvent.data, true);
+
+          // Verificar que el emisor sea el líder autorizado si está identificado
+          if (
+            syncEvent.sourceTabId &&
+            coordinator.getLeaderTabId() &&
+            !coordinator.isAuthorizedSender({
+              senderTabId: syncEvent.sourceTabId,
+            })
+          ) {
+            return;
+          }
+
+          setIsConnected(true);
+          handleIncomingEvent(
+            syncEvent.type,
+            syncEvent.data,
+            true,
+            syncEvent.sourceTabId,
+            syncEvent.leaderTabId
+          );
         };
       } catch (err) {
         console.warn("BroadcastChannel no soportado o bloqueado:", err);
       }
     }
 
-    // Conectar EventSource al hub de SSE del hogar
     const apiBase = (
       import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1"
     ).replace(/\/+$/, "");
@@ -308,83 +367,119 @@ export const useRoomEvents = (
       roomId
     )}/events?token=${encodeURIComponent(token)}`;
 
+    const supportedEvents: RoomEventType[] = [
+      "TASK_CREATED",
+      "TASK_UPDATED",
+      "TASK_DELETED",
+      "SUBTASK_TOGGLED",
+      "SUBTASK_CREATED",
+      "COMMENT_ADDED",
+      "COMMENT_DELETED",
+      "ATTACHMENT_ADDED",
+      "ATTACHMENT_DELETED",
+      "MEMBER_EVICTED",
+      "POINTS_AWARDED",
+      "STREAK_UPDATED",
+      "REWARD_REDEEMED",
+    ];
+
     let eventSource: EventSource | null = null;
+    let eventListeners: Record<string, (e: MessageEvent) => void> = {};
 
-    try {
-      eventSource = new EventSource(streamUrl);
-
-      eventSource.onopen = () => {
-        setIsConnected(true);
-      };
-
-      // Control del evento Ping de conexión inicial
-      eventSource.addEventListener("ping", () => {
-        setIsConnected(true);
-      });
-
-      // Manejadores específicos para eventos SSE de dominio
-      const supportedEvents: RoomEventType[] = [
-        "TASK_CREATED",
-        "TASK_UPDATED",
-        "TASK_DELETED",
-        "SUBTASK_TOGGLED",
-        "SUBTASK_CREATED",
-        "COMMENT_ADDED",
-        "COMMENT_DELETED",
-        "ATTACHMENT_ADDED",
-        "ATTACHMENT_DELETED",
-        "MEMBER_EVICTED",
-        "POINTS_AWARDED",
-        "STREAK_UPDATED",
-        "REWARD_REDEEMED",
-      ];
-
-      const eventListeners: Record<string, (e: MessageEvent) => void> = {};
-
+    const closeEventSource = () => {
+      if (!eventSource) return;
       supportedEvents.forEach((type) => {
-        const listener = (e: MessageEvent) => {
-          try {
-            const data = e.data ? JSON.parse(e.data) : null;
-            handleIncomingEvent(type, data, false);
-          } catch {
-            handleIncomingEvent(type, e.data, false);
+        if (eventListeners[type]) {
+          eventSource?.removeEventListener(type, eventListeners[type]);
+        }
+      });
+      eventListeners = {};
+      eventSource.close();
+      eventSource = null;
+    };
+
+    const openEventSourceIfLeader = () => {
+      if (!coordinator.isMainLogicWindow()) {
+        closeEventSource();
+        return;
+      }
+      if (eventSource) {
+        return;
+      }
+
+      try {
+        eventSource = new EventSource(streamUrl);
+
+        eventSource.onopen = () => {
+          setIsConnected(true);
+          handleIncomingEvent("ping", null, false);
+        };
+
+        eventSource.addEventListener("ping", () => {
+          setIsConnected(true);
+          handleIncomingEvent("ping", null, false);
+        });
+
+        supportedEvents.forEach((type) => {
+          const listener = (e: MessageEvent) => {
+            try {
+              const data: unknown = e.data ? JSON.parse(String(e.data)) : null;
+              handleIncomingEvent(type, data, false);
+            } catch {
+              handleIncomingEvent(type, e.data, false);
+            }
+          };
+          eventListeners[type] = listener;
+          eventSource?.addEventListener(type, listener);
+        });
+
+        eventSource.onerror = (e) => {
+          setIsConnected(false);
+          if (eventSource?.readyState === EventSource.CLOSED) {
+            console.debug("SSE stream desconectado para el hogar:", roomId, e);
           }
         };
-        eventListeners[type] = listener;
-        eventSource?.addEventListener(type, listener);
-      });
-
-      eventSource.onerror = (e) => {
+      } catch (err) {
+        console.error("Error al instanciar EventSource:", err);
         setIsConnected(false);
-        if (eventSource?.readyState === EventSource.CLOSED) {
-          console.debug("SSE stream desconectado para el hogar:", roomId, e);
-        }
-      };
+      }
+    };
 
-      return () => {
-        supportedEvents.forEach((type) => {
-          if (eventListeners[type]) {
-            eventSource?.removeEventListener(type, eventListeners[type]);
-          }
-        });
-        eventSource?.close();
-        if (channel) {
-          channel.close();
-          broadcastChannelRef.current = null;
+    const unsubscribeLeadership = coordinator.onLeadershipChange(
+      (leaderStatus) => {
+        setIsLeader(leaderStatus);
+        if (leaderStatus) {
+          openEventSourceIfLeader();
+        } else {
+          closeEventSource();
         }
-        setIsConnected(false);
-      };
-    } catch (err) {
-      console.error("Error al instanciar EventSource:", err);
-      setIsConnected(false);
+      }
+    );
+
+    void coordinator.start().then(() => {
+      const currentLeaderStatus = coordinator.isMainLogicWindow();
+      setIsLeader(currentLeaderStatus);
+      if (currentLeaderStatus) {
+        openEventSourceIfLeader();
+      }
+    });
+
+    return () => {
+      unsubscribeLeadership();
+      closeEventSource();
+      coordinator.stop();
+      coordinatorRef.current = null;
       if (channel) {
         channel.close();
         broadcastChannelRef.current = null;
       }
-    }
+      setIsConnected(false);
+      setIsLeader(false);
+    };
   }, [roomId, handleIncomingEvent]);
 
-  return { isConnected, lastEvent };
+  return { isConnected, lastEvent, isLeader };
 };
 
 export default useRoomEvents;
+

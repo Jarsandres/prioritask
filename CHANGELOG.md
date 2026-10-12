@@ -3,6 +3,150 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## 🎯 Versión 1.9.0 (Store Normalizado O(1) `useTasksState`, Primitiva `TaskItem` WAI-ARIA con Roving TabIndex, Prioridades P1–P4 & Paridad Optimista en `RoomTasks`) — [2026-10-12]
+
+### ⚡ Arquitectura Frontend Estilo Todoist Renderer, Accesibilidad WAI-ARIA & Conciliación SSE Unificada
+- **[REA-UI-030] Extracción de Patrones de Estado y UI desde `todoist-electron@9.31.0` (`app.asar`)**:
+  - Normalización de entidades en diccionarios O(1) (`byId` + `ids`), separación entre estado de dominio y estado de UI/overlays, *roving tabindex* WAI-ARIA y sistema de prioridades cromáticas P1–P4 (`#dc2626`, `#d97706`, `#2563eb`, `#64748b`).
+- **[FE-STORE-010] Store Normalizado O(1) y Mutaciones Optimistas con Rollback por Campo (`prioritask-frontend/src/hooks/useTasksState.ts`)**:
+  - Hook reactivo basado en `useReducer` con `byId`, `ids`, `pendingById` y `ui` (`focusedTaskId`, `selectedTaskIds`, `activeOverlay`, `lastError`).
+  - Mutaciones optimistas instantáneas (`toggleCompleteOptimistic`, `updateTaskOptimistic`, `setPriorityOptimistic`, `deleteTaskOptimistic`) con contador de operaciones concurrentes en vuelo (`inFlightRef`) y reversión atómica por campo sin pisar cambios paralelos.
+  - Conciliación en vivo O(1) (`reconcileLiveEvent`) para todos los eventos SSE y del puente IPC (`TASK_CREATED`, `TASK_UPDATED`, `TASK_DELETED`, `SUBTASK_TOGGLED`, `SUBTASK_CREATED`, `COMMENT_ADDED`, `COMMENT_DELETED`, `ATTACHMENT_ADDED`, `ATTACHMENT_DELETED`, `completeItem`, `uncompleteItem`).
+- **[FE-TASK-010] Primitiva `TaskItem` WAI-ARIA y Atajos de Teclado Estilo Todoist (`prioritask-frontend/src/components/tasks/TaskItem.tsx`, `TaskListView.tsx`, `KeyboardShortcutsModal.tsx`)**:
+  - Semántica accesible (`role="listitem"`, `role="checkbox"`, `aria-checked`, `aria-busy`), anillos y chips P1–P4, avance de ciclo recurrente (`onAdvance`), navegación espacial con `↑`/`↓`/`Home`/`End` y atajos de una tecla (`Espacio`/`x`, `e`/`Enter`, `1`–`4`, `Shift+Espacio`/`s`, `Supr`).
+- **[FE-PARITY-010] Consolidación en `TaskList.tsx` y `RoomTasks.tsx` (`prioritask-frontend/src/components/TaskList.tsx`, `src/pages/RoomTasks.tsx`)**:
+  - Integración completa de `RoomTasks.tsx` y `TaskList.tsx` sobre `useTasksState`, preservando caché L1 SWR (`cacheManager`), celebración de confeti (`usePixelConfetti`) y vinculación en vivo de `TaskPeekDrawer` con `byId`.
+- **[SEC-AUD-040 / BE-SYNC-020] Blindaje de Sincronización por Lotes, Anti-HLC Poisoning & Aislamiento por Savepoint (`app/schemas/sync.py`, `app/api/v1/endpoints/sync.py`, `app/api/v1/endpoints/tasks.py`, `app/schemas/user.py`)**:
+  - Validación estricta de HLC canónico (`_HLC_REGEX`) con cota de deriva temporal futura máxima (`+5 min`) en `validate_hlc_timestamp`, filtrado de campos mutables en `field_hlc` (`_MUTABLE_TASK_FIELDS`), y rechazo de marcas arbitrarias futuras (Anti-HLC Poisoning).
+  - Aislamiento transaccional por comando mediante Savepoint (`await session.begin_nested()`) en `POST /api/v1/sync/batch` ante `IntegrityError` en `task_create`.
+  - Validación de rango y finitud en `peso` (`math.isfinite`, rechazo de `NaN`/`Inf`/booleanos), límite de descripción (`<= 500` caracteres), cota de preferencias de usuario (máximo 32 claves, `<= 16 KB`) y autorización unificada para propietarios de hogares (`Room.owner_id == current_user.id`) en `_get_task_with_access`.
+- **[FE-SEC-010] Higiene de Sesión Integral y Blindaje contra Prototype Pollution (`prioritask-frontend/src/services/sessionCleanup.ts`, `src/hooks/useTasksState.ts`, `src/sync/tabCoordinator.ts`, `public/sw-reminders.js`)**:
+  - Función centralizada `clearClientSessionData` en `sessionCleanup.ts` para revocación e invalidación completa de cachés, IndexedDB y tokens al cerrar sesión.
+  - Protección contra Prototype Pollution en `useTasksState.ts` mediante `isSafeEntityId` y helper `hasOwnKey` (`Object.prototype.hasOwnProperty.call`) compatible con ES2020.
+  - Restricción Same-Origin en URLs de Service Worker (`sw-reminders.js`), allowlist de acciones de notificación y guardia de Web Lock en `TabLeaderCoordinator`.
+
+---
+
+## 🚀 Versión 1.8.0 (Concurrencia HLC/OCC, Endpoint Batch Sync, Coordinación Multi-Pestaña con Líder Único & Recordatorios Accionables en Segundo Plano) — [2026-10-12]
+
+### ⚡ Sincronización Distribuida Offline-First, Concurrencia HLC/OCC, Coordinación Multi-Pestaña & Recordatorios (Backend & Frontend)
+- **[REA-ARCH-020] Extracción de Patrones de Concurrencia, Multi-Ventana y Alarmas desde `todoist-electron@9.31.0` (`app.asar`)**:
+  - Resolución de conflictos y reanudación del sistema (`powerMonitor.on("resume")` con settle delay de `500ms`, `ev_e1ee5652...`).
+  - Coordinación multi-ventana con líder único (`We.mainLogicWindow`, `Gn(e)`, guardia de emisor `zi(e)`, `ev_bf3dffd5...`, `ev_82c2bbe0...`).
+  - Retención anti-GC de notificaciones (`Jt = new Map`, `ev_c65120c2...`) y acciones rápidas de posposición (`30m`, `3h`, `tomorrow9am`, `ev_5dc96362...`).
+- **[BE-SYNC-010] Control de Concurrencia Optimista (OCC), HLC por Campo y Endpoint Transaccional `POST /api/v1/sync/batch` (`app/models/task.py`, `app/schemas/sync.py`, `app/api/v1/endpoints/sync.py`, migración `f9b2c3d4e5a6`)**:
+  - Nuevas columnas `version: int`, `field_hlc: dict[str, str]` y `reminder_at: datetime | None` en `Task`, y tabla de idempotencia `ProcessedSyncCommand` (`processedsynccommand`).
+  - Resolución de conflictos por campo (`field-hlc-merge`) comparando marcas HLC por propiedad modificada sin sobrescribir campos disjuntos, mapeo `temp_id -> task.id`, validación Anti-IDOR y difusión SSE (`TASK_CREATED`, `TASK_UPDATED`, `TASK_DELETED`).
+- **[FE-HLC-010] Reloj Lógico Híbrido (`HybridLogicalClock`), Transporte HTTP Batch y Monitor de Reanudación (`prioritask-frontend/src/sync/hlc.ts`, `src/sync/offlineQueue.ts`)**:
+  - Implementación determinista de `HybridLogicalClock` (`<epoch_ms_13d>:<counter_hex_4d>:<node_id>`) con garantía de monotonicidad ante retrocesos de reloj físico.
+  - Transporte `createHttpSyncTransport`, clasificador `isTransientNetworkError` y monitor `attachSystemWakeupMonitor`.
+- **[FE-TAB-010] Coordinador Multi-Pestaña con Elección de Líder Único (`prioritask-frontend/src/sync/tabCoordinator.ts`, `src/hooks/useRoomEvents.ts`)**:
+  - Elección exclusiva mediante Web Locks API (`navigator.locks.request`) con fallback en `BroadcastChannel("prioritask_sync")` y guardia `isAuthorizedSender`.
+  - Refactorización de `useRoomEvents.ts` para mantener una única conexión `EventSource` SSE en la pestaña líder y retransmitir eventos en tiempo real a las pestañas seguidoras con failover automático.
+- **[FE-REM-010] Motor de Recordatorios Accionables en Segundo Plano (`prioritask-frontend/src/notifications/reminderScheduler.ts`, `public/sw-reminders.js`)**:
+  - Planificador persistente en IndexedDB (`prioritask_reminders_db`), mapa `activeNotifications` contra recolección de basura prematura, catch-up tras suspensión (`triggerWakeupCatchUp`), acciones `action.complete`, `action.snooze.30m`, `action.snooze.3h`, `action.snooze.tomorrow9am` y Service Worker `sw-reminders.js`.
+- **[QA-SYNC-020] Puerta de Calidad y Seguridad Consolidada (`tests/integration/test_sync_batch.py`, `tests/unit/test_sync_endpoint_unit.py`)**:
+  - **341 tests backend en verde (100% pass rate)** con **73.90% de cobertura global** (`100%` en `app/api/v1/endpoints/sync.py`), **34 suites unitarias frontend en Vitest (173 tests en verde)**, **0 errores en Ruff y ESLint**, y pipeline CI/CD completo en verde.
+
+---
+
+## 🔄 Versión 1.7.0 (Motor de Sincronización Offline, Optimistic UI, Cola de Comandos Transaccionales & Análisis REA Todoist Desktop) — [2026-10-11]
+
+### ⚡ Motor de Sincronización Offline, Optimistic UI y Cola Persistente (Frontend & Arquitectura)
+- **[REA-SYNC-010] Diagnóstico Estático de `todoist-electron@9.31.0` con REA (`app.asar`)**:
+  - Inspección estática sin ejecución sobre `app.asar` (SHA-256: `5d756871...`, 3.065 módulos JS, 86 canales IPC; Evidence IDs: `ev_a1a8042f...`, `ev_1b127198...`, `ev_57bc1908...`, `ev_8e654732...`, `ev_6c047951...`).
+  - Identificación del patrón de **Despacho por Sobres de Comando IPC (`DesktopBridgeEnvelope`)**, **Elección de Ventana Líder (`We.mainLogicWindow` vía `isMainLogicWindow`/`setMainLogicWindow`)** para prevenir condiciones de carrera sobre la cola local, y **Drenado Reactivo al Reanudar Red/Sistema (`sendRequestSync` / `handleWakeup` + `isNetworkError`)**.
+- **[FE-SYNC-010] Esquema de Comandos Transaccionales y Cola Local (`prioritask-frontend/src/sync/offlineQueue.ts`)**:
+  - Definición estricta en TypeScript de `SyncCommand`, `LocalSyncQueueState`, `OptimisticSnapshot`, `DesktopBridgeEnvelope`, `SyncBatchRequest` y `SyncBatchResponse`.
+  - Soporte nativo para generación de `uuid` de idempotencia y `temp_id` (`temp_<uuid>`) en creaciones offline (`task_create`), permitiendo encadenar mutaciones posteriores (`task_update`, `task_complete`, `task_delete`) sobre tareas aún no confirmadas por el servidor.
+- **[FE-SYNC-020] Motor `OfflineSyncEngine` con Actualización Optimista, Persistencia IndexedDB y Resolución de Conflictos (`prioritask-frontend/src/sync/offlineQueue.ts`)**:
+  - Mutación optimista inmediata en memoria (`dispatchMutation` + `applyMutationToMemory`) con captura automática de `OptimisticSnapshot` para rollback atómico ante errores permanentes (`4xx`).
+  - Adaptador de persistencia `IndexedDBQueueStorageAdapter` (`prioritask_sync_engine_db`) con fallback transparente en memoria.
+  - Reprocesamiento por lotes `flushQueue()` con traducción automática `temp_id -> server_id` (`temp_id_mapping`) y estrategias configurables de resolución de conflictos (`field-merge`, `last-write-wins`, `client-wins`, `server-wins`).
+- **[QA-SYNC-010] Suite de Pruebas Unitarias del Motor de Sincronización (`prioritask-frontend/src/sync/__tests__/offlineQueue.test.ts`)**:
+  - Cobertura automatizada en Vitest validando creaciones optimistas con `temp_id`, encadenamiento de comandos offline, mapeo a IDs definitivos del servidor tras `flushQueue()`, resolución de conflictos concurrentes mediante `field-merge` y rollback automático ante fallos definitivos.
+
+---
+
+## ✨ Versión 1.6.2 (Rediseño Split-Screen de Autenticación 21st.dev, Glassmorphism Inputs & Escaparate de Convivencia — UI/UX Polish) — [2026-10-11]
+
+### 🎨 Experiencia de Autenticación Split-Screen, Glassmorphism & Escaparate de Convivencia (Frontend)
+- **[FE-AUTH-010] Primitiva UI `SignInPage` y Subcomponentes Glassmorphic (`prioritask-frontend/src/components/ui/SignInPage.tsx`, `src/components/ui/index.ts`)**:
+  - Implementación de `SignInPage`, `GlassInputWrapper`, `TestimonialCard` y `GoogleIcon` tipados estrictamente en TypeScript (`SignInPageProps`, `Testimonial`).
+  - Soporte dual controlado (`email`, `password`, `rememberMe` + handlers) y no controlado (`new FormData(event.currentTarget)`), además de composición flexible vía `children` para formularios multi-campo.
+  - Preservación 100% retrocompatible de los selectores y etiquetas accesibles requeridos por la suite E2E Playwright (`e2e/smoke.spec.ts`).
+- **[FE-AUTH-020] Arquitectura CSS Split-Screen, Animaciones Escalonadas y Soporte Theme Studio (`prioritask-frontend/src/auth/Auth.css`)**:
+  - Sistema de animaciones de entrada escalonadas (`@keyframes fadeSlideIn`, `slideRightIn`, `testimonialIn` con `.animate-delay-100..1400`) y respeto estricto de accesibilidad vestibular mediante `@media (prefers-reduced-motion: reduce)`.
+  - Superficies `.glass-input-wrapper` (`backdrop-filter: blur(12px)`) y `.auth-testimonial-card` (`backdrop-filter: blur(16px)`) reactivas a las 5 paletas de acento del Theme Studio (`cobalt`, `crimson`, `emerald`, `violet`, `oled`) y a los modos claro/oscuro.
+- **[FE-AUTH-030] Escaparate de Convivencia con Esencia Prioritask y Armonización de Login/Registro (`prioritask-frontend/src/auth/Login.tsx`, `src/auth/Register.tsx`)**:
+  - Curación de `PRIORITASK_TESTIMONIALS` reflejando casos de uso reales de convivencia doméstica: Piso Compartido (`🔥 Racha 14d · P1`), Vida en Pareja (`⚖️ Reparto 50/50`) y Hogar Familiar (`👏 +120 pts Kiosco`).
+  - Persistencia segura de `rememberMe` en `Login.tsx` (`prioritask-remember-email` y almacenamiento condicional de `refreshToken`) e integración con `useToast()` para acciones secundarias (`onResetPassword`, `onGoogleSignIn`).
+  - Armonización visual de `Register.tsx` reutilizando `SignInPage` y `GlassInputWrapper` con medidor de fortaleza de contraseña en vivo (`getPasswordStrength`).
+- **[QA-AUTH-010] Suite Unitaria e Integración (`prioritask-frontend/src/__tests__/SignInPage.test.tsx`)**:
+  - Incorporación de 5 tests en Vitest + React Testing Library validando renderizado de la primitiva `SignInPage`, tarjetas de convivencia con badges, toggle accesible de visibilidad de contraseña, callbacks de formulario, persistencia de `rememberMe` en `Login` y flujo de registro en `Register`.
+
+---
+
+## 🛡️ Versión 1.6.1 (Remediación de Auditoría de Seguridad Cloudflare, Migración a PyJWT/Bcrypt & Blindaje Anti-Prompt Injection — Security Patch) — [2026-10-11]
+
+### 🔒 Remediación de Vulnerabilidades, Criptografía & Blindaje IA (Backend)
+- **[SEC-AUD-010] Eliminación de Fallback de Clave Secreta JWT y Validación de Postura de Seguridad (`app/services/auth.py`, `app/core/config.py`)**:
+  - Remediación de `auth-jwt-hardcoded-secret-key-fallback` (**CRITICAL**, CWE-798 / CWE-321 / CWE-287).
+  - Reemplazo de `os.getenv("JWT_SECRET_KEY", "dev-secret")` por `settings.JWT_SECRET_KEY`, eliminando la discrepancia entre variables de entorno del SO y el archivo `.env` gestionado por Pydantic.
+  - Definición de `INSECURE_JWT_SECRETS` y validador `@model_validator(mode="after")` `validate_security_posture` en `Settings` que bloquea claves inseguras o por defecto en cualquier entorno no de prueba.
+- **[SEC-AUD-020] Mitigación de Inyección Directa de Prompts en Subsistema IA (`app/services/AI/ollama_client.py`, `reformulator.py`, `task_organizer.py`, `priority_classifier.py`)**:
+  - Remediación de `ai-prompt-injection-task-reformulation` (**MEDIUM**, OWASP LLM01 / CWE-77).
+  - Implementación de la función `sanitize_prompt_input` (eliminación de caracteres de control, saltos de línea e inyecciones de cierre, escape de `"""`, `"`, `<`, `>`, y truncamiento defensivo a 200 caracteres).
+  - Encapsulado estricto de datos de usuario entre triples comillas `"""..."""`, instrucciones explícitas de tratamiento de datos pasivos (ignorando directivas embebidas) y soporte del parámetro `system` en `generate_json` para separación de roles en Ollama.
+- **[SEC-AUD-030] Modernización de Dependencias Criptográficas (`pyproject.toml`, `requirements.txt`, `app/services/auth.py`, `tests/`)**:
+  - Remediación de `supply-chain-deprecated-crypto-libraries` (**LOW**, CWE-1104, CVE-2024-33663, CVE-2024-33664).
+  - Reemplazo completo de las librerías sin mantenimiento `python-jose` y `passlib` por `PyJWT[crypto]>=2.8.0` y `bcrypt>=4.0.1` nativo.
+  - Configuración de `BCRYPT_ROUNDS` (`12` en producción/desarrollo y `4` en `tests/conftest.py` para velocidad de ejecución sin sacrificar cobertura real).
+- **[SEC-AUD-040] Blindaje de Persistencia en Producción e Higiene de Artefactos (`app/core/config.py`, `.gitignore`, `.dockerignore`)**:
+  - Cierre definitivo de `db-sqlite-file-insecure-default`.
+  - Prohibición automática en arranque de `DATABASE_URL` basada en SQLite y exigencia de entropía mínima (`len(JWT_SECRET_KEY) >= 32` caracteres / 256 bits) cuando `ENVIRONMENT="production"`.
+  - Exclusión de artefactos locales sensibles (`*.db.bak`, `*.db-shm`, `*.db-wal`, `*export*.json` y `audit-reports/`) en `.gitignore` y `.dockerignore`.
+- **[QA-AUD-010] Suite de Regresión de Seguridad y Quality Gate (`tests/unit/test_config.py`, `test_auth_service.py`, `test_ai_services.py`)**:
+  - Incorporación de 11 nuevos casos de prueba unitarios de seguridad (validación de secretos JWT, rechazo de SQLite en producción, expiración PyJWT, hashing Bcrypt directo y neutralización de Prompt Injection), alcanzando **316 tests en verde (100% pass rate)**, **70% de cobertura global** y **0 errores en Ruff**.
+
+---
+
+## 🚀 Versión 1.6.0 (Motor de Recurrencia Avanzado, Modos Fijo vs. Flotante, Anti-Deriva Mensual, Clonación de Subtareas & REA Skill — Sprint 13) — [2026-10-10]
+
+### ⚡ Motor de Recurrencia, Reglas y Persistencia (Backend)
+- **[REC-ENG-010] Modos de Recurrencia Fija y Flotante (`app/models/enums.py`, `recurrence_rule.py`, `migración e5a9b1c2d3f4`)**:
+  - Incorporación del enum `RecurrenceMode` (`FIXED` vs `FLOATING`), manteniendo estricta retrocompatibilidad en `RecurrenceFrequency` (`DAILY`, `WEEKLY`, `MONTHLY`).
+  - Extensión del modelo `RecurrenceRule` con `mode: RecurrenceMode`, `anchor_day_of_month: Optional[int]` y `reset_subtasks: bool = True`.
+  - Migración Alembic `e5a9b1c2d3f4_add_recurrence_mode_and_subtask_reset.py` que aplica `ALTER TABLE recurrencerule` con valores por defecto seguros.
+- **[REC-CALC-010] Algoritmo Anti-Deriva Mensual y Catch-Up en Vencimientos (`app/services/recurrence.py`)**:
+  - Implementación de `anchor_day_of_month` en `calculate_next_due`: si una tarea se creó el 31, no queda atrapada en el 28 tras pasar por febrero y salta correctamente al 31 en meses posteriores.
+  - Avance inteligente en modo `FIXED` con catch-up secuencial cuando la tarea está en mora frente al reloj actual.
+  - Avance en modo `FLOATING` (`every!`) anclado estrictamente a la fecha y hora de finalización real (`completed_at`).
+- **[REC-SUB-010] Clonación Automática y Reseteo de Subtareas (`app/services/recurrence.py`, `app/api/v1/endpoints/tasks.py`)**:
+  - `advance_recurring_task` clona la jerarquía completa de subtareas activas (`Subtask`) hacia la nueva instancia de tarea generada, reseteando su estado a `completada=False`.
+- **[REC-API-010] Sincronización en Endpoints REST y Notificaciones SSE (`app/api/v1/endpoints/tasks.py`, `app/schemas/task.py`)**:
+  - Integración transparente de `recurrence_rule` en `create_task`, `update_task`, `patch_task` y `patch_task_status`.
+  - Endpoint `POST /api/v1/tasks/{task_id}/advance` que finaliza el ciclo actual, genera la siguiente instancia recurrente, otorga puntos de gamificación y emite eventos SSE `TASK_UPDATED` y `TASK_CREATED`.
+  - Propiedad de acceso seguro `loaded_recurrence_rule` en `Task` para prevenir excepciones `MissingGreenlet` en validaciones Pydantic asíncronas.
+
+### 🖥️ Motor DSL, Vista Previa Visual y Avance Reactivo (Frontend)
+- **[FE-REC-010] Motor de Recurrencia en TypeScript (`prioritask-frontend/src/utils/recurrenceEngine.ts`)**:
+  - Analizador sintáctico DSL tolerante a fallos para expresiones en inglés y español (`every! 7 days`, `cada 2 semanas`, `every month`).
+  - Generador de previsualización `previewNextOccurrences` con proyección de los próximos N ciclos en tiempo real.
+  - Manejo UTC puro con aritmética de fechas segura contra desfases de zona horaria (DST).
+- **[FE-UI-010] Panel Interactivo de Configuración de Recurrencia (`TaskForm.tsx`)**:
+  - Sección expandible accesible con `aria-expanded` y `aria-controls` (`data-testid="recurrence-config-panel"`).
+  - Selector táctil de modo (Calendario fijo vs. Flotante al completar), chips de sugerencias rápidas, frecuencia, intervalo y fecha de finalización.
+  - Visualización en tiempo real de los próximos 4 ciclos mediante chips de previsualización (`recurrence-preview-chip`).
+- **[FE-ACT-010] Acción de Avance Inmediato de Tareas Recurrentes (`TaskList.tsx`)**:
+  - Conexión del callback `onAdvance` en `TaskCard` llamando al endpoint `/advance`, actualizando reactivamente la lista de tareas y notificando con toast sin recarga de página.
+
+### 🛠️ Herramientas de Ingeniería Inversa (Skills)
+- **[TOOL-REA-010] Integración de la Skill Reverse-Engineer-Anything (`.agents/skills/reverse-engineer-anything/`)**:
+  - Registro de capacidades REA para inspección de binarios nativos, empaquetados Electron (`app.asar`), aplicaciones Android/JavaScript y artefactos compilados.
+
+---
+
 ## 🚀 Versión 1.5.0 (Motor de Alto Rendimiento, Escalabilidad, Redis Pub/Sub, Virtualización DOM & Web Workers — Sprint 12) — [2026-10-08]
 
 ### ⚡ Motor de Alto Rendimiento, IA y Base de Datos (Backend)

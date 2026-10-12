@@ -314,6 +314,18 @@
   opacity: 0.7;
 }
 
+.task-list-row:focus-visible,
+.task-list-row.task-row-focused {
+  outline: none;
+  background-color: var(--bg-hover);
+  box-shadow: inset 3px 0 0 0 var(--primary-500, #3b82f6);
+}
+
+.task-list-row.task-row-selected {
+  background-color: var(--primary-50, rgba(59, 130, 246, 0.08));
+  box-shadow: inset 3px 0 0 0 var(--primary-600, #2563eb);
+}
+
 .task-list-title-cell {
   display: flex;
   flex-direction: column;
@@ -1883,6 +1895,1693 @@
     border-top: 1px solid #ccc !important;
     padding-top: 4px !important;
   }
+}
+
+/* =========================================================
+   11. TODOIST + 21st.DEV UI EXTENSION (PRIORITY RINGS, DUE DATES, QUICK-ADD)
+   ========================================================= */
+
+/* ── Priority-Ring Checkboxes (P1 Red, P2 Amber, P3 Blue, P4 Slate) ── */
+.ui-task-checkbox.priority-ring-p1,
+.task-list-checkbox.priority-ring-p1 {
+  border-color: var(--todoist-p1, #dc2626);
+  background-color: var(--todoist-p1-bg, rgba(220, 38, 38, 0.08));
+}
+.ui-task-checkbox.priority-ring-p1:hover:not(:disabled),
+.task-list-checkbox.priority-ring-p1:hover:not(:disabled) {
+  border-color: var(--todoist-p1, #dc2626);
+  background-color: rgba(220, 38, 38, 0.18);
+  color: var(--todoist-p1, #dc2626);
+}
+
+.ui-task-checkbox.priority-ring-p2,
+.task-list-checkbox.priority-ring-p2 {
+  border-color: var(--todoist-p2, #f59e0b);
+  background-color: var(--todoist-p2-bg, rgba(245, 158, 11, 0.09));
+}
+.ui-task-checkbox.priority-ring-p2:hover:not(:disabled),
+.task-list-checkbox.priority-ring-p2:hover:not(:disabled) {
+  border-color: var(--todoist-p2, #f59e0b);
+  background-color: rgba(245, 158, 11, 0.2);
+  color: var(--todoist-p2, #f59e0b);
+}
+
+.ui-task-checkbox.priority-ring-p3,
+.task-list-checkbox.priority-ring-p3 {
+  border-color: var(--todoist-p3, #2563eb);
+  background-color: var(--todoist-p3-bg, rgba(37, 99, 235, 0.08));
+}
+.ui-task-checkbox.priority-ring-p3:hover:not(:disabled),
+.task-list-checkbox.priority-ring-p3:hover:not(:disabled) {
+  border-color: var(--todoist-p3, #2563eb);
+  background-color: rgba(37, 99, 235, 0.18);
+  color: var(--todoist-p3, #2563eb);
+}
+
+.ui-task-checkbox.priority-ring-p4,
+.task-list-checkbox.priority-ring-p4 {
+  border-color: var(--todoist-p4, #94a3b8);
+}
+
+/* Keep completed checkbox green regardless of priority ring */
+.ui-task-checkbox.checked,
+.task-list-checkbox.checked {
+  background-color: var(--success-500) !important;
+  border-color: var(--success-500) !important;
+  color: #ffffff !important;
+}
+
+/* ── Subtle Left Accent Border on Task Cards by Priority ── */
+.ui-task-card.priority-card-p1:not(.task-done) {
+  border-left: 3px solid var(--todoist-p1, #dc2626);
+}
+.ui-task-card.priority-card-p2:not(.task-done) {
+  border-left: 3px solid var(--todoist-p2, #f59e0b);
+}
+.ui-task-card.priority-card-p3:not(.task-done) {
+  border-left: 3px solid var(--todoist-p3, #2563eb);
+}
+
+/* ── Semantic Due-Date Coloring (Todoist Overdue / Today / Upcoming) ── */
+.ui-task-due-date.due-overdue,
+.ui-task-meta-item.due-overdue,
+.task-list-due.due-overdue {
+  color: var(--todoist-due-overdue, #dc2626) !important;
+  font-weight: 600;
+}
+
+.ui-task-due-date.due-today,
+.ui-task-meta-item.due-today,
+.task-list-due.due-today {
+  color: var(--todoist-due-today, #059669) !important;
+  font-weight: 600;
+}
+
+.ui-task-due-date.due-upcoming,
+.ui-task-meta-item.due-upcoming,
+.task-list-due.due-upcoming {
+  color: var(--todoist-due-upcoming, #7c3aed);
+  font-weight: 500;
+}
+
+/* ── Todoist Inline Quick-Add Trigger Bar ── */
+.todoist-quick-add-trigger-bar {
+  margin-bottom: 16px;
+}
+
+.todoist-quick-add-trigger-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px dashed var(--border-default);
+  background-color: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.todoist-quick-add-plus-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--danger-500, #ef4444);
+  background-color: transparent;
+  transition: all 0.16s ease;
+  flex-shrink: 0;
+}
+
+.todoist-quick-add-trigger-btn:hover {
+  border-color: var(--danger-500, #ef4444);
+  border-style: solid;
+  color: var(--danger-600, #dc2626);
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.todoist-quick-add-trigger-btn:hover .todoist-quick-add-plus-circle {
+  background-color: var(--danger-500, #ef4444);
+  color: #ffffff;
+}
+
+.todoist-quick-add-trigger-text {
+  flex: 1;
+}
+
+.todoist-quick-add-kbd {
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-subtle);
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+/* ── Todoist Inline Quick-Add Composer Box ── */
+.todoist-quick-add-composer {
+  background-color: var(--bg-surface);
+  border: 1.5px solid var(--border-focus, #3b82f6);
+  border-radius: var(--radius-md, 10px);
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-md);
+  animation: todoistComposerIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes todoistComposerIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.todoist-composer-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.todoist-composer-title-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-heading);
+  outline: none;
+  padding: 2px 0;
+}
+
+.todoist-composer-title-input::placeholder {
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.todoist-composer-desc-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  outline: none;
+  padding: 2px 0;
+}
+
+.todoist-composer-desc-input::placeholder {
+  color: var(--text-subtle);
+}
+
+/* AI Rationale inline banner */
+.todoist-composer-ai-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm, 6px);
+  background-color: var(--ai-alert-bg);
+  border: 1px solid var(--ai-alert-border);
+  color: var(--ai-alert-text);
+  font-size: 12px;
+}
+
+.todoist-composer-ai-dismiss {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Attribute Pills Row */
+.todoist-composer-pills-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.todoist-composer-pill-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.todoist-attr-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  white-space: nowrap;
+}
+
+.todoist-attr-pill:hover:not(:disabled) {
+  background-color: var(--bg-subtle);
+  color: var(--text-heading);
+  border-color: var(--text-subtle);
+}
+
+.todoist-attr-pill.active-today {
+  background-color: var(--success-50);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: var(--success-600);
+  font-weight: 600;
+}
+
+.todoist-attr-pill.active-tomorrow,
+.todoist-attr-pill.active-recurrence {
+  background-color: var(--ai-50);
+  border-color: rgba(139, 92, 246, 0.35);
+  color: var(--ai-600);
+  font-weight: 600;
+}
+
+.todoist-attr-pill.active-priority {
+  font-weight: 600;
+  background-color: var(--bg-subtle);
+}
+
+.todoist-attr-pill-ai {
+  border-color: rgba(139, 92, 246, 0.35);
+  color: var(--ai-600);
+  background-color: var(--ai-50);
+}
+
+.todoist-attr-pill-ai:hover:not(:disabled) {
+  background-color: var(--ai-500);
+  color: #ffffff;
+  border-color: var(--ai-500);
+}
+
+.todoist-attr-pill-ai:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.todoist-attr-pill-date-picker {
+  font-size: 11.5px;
+  padding: 0 6px;
+}
+
+.todoist-attr-pill-select {
+  padding-right: 6px;
+}
+
+/* Popover Menus for Priority & Recurrence */
+.todoist-popover-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  min-width: 210px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.todoist-popover-recurrence {
+  min-width: 250px;
+}
+
+.todoist-popover-header {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-subtle);
+  padding: 4px 8px;
+}
+
+.todoist-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+
+.todoist-popover-item:hover,
+.todoist-popover-item.selected {
+  background-color: var(--bg-subtle);
+}
+
+.todoist-popover-divider {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 4px 0;
+}
+
+.todoist-dsl-form {
+  display: flex;
+  gap: 4px;
+  padding: 4px 6px;
+}
+
+.todoist-dsl-input {
+  flex: 1;
+  height: 28px;
+  font-size: 12px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background-color: var(--input-bg);
+  color: var(--text-main);
+  outline: none;
+}
+
+.todoist-dsl-input:focus {
+  border-color: var(--primary-500);
+}
+
+.todoist-dsl-apply-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--primary-500);
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Composer Footer */
+.todoist-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  gap: 8px;
+}
+
+.todoist-composer-room-indicator {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.todoist-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.todoist-btn-cancel {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--bg-subtle);
+  color: var(--text-main);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+
+.todoist-btn-cancel:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+}
+
+.todoist-btn-submit {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: none;
+  background-color: #dc2626;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s ease, opacity 0.14s ease;
+}
+
+.todoist-btn-submit:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+.todoist-btn-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.todoist-quick-add-trigger-hint {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.todoist-composer-ai-close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.todoist-date-pill-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.todoist-date-picker-label {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.todoist-hidden-date-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.todoist-pill-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.todoist-pill-clear-btn:hover {
+  background-color: var(--danger-50);
+  color: var(--danger-600);
+}
+
+.todoist-dropdown-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.todoist-attr-select {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+}
+
+.todoist-attr-select:hover,
+.todoist-attr-select:focus {
+  border-color: var(--text-subtle);
+  color: var(--text-heading);
+}
+
+.todoist-attr-pill.active-recurring {
+  background-color: var(--ai-50);
+  border-color: rgba(139, 92, 246, 0.35);
+  color: var(--ai-600);
+  font-weight: 600;
+}
+
+.todoist-ai-pill {
+  border-color: rgba(139, 92, 246, 0.35);
+  color: var(--ai-600);
+  background-color: var(--ai-50);
+}
+
+.todoist-ai-pill:hover:not(:disabled) {
+  background-color: var(--ai-500);
+  color: #ffffff;
+  border-color: var(--ai-500);
+}
+
+.todoist-ai-pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.todoist-recurrence-popover {
+  min-width: 250px;
+  padding: 8px;
+  gap: 6px;
+}
+
+.todoist-popover-input {
+  width: 100%;
+  height: 30px;
+  font-size: 12px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background-color: var(--input-bg);
+  color: var(--text-main);
+  outline: none;
+}
+
+.todoist-popover-input:focus {
+  border-color: var(--primary-500);
+}
+
+.todoist-popover-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.todoist-mini-chip {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.todoist-mini-chip:hover,
+.todoist-mini-chip.active {
+  background-color: var(--primary-50);
+  border-color: var(--primary-500);
+  color: var(--primary-600);
+}
+
+.todoist-popover-clear {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--danger-600);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px;
+  cursor: pointer;
+  text-align: center;
+  border-radius: 4px;
+}
+
+.todoist-popover-clear:hover {
+  background-color: var(--danger-50);
+}
+
+.todoist-composer-project-indicator {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── Dashboard "Enfoque de Hoy" Focus Rows ── */
+.todoist-focus-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.todoist-focus-row:hover,
+.todoist-focus-row:focus-visible {
+  background-color: var(--bg-hover);
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-xs);
+  outline: none;
+}
+
+.todoist-focus-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.todoist-focus-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.todoist-focus-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.todoist-focus-submeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.todoist-focus-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .todoist-popover-menu,
+  .todoist-recurrence-popover {
+    max-width: calc(100vw - 36px);
+    min-width: min(220px, calc(100vw - 36px));
+    box-sizing: border-box;
+  }
+
+  .todoist-focus-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* =========================================================
+   12. ROADMAP EXTENSIONS: NLP TOKENS, PEEK DRAWER & BENTO KARMA
+   ========================================================= */
+
+/* ── Live NLP Token Highlighting Bar & Slash Suggestions ── */
+.todoist-nlp-tokens-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  margin: 4px 0;
+  border-radius: 8px;
+  background-color: var(--bg-subtle);
+  border: 1px dashed var(--border-default);
+  font-size: 11.5px;
+}
+
+.todoist-nlp-tokens-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--ai-600, #7c3aed);
+}
+
+.todoist-nlp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.todoist-nlp-chip-date {
+  background-color: var(--success-50);
+  color: var(--success-600);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.todoist-nlp-chip-priority {
+  background-color: var(--danger-50);
+  color: var(--danger-600);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+.todoist-nlp-chip-category {
+  background-color: var(--primary-50);
+  color: var(--primary-600);
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+.todoist-nlp-chip-recurrence {
+  background-color: var(--ai-50);
+  color: var(--ai-600);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.todoist-nlp-clean-preview {
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.todoist-nlp-suggest-popover {
+  position: absolute;
+  top: 34px;
+  left: 0;
+  z-index: 80;
+  min-width: 260px;
+  max-width: 360px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Slide-Over Task Peek Drawer (Todoist / Linear / 21st.dev) ── */
+.task-peek-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+  background-color: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  justify-content: flex-end;
+  animation: peekBackdropFadeIn 0.18s ease-out;
+}
+
+@keyframes peekBackdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.task-peek-drawer {
+  width: min(540px, 100vw);
+  height: 100vh;
+  background-color: var(--bg-surface);
+  border-left: 1px solid var(--border-default);
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: peekDrawerSlideIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes peekDrawerSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.task-peek-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-default);
+  background-color: var(--bg-surface);
+  flex-shrink: 0;
+}
+
+.task-peek-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.task-peek-icon-btn:hover {
+  background-color: var(--bg-subtle);
+  color: var(--text-heading);
+}
+
+.task-peek-icon-btn.danger:hover {
+  background-color: var(--danger-50);
+  color: var(--danger-600);
+}
+
+.task-peek-drawer-body {
+  padding: 18px 20px 32px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.task-peek-title-input {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-heading);
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.task-peek-title-input:focus {
+  border-color: var(--border-focus);
+  background-color: var(--bg-subtle);
+}
+
+.task-peek-desc-input {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.task-peek-desc-input:focus {
+  border-color: var(--border-focus);
+  background-color: var(--bg-subtle);
+  color: var(--text-main);
+}
+
+.task-peek-props-card {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg, 14px);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-peek-prop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.task-peek-prop-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 95px;
+}
+
+.task-peek-recurrence-preview {
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-default);
+}
+
+.task-peek-section {
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--border-default);
+}
+
+/* ── Bento Dashboard Daily Goal Ring & Karma Widget ── */
+.bento-karma-widget {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.bento-karma-ring-card,
+.bento-karma-breakdown-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl, 18px);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.bento-badge-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background-color: var(--primary-50);
+  color: var(--primary-600);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bento-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.bento-ring-main {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 8px;
+}
+
+.bento-svg-wrapper {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  flex-shrink: 0;
+}
+
+.bento-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.bento-ring-fraction {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-heading);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.bento-ring-sublabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.bento-ring-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.bento-karma-points {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.bento-weekly-heatmap {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  padding: 8px 10px;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+
+.bento-heatmap-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.bento-heatmap-cell {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
+}
+
+.bento-heatmap-cell.level-1 {
+  background-color: var(--primary-50);
+  border-color: var(--primary-500);
+  color: var(--primary-600);
+}
+
+.bento-heatmap-cell.level-2 {
+  background-color: var(--primary-500);
+  border-color: var(--primary-600);
+  color: #ffffff;
+}
+
+.bento-heatmap-cell.level-3 {
+  background-color: var(--success-500, #10b981);
+  border-color: var(--success-600, #059669);
+  color: #ffffff;
+}
+
+.bento-heatmap-col.is-today .bento-heatmap-label {
+  color: var(--primary-600);
+  font-weight: 700;
+}
+
+.bento-heatmap-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.bento-cozy-subtasks-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  margin-top: 4px;
+  background-color: var(--bg-subtle);
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+}
+
+.bento-cozy-subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-main);
+}
+
+.bento-cozy-subtask-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  flex-shrink: 0;
+}
+
+.bento-cozy-subtask-dot.checked {
+  background-color: var(--success-500, #10b981);
+  border-color: var(--success-500, #10b981);
+}
+
+/* =========================================================
+   13. FASE 4 ROADMAP: DRAG & DROP CONVIVIENTES, KUDOS & MODO KIOSCO
+   ========================================================= */
+
+/* ── Barra de Asignación Rápida Drag & Drop de Convivientes ── */
+.room-member-avatars-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg, 14px);
+  box-shadow: var(--shadow-xs);
+}
+
+.room-member-bar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.room-member-avatars-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.room-member-avatar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-subtle);
+  color: var(--text-heading);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: grab;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.room-member-avatar-pill:hover {
+  border-color: var(--primary-500);
+  background-color: var(--primary-50);
+  transform: translateY(-1px);
+}
+
+.room-member-avatar-pill.active {
+  border-color: var(--primary-500);
+  background-color: var(--primary-500);
+  color: #ffffff;
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+.room-member-avatar-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.room-member-avatar-pill.active .room-member-avatar-circle {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.room-member-active-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background-color: var(--primary-50);
+  color: var(--primary-600);
+  border: 1px solid var(--primary-100);
+  font-size: 11.5px;
+}
+
+.room-member-hint-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 2px;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.ui-task-card.is-member-drop-target,
+.task-list-row.is-member-drop-target {
+  border-color: var(--primary-500) !important;
+  box-shadow: 0 0 0 3px var(--primary-100), var(--shadow-md) !important;
+  transform: scale(1.01);
+}
+
+.ui-task-assignees-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ui-task-assignee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 3px;
+  border-radius: 999px;
+  border: 1px solid var(--primary-100);
+  background-color: var(--primary-50);
+  color: var(--primary-600);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.ui-task-assignee-chip:hover {
+  background-color: var(--danger-50);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: var(--danger-600);
+}
+
+.ui-task-assignee-initials {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background-color: var(--primary-500);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.ui-task-quick-assign-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px dashed var(--primary-500);
+  background-color: var(--primary-50);
+  color: var(--primary-600);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ui-task-quick-assign-btn:hover {
+  background-color: var(--primary-500);
+  color: #ffffff;
+}
+
+/* ── Reacciones y Reconocimiento Rápido ("Kudos": 👏, 🔥, ❤️) ── */
+.ui-task-kudos-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+}
+
+.ui-task-kudos-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.ui-task-kudos-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ui-task-kudos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-surface);
+  color: var(--text-heading);
+  font-size: 12px;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.ui-task-kudos-btn:hover {
+  transform: scale(1.08);
+  border-color: var(--primary-500);
+}
+
+.ui-task-kudos-btn.active {
+  background-color: var(--primary-50);
+  border-color: var(--primary-500);
+  color: var(--primary-600);
+  font-weight: 700;
+}
+
+.ui-task-kudos-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Modo Kiosco / Tablet de Cocina (Always-On Display + Pomodoro) ── */
+.kitchen-kiosk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: radial-gradient(circle at top right, #111827 0%, #070b14 100%);
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.kitchen-kiosk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 20px;
+}
+
+.kitchen-kiosk-brand-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.22);
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  color: #60a5fa;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kitchen-kiosk-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+.kitchen-kiosk-subtitle {
+  font-size: 13.5px;
+  color: #94a3b8;
+}
+
+.kitchen-kiosk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kitchen-kiosk-pill-amber {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.kitchen-kiosk-pill-emerald {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.kitchen-kiosk-clock {
+  font-size: 32px;
+  font-weight: 800;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+}
+
+.kitchen-kiosk-touch-btn {
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 15px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.kitchen-kiosk-exit-btn {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.kitchen-kiosk-exit-btn:hover {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.btn-kiosk-primary {
+  background: #2563eb;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.btn-kiosk-warning {
+  background: #d97706;
+  border-color: #f59e0b;
+  color: #ffffff;
+}
+
+.btn-kiosk-emerald {
+  background: #059669;
+  border-color: #10b981;
+  color: #ffffff;
+}
+
+.btn-kiosk-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #e2e8f0;
+}
+
+.kitchen-kiosk-body {
+  display: grid;
+  grid-template-columns: minmax(300px, 370px) 1fr;
+  gap: 20px;
+  flex: 1;
+}
+
+@media (max-width: 900px) {
+  .kitchen-kiosk-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kitchen-kiosk-pomodoro-card {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kitchen-kiosk-timer-display {
+  font-size: 56px;
+  font-weight: 900;
+  text-align: center;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  padding: 12px 0;
+}
+
+.kitchen-kiosk-timer-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.kitchen-kiosk-timer-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #10b981);
+  transition: width 0.3s ease;
+}
+
+.kitchen-kiosk-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.kitchen-kiosk-preset-btn {
+  min-height: 52px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.kitchen-kiosk-preset-btn.active {
+  border-color: #60a5fa;
+  background: rgba(37, 99, 235, 0.28);
+  color: #ffffff;
+}
+
+.kitchen-kiosk-tasks-panel {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kitchen-kiosk-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kitchen-kiosk-task-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.kitchen-kiosk-task-row.is-done {
+  opacity: 0.82;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.kitchen-kiosk-complete-btn {
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 14px;
+  border: 2px solid #60a5fa;
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.kitchen-kiosk-complete-btn.checked {
+  border-color: #10b981;
+  background: #059669;
+  color: #ffffff;
+}
+
+.kitchen-kiosk-task-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.kitchen-kiosk-task-title {
+  font-size: 19px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.kitchen-kiosk-task-row.is-done .kitchen-kiosk-task-title {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.kitchen-kiosk-task-desc {
+  font-size: 14px;
+  color: #cbd5e1;
+}
+
+.kitchen-kiosk-cat-badge,
+.kitchen-kiosk-date-badge,
+.kitchen-kiosk-assignees-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+.kitchen-kiosk-kudos-btn {
+  min-height: 52px;
+  min-width: 56px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.kitchen-kiosk-kudos-btn.active {
+  border-color: #fbbf24;
+  background: rgba(245, 158, 11, 0.25);
+}
+
+.kitchen-kiosk-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
 }
 
 

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import CommandPaletteModal, { searchLRUCache, QueryLRUCache } from "../CommandPaletteModal";
-import { cacheManager } from "../../../services/cacheManager";
+import CommandPaletteModal from "../CommandPaletteModal";
+import { cacheManager, searchLRUCache, QueryLRUCache } from "../../../services/cacheManager";
 import api from "../../../api";
 import type { Task } from "../../../types/task";
 

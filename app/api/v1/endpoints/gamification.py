@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -80,6 +80,8 @@ async def get_room_gamification(
 )
 async def list_room_rewards(
     room_id: UUID,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -93,6 +95,8 @@ async def list_room_rewards(
             HouseholdReward.deleted_at.is_(None),
         )
         .order_by(HouseholdReward.cost_points.asc())
+        .offset(skip)
+        .limit(limit)
     )
     rewards = (await session.exec(stmt)).all()
     return rewards

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import api from "../api";
 import { useNavigate, Link } from "react-router-dom";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
@@ -15,7 +15,10 @@ import TaskListView from "./tasks/TaskListView";
 import TaskKanbanBoard from "./tasks/TaskKanbanBoard";
 import TaskCalendarView from "./tasks/TaskCalendarView";
 import { useRoomEvents } from "../hooks/useRoomEvents";
+import { useTasksState } from "../hooks/useTasksState";
 import FilterBar from "./tasks/FilterBar";
+import QuickAddTaskBar from "./tasks/QuickAddTaskBar";
+import TaskPeekDrawer from "./tasks/TaskPeekDrawer";
 import {
   LuPlus,
   LuSparkles,
@@ -26,12 +29,12 @@ import {
 import "./tasks/tasks.css";
 
 const TaskList = () => {
-  const [tareas, setTareas] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [estado, setEstado] = useState("");
   const [categoria, setCategoria] = useState("");
   const [fechaLimite, setFechaLimite] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  const [debouncedBusqueda, setDebouncedBusqueda] = useState("");
 
   const [viewMode, setViewMode] = useState<TaskViewMode>(() => {
     return (localStorage.getItem("tasks_view_mode") as TaskViewMode) || "grid";
@@ -40,47 +43,58 @@ const TaskList = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [peekTask, setPeekTask] = useState<Task | null>(null);
 
   const navigate = useNavigate();
   const { version, notifyUpdate } = useTaskUpdate();
   const { roomId } = useRoom();
   const { toast } = useToast();
 
-  // Cliente de Sincronización en Vivo SSE y BroadcastChannel para la sala activa con conciliación in-place
-  const handleLiveEvent = useCallback((event: { type: string; data: unknown }) => {
-    if (!event || !event.type) return;
-    if (event.type === "TASK_CREATED") {
-      const newTask = event.data as Task;
-      if (newTask && newTask.id) {
-        setTareas((prev) =>
-          prev.some((t) => t.id === newTask.id)
-            ? prev.map((t) => (t.id === newTask.id ? { ...t, ...newTask } : t))
-            : [newTask, ...prev]
-        );
-      }
-    } else if (event.type === "TASK_UPDATED") {
-      const updated = event.data as Partial<Task> & { id: string };
-      if (updated && updated.id) {
-        setTareas((prev) =>
-          prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
-        );
-      }
-    } else if (event.type === "TASK_DELETED") {
-      const payload = event.data as { id?: string; task_id?: string } | string;
-      const deletedId =
-        typeof payload === "string" ? payload : payload?.id || payload?.task_id;
-      if (deletedId) {
-        setTareas((prev) => prev.filter((t) => t.id !== deletedId));
-      }
-    }
-  }, []);
+  const {
+    byId,
+    tasks: tareas,
+    pendingById,
+    ui: tasksUi,
+    getTaskById,
+    setTasks: setTareas,
+    upsertTask,
+    reconcileLiveEvent,
+    toggleCompleteOptimistic,
+    updateTaskOptimistic,
+    setPriorityOptimistic,
+    deleteTaskOptimistic,
+    setFocusedTaskId,
+    moveFocus,
+    toggleSelectTask,
+  } = useTasksState({
+    onOptimisticError: (err) => toast.error(err.message),
+  });
 
-  const { isConnected: isLiveConnected } = useRoomEvents(roomId, handleLiveEvent);
+  const { isConnected: isLiveConnected } = useRoomEvents(roomId, reconcileLiveEvent);
 
   const handleChangeViewMode = (mode: TaskViewMode) => {
-    setViewMode(mode);
+    const docWithTransition = document as Document & {
+      startViewTransition?: (cb: () => void) => void;
+    };
+    if (typeof docWithTransition.startViewTransition === "function") {
+      docWithTransition.startViewTransition(() => {
+        setViewMode(mode);
+      });
+    } else {
+      setViewMode(mode);
+    }
     localStorage.setItem("tasks_view_mode", mode);
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedBusqueda(busqueda);
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [busqueda]);
 
   const fetchTareas = useCallback(async () => {
     setLoading(true);
@@ -89,7 +103,7 @@ const TaskList = () => {
       if (estado) params.estado = estado;
       if (categoria) params.categoria = categoria;
       if (fechaLimite) params.due_date_max = fechaLimite;
-      if (busqueda) params.search = busqueda;
+      if (debouncedBusqueda) params.search = debouncedBusqueda;
       if (roomId) params.room_id = roomId;
 
       const res = await api.get<Task[]>("/tasks", { params });
@@ -99,24 +113,11 @@ const TaskList = () => {
     } finally {
       setLoading(false);
     }
-  }, [estado, categoria, fechaLimite, busqueda, roomId]);
+  }, [estado, categoria, fechaLimite, debouncedBusqueda, roomId, setTareas]);
 
   useEffect(() => {
     fetchTareas();
   }, [fetchTareas, version]);
-
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      fetchTareas();
-    }, 400);
-
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [busqueda]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const promptDelete = (tarea: Task) => {
     setTaskToDelete(tarea);
@@ -126,27 +127,25 @@ const TaskList = () => {
     if (!taskToDelete) return;
     const id = taskToDelete.id;
     setDeletingId(id);
-    try {
-      await api.delete(`/tasks/${id}`);
-      setTareas((prev) => prev.filter((t) => t.id !== id));
+    setTaskToDelete(null);
+    const ok = await deleteTaskOptimistic(id);
+    setDeletingId(null);
+    if (ok) {
       notifyUpdate();
-      setTaskToDelete(null);
       toast.success("Tarea eliminada correctamente");
-    } catch (error) {
-      console.error("Error al eliminar tarea:", error);
-      toast.error("Ocurrió un error al eliminar la tarea.");
-    } finally {
-      setDeletingId(null);
     }
   };
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     setCompletingId(taskId);
-    try {
-      await api.patch(`/tasks/${taskId}/status`, { estado: newStatus });
-      setTareas((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, estado: newStatus } : t))
-      );
+    const ok = await updateTaskOptimistic(
+      taskId,
+      { estado: newStatus, completed: newStatus === "DONE" },
+      async (id) =>
+        (await api.patch<Task>(`/tasks/${id}/status`, { estado: newStatus })).data
+    );
+    setCompletingId(null);
+    if (ok) {
       notifyUpdate();
       if (newStatus === "DONE") {
         toast.success("¡Tarea completada! 🎉");
@@ -155,19 +154,50 @@ const TaskList = () => {
       } else {
         toast.info("Tarea movida a Por Hacer");
       }
-    } catch (error) {
-      console.error("Error al cambiar estado:", error);
-      toast.error("Error al actualizar el estado de la tarea.");
-    } finally {
-      setCompletingId(null);
     }
   };
 
   const handleToggleComplete = async (taskId: string) => {
-    const task = tareas.find((t) => t.id === taskId);
-    if (!task) return;
-    const nextStatus: TaskStatus = task.estado === "DONE" ? "TODO" : "DONE";
-    await handleStatusChange(taskId, nextStatus);
+    const prev = getTaskById(taskId);
+    if (!prev) return;
+    const nextStatus: TaskStatus = prev.estado === "DONE" ? "TODO" : "DONE";
+    setCompletingId(taskId);
+    const ok = await toggleCompleteOptimistic(taskId);
+    setCompletingId(null);
+    if (ok) {
+      notifyUpdate();
+      if (nextStatus === "DONE") {
+        toast.success("¡Tarea completada! 🎉");
+      } else {
+        toast.info("Tarea movida a Por Hacer");
+      }
+    }
+  };
+
+  const handlePriorityChange = async (taskId: string, nextPeso: number) => {
+    const ok = await setPriorityOptimistic(taskId, nextPeso);
+    if (ok) {
+      notifyUpdate();
+    }
+  };
+
+  const handleAdvanceTask = async (taskId: string) => {
+    try {
+      const res = await api.post<Task>(`/tasks/${taskId}/advance`);
+      reconcileLiveEvent({
+        type: "TASK_UPDATED",
+        data: { id: taskId, estado: "DONE", completed: true },
+      });
+      if (res.data?.id) {
+        upsertTask(res.data, "prepend");
+      }
+      notifyUpdate();
+      const nextDueStr = res.data?.due_date ? ` (próxima: ${String(res.data.due_date).slice(0, 10)})` : "";
+      toast.success(`Rutina avanzada al siguiente ciclo 🔄${nextDueStr}`);
+    } catch (error) {
+      console.error("Error al avanzar la tarea recurrente:", error);
+      toast.error("Error al avanzar la tarea recurrente.");
+    }
   };
 
   const handleClearFilters = () => {
@@ -175,6 +205,7 @@ const TaskList = () => {
     setCategoria("");
     setFechaLimite("");
     setBusqueda("");
+    setDebouncedBusqueda("");
   };
 
   return (
@@ -236,6 +267,13 @@ const TaskList = () => {
         totalTasks={tareas}
       />
 
+      {/* Entrada Rápida Inline Estilo Todoist */}
+      <QuickAddTaskBar
+        roomId={roomId}
+        onTaskCreated={(newTask) => upsertTask(newTask, "prepend")}
+        className="mb-3"
+      />
+
       {/* Renderizado de vistas */}
       {loading ? (
         <div className="row g-3">
@@ -289,10 +327,11 @@ const TaskList = () => {
               <TaskCard
                 task={tarea}
                 onComplete={handleToggleComplete}
-                onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+                onEdit={(t) => setPeekTask(t)}
                 onDelete={promptDelete}
-                isCompleting={completingId === tarea.id}
-                isDeleting={deletingId === tarea.id}
+                onAdvance={handleAdvanceTask}
+                isCompleting={completingId === tarea.id || pendingById[tarea.id] === "completing"}
+                isDeleting={deletingId === tarea.id || pendingById[tarea.id] === "deleting"}
               />
             </div>
           ))}
@@ -301,16 +340,24 @@ const TaskList = () => {
         <TaskListView
           tasks={tareas}
           onComplete={handleToggleComplete}
-          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
+          onAdvance={handleAdvanceTask}
+          onPriorityChange={handlePriorityChange}
           completingId={completingId}
           deletingId={deletingId}
+          pendingById={pendingById}
+          focusedTaskId={tasksUi.focusedTaskId}
+          selectedTaskIds={tasksUi.selectedTaskIds}
+          onFocusTask={setFocusedTaskId}
+          onNavigateFocus={moveFocus}
+          onToggleSelect={toggleSelectTask}
         />
       ) : viewMode === "calendar" ? (
         <TaskCalendarView
           tasks={tareas}
           onComplete={handleToggleComplete}
-          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
           completingId={completingId}
           deletingId={deletingId}
@@ -319,12 +366,26 @@ const TaskList = () => {
         <TaskKanbanBoard
           tasks={tareas}
           onStatusChange={handleStatusChange}
-          onEdit={(t) => navigate(`/tasks/edit/${t.id}`)}
+          onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
           completingId={completingId}
           deletingId={deletingId}
         />
       )}
+
+      {/* Slide-Over Task Peek Drawer (Edición y detalle sin cambio de ruta) */}
+      <TaskPeekDrawer
+        task={peekTask ? (byId[peekTask.id] ?? peekTask) : null}
+        isOpen={Boolean(peekTask)}
+        onClose={() => setPeekTask(null)}
+        onComplete={handleToggleComplete}
+        onDelete={promptDelete}
+        onAdvance={handleAdvanceTask}
+        onTaskUpdated={(updated) => {
+          upsertTask(updated);
+          setPeekTask(updated);
+        }}
+      />
 
       {/* Modal de confirmación para eliminar */}
       <ConfirmModal

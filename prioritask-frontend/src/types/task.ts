@@ -31,6 +31,17 @@ export interface SubtaskUpdate {
   orden?: number;
 }
 
+export interface RecurrenceRuleSummary {
+  id?: string;
+  frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+  interval: number;
+  mode: "FIXED" | "FLOATING";
+  next_due?: string;
+  end_date?: string | null;
+  anchor_day_of_month?: number | null;
+  reset_subtasks?: boolean;
+}
+
 export interface Task {
   id: string;
   titulo: string;
@@ -39,15 +50,22 @@ export interface Task {
   categoria: string;
   peso: number;
   due_date?: string;
+  created_at?: string;
+  updated_at?: string;
   deleted_at?: string | null;
   room_id?: string | null;
   tags?: Tag[];
   is_recurring?: boolean;
+  recurrence_rule?: RecurrenceRuleSummary | null;
   subtasks?: Subtask[];
   subtasks_count?: number;
   subtasks_completed_count?: number;
   comments_count?: number;
   attachments_count?: number;
+  completed?: boolean;
+  reminder_at?: string | null;
+  version?: number;
+  field_hlc?: Record<string, string>;
 }
 
 export type { TaskAttachment } from "./attachment";
@@ -115,7 +133,7 @@ export interface HistoryEntry {
 }
 
 export interface Assignment {
-  id: number;
+  id: string;
   task_id: string;
   user_id: string;
   asignado_por: string;

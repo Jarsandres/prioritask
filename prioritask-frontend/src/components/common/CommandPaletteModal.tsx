@@ -18,7 +18,7 @@ import {
 } from "react-icons/lu";
 import api from "../../api";
 import { useRoom } from "../../context/RoomContext";
-import { cacheManager } from "../../services/cacheManager";
+import { cacheManager, searchLRUCache } from "../../services/cacheManager";
 import type { TaskSearchResponse, SearchResultItem } from "../../types/search";
 import type { Room } from "../../types/task";
 import "./CommandPaletteModal.css";
@@ -58,54 +58,6 @@ interface TaskCommandItem {
 }
 
 type PaletteCommandItem = ActionCommandItem | RoomCommandItem | TaskCommandItem;
-
-/**
- * Estructura de datos LRU (Least Recently Used) en memoria con capacidad fija de 50 consultas.
- */
-export class QueryLRUCache<K, V> {
-  private capacity: number;
-  private cache: Map<K, V>;
-
-  constructor(capacity = 50) {
-    this.capacity = capacity;
-    this.cache = new Map<K, V>();
-  }
-
-  get(key: K): V | undefined {
-    if (!this.cache.has(key)) return undefined;
-    const value = this.cache.get(key)!;
-    this.cache.delete(key);
-    this.cache.set(key, value);
-    return value;
-  }
-
-  set(key: K, value: V): void {
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.capacity) {
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey !== undefined) {
-        this.cache.delete(oldestKey);
-      }
-    }
-    this.cache.set(key, value);
-  }
-
-  has(key: K): boolean {
-    return this.cache.has(key);
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-
-  size(): number {
-    return this.cache.size;
-  }
-}
-
-// Instancia compartida del LRU Cache (Capa 2) para el Command Palette
-export const searchLRUCache = new QueryLRUCache<string, SearchResultItem[]>(50);
 
 export const CommandPaletteModal = ({
   isOpen,

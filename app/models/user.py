@@ -1,5 +1,6 @@
+import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship, SQLModel
@@ -20,12 +21,13 @@ if TYPE_CHECKING:
 class Usuario(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     email: str = Field(index=True, sa_column_kwargs={"unique": True})
-    nombre : str | None = Field(default="Sin nombre", max_length=50)
+    nombre : str | None = Field(default="Sin nombre", max_length=100)
     hashed_password: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     is_active: bool = Field(default=True)
     is_superuser: bool = Field(default=False)
     token_version: int = Field(default=1, nullable=False)
+    preferences_json: str | None = Field(default=None)
 
     rooms:   list["Room"]  = Relationship(back_populates="owner")
     rooms_member: list["RoomMember"] = Relationship(back_populates="user")
@@ -38,4 +40,15 @@ class Usuario(SQLModel, table=True):
     @property
     def role(self) -> UserRole:
         return UserRole.ADMIN if self.is_superuser else UserRole.USER
+
+    @property
+    def preferences(self) -> dict[str, Any]:
+        if not self.preferences_json:
+            return {}
+        try:
+            parsed = json.loads(self.preferences_json)
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+
 

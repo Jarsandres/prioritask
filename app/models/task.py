@@ -46,6 +46,13 @@ class Task(SQLModel, table=True):
             "due_date",
             "user_id",
         ),
+        sa.Index(
+            "ix_task_is_recurring_completed_deleted_at_due_date",
+            "is_recurring",
+            "completed",
+            "deleted_at",
+            "due_date",
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -56,13 +63,24 @@ class Task(SQLModel, table=True):
     peso: float = 1.0
     completed: bool = Field(default=False, index=True)
     due_date: datetime | None = None
+    reminder_at: datetime | None = Field(default=None, index=True)
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
+    version: int = Field(
+        default=1,
+        sa_column=sa.Column(sa.Integer, nullable=False, server_default="1"),
+    )
+    field_hlc: dict[str, str] = Field(
+        default_factory=dict,
+        sa_column=sa.Column(sa.JSON, nullable=False, server_default="{}"),
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None, index=True)
 
     user_id: UUID = Field(foreign_key="usuario.id", index=True)
-    room_id: UUID = Field(foreign_key="room.id", nullable=False, index=True)
+    room_id: UUID = Field(
+        foreign_key="room.id", ondelete="CASCADE", nullable=False, index=True
+    )
 
     usuario: Optional["Usuario"] = Relationship(back_populates="tasks")
     room: Optional["Room"] = Relationship(back_populates="tasks")
@@ -70,7 +88,10 @@ class Task(SQLModel, table=True):
         back_populates="task",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    colaboradores: list["TaskAssignment"] = Relationship(back_populates="task")
+    colaboradores: list["TaskAssignment"] = Relationship(
+        back_populates="task",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
     etiquetas: list["TaskTag"] = Relationship(
         back_populates="tarea",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
@@ -114,6 +135,13 @@ class Task(SQLModel, table=True):
         return sum(1 for s in self.subtasks if s.completada and getattr(s, "deleted_at", None) is None)
 
     @property
+    def loaded_recurrence_rule(self) -> Optional["RecurrenceRule"]:
+        """Return associated RecurrenceRule without triggering lazy load."""
+        if "recurrence_rule" not in self.__dict__:
+            return None
+        return self.recurrence_rule
+
+    @property
     def owner_id(self) -> UUID:
         return self.user_id
 
@@ -126,6 +154,7 @@ class TaskHistory(SQLModel, table=True):
     __tablename__ = "taskhistory"
     __table_args__ = (
         sa.Index("ix_task_history_task_id_timestamp", "task_id", "timestamp"),
+        sa.Index("ix_taskhistory_user_id_timestamp", "user_id", "timestamp"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -136,3 +165,19 @@ class TaskHistory(SQLModel, table=True):
     changes: str | None = None
 
     task: Optional["Task"] = Relationship(back_populates="history")
+
+
+class ProcessedSyncCommand(SQLModel, table=True):
+    __tablename__ = "processedsynccommand"
+    __table_args__ = (
+        sa.Index("ix_processedsynccommand_user_created", "user_id", "created_at"),
+    )
+
+    command_uuid: str = Field(primary_key=True, max_length=64)
+    user_id: UUID = Field(foreign_key="usuario.id", index=True)
+    room_id: UUID | None = Field(default=None, foreign_key="room.id", index=True)
+    task_id: UUID | None = Field(default=None, foreign_key="task.id", index=True)
+    command_type: str = Field(max_length=40)
+    status: str = Field(default="ok", max_length=32)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
+

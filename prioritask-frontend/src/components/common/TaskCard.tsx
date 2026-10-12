@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, memo } from "react";
 import type { Task, Subtask } from "../../types/task";
+import { useTheme } from "../../context/ThemeContext";
 import TaskChecklist from "../tasks/TaskChecklist";
 import TaskCommentsSection from "../tasks/TaskCommentsSection";
 import TaskAttachmentsSection from "../tasks/TaskAttachmentsSection";
@@ -9,6 +10,14 @@ import {
   RecurringBadge,
   CategoryIcon,
 } from "./Badges";
+import {
+  KUDOS_OPTIONS,
+  getTaskKudos,
+  toggleTaskKudo,
+  getMemberInitials,
+  type KudosEmoji,
+  type QuickAssignee,
+} from "../../utils/kudosStore";
 import {
   LuCheck,
   LuCircleCheck,
@@ -20,6 +29,8 @@ import {
   LuListChecks,
   LuMessageSquare,
   LuPaperclip,
+  LuUserPlus,
+  LuAward,
 } from "react-icons/lu";
 import "../tasks/tasks.css";
 
@@ -34,6 +45,10 @@ export interface TaskCardProps {
   className?: string;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
+  assignedMembers?: QuickAssignee[];
+  onAssignMember?: (taskId: string, member: QuickAssignee) => void | Promise<void>;
+  activeAssigneeForClick?: QuickAssignee | null;
+  onKudosReaction?: (taskId: string, emoji: KudosEmoji, deltaPoints: number) => void;
 }
 
 const TaskCardComponent = ({
@@ -47,7 +62,12 @@ const TaskCardComponent = ({
   className = "",
   draggable = false,
   onDragStart,
+  assignedMembers = [],
+  onAssignMember,
+  activeAssigneeForClick = null,
+  onKudosReaction,
 }: TaskCardProps) => {
+  const { density } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -55,6 +75,8 @@ const TaskCardComponent = ({
   const [showAttachments, setShowAttachments] = useState(false);
   const [attachmentsCount, setAttachmentsCount] = useState<number | undefined>(task.attachments_count);
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks ?? []);
+  const [isMemberDragOver, setIsMemberDragOver] = useState(false);
+  const [kudosState, setKudosState] = useState(() => getTaskKudos(task.id));
   const menuRef = useRef<HTMLDivElement>(null);
   const isDone = task.estado === "DONE";
 
@@ -64,10 +86,21 @@ const TaskCardComponent = ({
   const [isSwiping, setIsSwiping] = useState(false);
 
   useEffect(() => {
+    setKudosState(getTaskKudos(task.id));
+    const handleSync = () => setKudosState(getTaskKudos(task.id));
+    window.addEventListener("prioritask:kudos-updated", handleSync);
+    return () => window.removeEventListener("prioritask:kudos-updated", handleSync);
+  }, [task.id]);
+
+  useEffect(() => {
     if (task.subtasks) {
       setSubtasks(task.subtasks);
     }
   }, [task.subtasks]);
+
+  useEffect(() => {
+    setAttachmentsCount(task.attachments_count);
+  }, [task.attachments_count]);
 
   const totalSubtasks = subtasks.length > 0 ? subtasks.length : (task.subtasks_count ?? 0);
   const completedSubtasks =
@@ -135,11 +168,78 @@ const TaskCardComponent = ({
   const swipeOffset = touchStartX !== null && touchCurrentX !== null ? touchCurrentX - touchStartX : 0;
   const clampedOffset = Math.max(-100, Math.min(100, swipeOffset));
 
+  const priorityRingClass =
+    task.peso >= 4
+      ? "priority-ring-p1"
+      : task.peso === 3
+      ? "priority-ring-p2"
+      : task.peso === 2
+      ? "priority-ring-p3"
+      : "priority-ring-p4";
+
+  const priorityCardClass =
+    task.peso >= 4
+      ? "priority-card-p1"
+      : task.peso === 3
+      ? "priority-card-p2"
+      : task.peso === 2
+      ? "priority-card-p3"
+      : "priority-card-p4";
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const dueDateNormalized = task.due_date ? String(task.due_date).slice(0, 10) : "";
+  const dueStatusClass =
+    !dueDateNormalized || isDone
+      ? ""
+      : dueDateNormalized < todayIso
+      ? "due-overdue"
+      : dueDateNormalized === todayIso
+      ? "due-today"
+      : "due-upcoming";
+
+  const handleMemberDragOver = (e: React.DragEvent) => {
+    if (!onAssignMember) return;
+    if (e.dataTransfer.types.includes("application/x-prioritask-member")) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "copy";
+      setIsMemberDragOver(true);
+    }
+  };
+
+  const handleMemberDragLeave = () => {
+    if (isMemberDragOver) {
+      setIsMemberDragOver(false);
+    }
+  };
+
+  const handleMemberDrop = (e: React.DragEvent) => {
+    if (!onAssignMember) return;
+    const rawMember = e.dataTransfer.getData("application/x-prioritask-member");
+    if (!rawMember) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsMemberDragOver(false);
+    try {
+      const parsed = JSON.parse(rawMember) as QuickAssignee;
+      if (parsed && parsed.userId) {
+        onAssignMember(task.id, parsed);
+      }
+    } catch {
+      // Ignorar payload inválido
+    }
+  };
+
   return (
     <div
-      className={`ui-task-card ${isDone ? "task-done" : ""} ${className}`.trim()}
+      className={`ui-task-card ${priorityCardClass} ${isDone ? "task-done" : ""} ${
+        isMemberDragOver ? "is-member-drop-target" : ""
+      } ${className}`.trim()}
       draggable={draggable && !showChecklist}
       onDragStart={onDragStart}
+      onDragOver={handleMemberDragOver}
+      onDragLeave={handleMemberDragLeave}
+      onDrop={handleMemberDrop}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -327,7 +427,7 @@ const TaskCardComponent = ({
       <div className="ui-task-main-row">
         <button
           type="button"
-          className={`ui-task-checkbox ${isDone ? "checked" : ""}`}
+          className={`ui-task-checkbox ${priorityRingClass} ${isDone ? "checked" : ""}`.trim()}
           onClick={handleToggleComplete}
           disabled={isCompleting || isDeleting}
           aria-label={isDone ? `Desmarcar tarea ${task.titulo}` : `Completar tarea ${task.titulo}`}
@@ -342,7 +442,21 @@ const TaskCardComponent = ({
           )}
         </button>
 
-        <h4 className="ui-task-title">{task.titulo}</h4>
+        <h4
+          className="ui-task-title"
+          onClick={() => onEdit?.(task)}
+          onKeyDown={(e) => {
+            if (onEdit && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              onEdit(task);
+            }
+          }}
+          role={onEdit ? "button" : undefined}
+          tabIndex={onEdit ? 0 : undefined}
+          style={{ cursor: onEdit ? "pointer" : undefined }}
+        >
+          {task.titulo}
+        </h4>
       </div>
 
       {/* Descripción opcional */}
@@ -350,6 +464,43 @@ const TaskCardComponent = ({
         <p className="ui-task-desc" title={task.descripcion}>
           {task.descripcion}
         </p>
+      )}
+
+      {/* Previsualización Bento de Subtareas en Densidad Cómoda ("cozy") */}
+      {density === "cozy" && subtasks.length > 0 && !showChecklist && (
+        <div
+          className="bento-cozy-subtasks-preview mb-2"
+          data-testid="bento-cozy-subtasks-preview"
+        >
+          {subtasks.slice(0, 3).map((st) => (
+            <div
+              key={st.id}
+              className="d-flex align-items-center gap-2 small text-muted py-0.5"
+            >
+              <span
+                style={{
+                  color: st.completada
+                    ? "var(--success-500)"
+                    : "var(--text-subtle)",
+                  fontSize: "11px",
+                }}
+              >
+                {st.completada ? "✓" : "○"}
+              </span>
+              <span
+                className={st.completada ? "text-decoration-line-through" : ""}
+                style={{ fontSize: "12px" }}
+              >
+                {st.titulo}
+              </span>
+            </div>
+          ))}
+          {subtasks.length > 3 && (
+            <span className="text-muted" style={{ fontSize: "11px" }}>
+              +{subtasks.length - 3} subtarea(s) más...
+            </span>
+          )}
+        </div>
       )}
 
       {/* Checklist desplegable integrado */}
@@ -389,16 +540,65 @@ const TaskCardComponent = ({
         </div>
       )}
 
-      {/* Footer meta: Fecha de vencimiento y Tags */}
+      {/* Footer meta: Fecha de vencimiento, Avatares de Convivientes y Tags */}
       <div className="ui-task-meta-footer">
-        {task.due_date ? (
-          <div className="ui-task-due-date" title={`Fecha de vencimiento: ${task.due_date}`}>
-            <LuCalendar size={13} aria-hidden="true" />
-            <span>{task.due_date}</span>
-          </div>
-        ) : (
-          <span />
-        )}
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          {task.due_date ? (
+            <div
+              className={`ui-task-due-date ${dueStatusClass}`.trim()}
+              title={`Fecha de vencimiento: ${task.due_date}`}
+            >
+              <LuCalendar size={13} aria-hidden="true" />
+              <span>{task.due_date}</span>
+            </div>
+          ) : null}
+
+          {assignedMembers.length > 0 && (
+            <div
+              className="ui-task-assignees-group"
+              data-testid={`task-assignees-${task.id}`}
+            >
+              {assignedMembers.map((member) => (
+                <button
+                  key={member.userId}
+                  type="button"
+                  className="ui-task-assignee-chip"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAssignMember?.(task.id, member);
+                  }}
+                  title={`Asignada a ${member.label} (clic para quitar)`}
+                  aria-label={`Quitar asignación de ${member.label}`}
+                >
+                  <span className="ui-task-assignee-initials">
+                    {getMemberInitials(member.label)}
+                  </span>
+                  <span className="ui-task-assignee-name">{member.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {activeAssigneeForClick && onAssignMember && (
+            <button
+              type="button"
+              className="ui-task-quick-assign-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAssignMember(task.id, activeAssigneeForClick);
+              }}
+              data-testid={`quick-assign-btn-${task.id}`}
+              title={`Vincular o desvincular a ${activeAssigneeForClick.label}`}
+            >
+              <LuUserPlus size={12} />
+              <span>
+                {assignedMembers.some((m) => m.userId === activeAssigneeForClick.userId)
+                  ? `Quitar ${activeAssigneeForClick.label}`
+                  : `Asignar a ${activeAssigneeForClick.label}`}
+              </span>
+            </button>
+          )}
+        </div>
 
         {task.tags && task.tags.length > 0 && (
           <div className="ui-task-tags">
@@ -410,6 +610,58 @@ const TaskCardComponent = ({
           </div>
         )}
       </div>
+
+      {/* Barra de Reconocimiento Rápido ("Kudos": 👏, 🔥, ❤️) en tareas completadas */}
+      {isDone && (
+        <div
+          className="ui-task-kudos-bar"
+          onClick={(e) => e.stopPropagation()}
+          data-testid={`task-kudos-bar-${task.id}`}
+        >
+          <span className="ui-task-kudos-label">
+            <LuAward size={13} className="text-warning" />
+            <span>
+              {task.peso >= 4 || (attachmentsCount ?? 0) > 0
+                ? "¡Gran esfuerzo! Reconocer:"
+                : "Kudos:"}
+            </span>
+          </span>
+          <div className="ui-task-kudos-actions">
+            {KUDOS_OPTIONS.map((opt) => {
+              const count = kudosState.counts[opt.emoji] || 0;
+              const isReacted = kudosState.myReactions.includes(opt.emoji);
+              return (
+                <button
+                  key={opt.code}
+                  type="button"
+                  className={`ui-task-kudos-btn ${isReacted ? "active" : ""}`}
+                  onClick={() => {
+                    const res = toggleTaskKudo(
+                      task.id,
+                      opt.emoji,
+                      task.peso,
+                      (attachmentsCount ?? 0) > 0
+                    );
+                    setKudosState(res.state);
+                    onKudosReaction?.(task.id, opt.emoji, res.deltaPoints);
+                  }}
+                  title={`${opt.label} (${
+                    task.peso >= 4 || (attachmentsCount ?? 0) > 0
+                      ? `+${opt.basePoints * 2} pts`
+                      : `+${opt.basePoints} pts`
+                  })`}
+                  aria-label={`Reaccionar con ${opt.emoji} ${opt.label}`}
+                  aria-pressed={isReacted}
+                  data-testid={`kudos-btn-${opt.code}-${task.id}`}
+                >
+                  <span>{opt.emoji}</span>
+                  {count > 0 && <span className="ui-task-kudos-count">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Botón Avanzar Rutina — solo visible en tareas recurrentes no completadas */}
       {task.is_recurring && onAdvance && task.estado !== "DONE" && (

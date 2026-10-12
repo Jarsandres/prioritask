@@ -137,4 +137,51 @@ describe("TaskCard Component", () => {
     expect(vibrateSpy).toHaveBeenCalledWith(30);
     expect(onDelete).toHaveBeenCalledWith(mockTask);
   });
+
+  it("aplica el anillo de prioridad estilo Todoist (priority-ring-p1..p4) y estado semántico de vencimiento", () => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const urgentTodayTask: Task = {
+      ...mockTask,
+      id: "task-urgent",
+      peso: 5,
+      due_date: todayStr,
+    };
+
+    const { unmount } = renderTaskCard({ task: urgentTodayTask });
+
+    const card = screen.getByTestId("task-card-task-urgent");
+    expect(card).toHaveClass("priority-card-p1");
+
+    const checkbox = screen.getByLabelText(/Completar tarea Limpiar y desinfectar el salón/i);
+    expect(checkbox).toHaveClass("priority-ring-p1");
+
+    const dueEl = screen.getByTitle(`Fecha de vencimiento: ${todayStr}`);
+    expect(dueEl).toHaveClass("due-today");
+
+    unmount();
+
+    // Verificar prioridad media-baja (peso 2 -> priority-ring-p3) y fecha vencida (due-overdue)
+    const overdueLowTask: Task = {
+      ...mockTask,
+      id: "task-overdue",
+      peso: 2,
+      due_date: "2020-01-01",
+    };
+
+    renderTaskCard({ task: overdueLowTask });
+    expect(screen.getByTestId("task-card-task-overdue")).toHaveClass("priority-card-p3");
+    expect(
+      screen.getByLabelText(/Completar tarea Limpiar y desinfectar el salón/i)
+    ).toHaveClass("priority-ring-p3");
+    expect(screen.getByTitle("Fecha de vencimiento: 2020-01-01")).toHaveClass("due-overdue");
+  });
+
+  it("abre el panel rápido (onEdit) al hacer clic directamente sobre el título de la tarea", () => {
+    const onEdit = vi.fn();
+    renderTaskCard({ onEdit });
+
+    fireEvent.click(screen.getByText("Limpiar y desinfectar el salón"));
+    expect(onEdit).toHaveBeenCalledWith(mockTask);
+  });
 });
+

@@ -122,4 +122,65 @@ describe("OfflineBanner Component", () => {
       expect(remaining).toHaveLength(0);
     });
   });
+
+  it("permite descartar la cola de mutaciones con el botón 'Descartar'", async () => {
+    vi.spyOn(useNetworkStatusModule, "default").mockReturnValue({
+      isOnline: false,
+      isOffline: true,
+      wasOffline: false,
+    });
+
+    await offlineQueue.enqueueMutation({
+      id: "mut_to_discard",
+      url: "/tasks",
+      method: "POST",
+      data: { titulo: "Tarea descartable" },
+    });
+
+    renderBanner();
+
+    const discardBtn = await screen.findByRole("button", { name: /Descartar/i });
+    expect(discardBtn).toBeInTheDocument();
+
+    act(() => {
+      discardBtn.click();
+    });
+
+    await waitFor(async () => {
+      const remaining = await offlineQueue.getPendingMutations();
+      expect(remaining).toHaveLength(0);
+    });
+  });
+
+  it("permite forzar la sincronización manual con el botón 'Sincronizar'", async () => {
+    vi.spyOn(useNetworkStatusModule, "default").mockReturnValue({
+      isOnline: true,
+      isOffline: false,
+      wasOffline: false,
+    });
+
+    await offlineQueue.enqueueMutation({
+      id: "mut_manual_sync",
+      url: "/tasks/5/status",
+      method: "PATCH",
+      data: { estado: "DONE" },
+    });
+
+    const apiRequestSpy = vi.spyOn(api, "request").mockResolvedValueOnce({
+      data: { id: "5", estado: "DONE" },
+    });
+
+    renderBanner();
+
+    const syncBtn = await screen.findByRole("button", { name: /Sincronizar/i });
+    expect(syncBtn).toBeInTheDocument();
+
+    act(() => {
+      syncBtn.click();
+    });
+
+    await waitFor(() => {
+      expect(apiRequestSpy).toHaveBeenCalled();
+    });
+  });
 });
