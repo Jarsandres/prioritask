@@ -3,6 +3,29 @@
 Todos los cambios notables realizados en el backend de Prioritask se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## 🚀 Versión 1.8.0 (Concurrencia HLC/OCC, Endpoint Batch Sync, Coordinación Multi-Pestaña con Líder Único & Recordatorios Accionables en Segundo Plano) — [2026-10-12]
+
+### ⚡ Sincronización Distribuida Offline-First, Concurrencia HLC/OCC, Coordinación Multi-Pestaña & Recordatorios (Backend & Frontend)
+- **[REA-ARCH-020] Extracción de Patrones de Concurrencia, Multi-Ventana y Alarmas desde `todoist-electron@9.31.0` (`app.asar`)**:
+  - Resolución de conflictos y reanudación del sistema (`powerMonitor.on("resume")` con settle delay de `500ms`, `ev_e1ee5652...`).
+  - Coordinación multi-ventana con líder único (`We.mainLogicWindow`, `Gn(e)`, guardia de emisor `zi(e)`, `ev_bf3dffd5...`, `ev_82c2bbe0...`).
+  - Retención anti-GC de notificaciones (`Jt = new Map`, `ev_c65120c2...`) y acciones rápidas de posposición (`30m`, `3h`, `tomorrow9am`, `ev_5dc96362...`).
+- **[BE-SYNC-010] Control de Concurrencia Optimista (OCC), HLC por Campo y Endpoint Transaccional `POST /api/v1/sync/batch` (`app/models/task.py`, `app/schemas/sync.py`, `app/api/v1/endpoints/sync.py`, migración `f9b2c3d4e5a6`)**:
+  - Nuevas columnas `version: int`, `field_hlc: dict[str, str]` y `reminder_at: datetime | None` en `Task`, y tabla de idempotencia `ProcessedSyncCommand` (`processedsynccommand`).
+  - Resolución de conflictos por campo (`field-hlc-merge`) comparando marcas HLC por propiedad modificada sin sobrescribir campos disjuntos, mapeo `temp_id -> task.id`, validación Anti-IDOR y difusión SSE (`TASK_CREATED`, `TASK_UPDATED`, `TASK_DELETED`).
+- **[FE-HLC-010] Reloj Lógico Híbrido (`HybridLogicalClock`), Transporte HTTP Batch y Monitor de Reanudación (`prioritask-frontend/src/sync/hlc.ts`, `src/sync/offlineQueue.ts`)**:
+  - Implementación determinista de `HybridLogicalClock` (`<epoch_ms_13d>:<counter_hex_4d>:<node_id>`) con garantía de monotonicidad ante retrocesos de reloj físico.
+  - Transporte `createHttpSyncTransport`, clasificador `isTransientNetworkError` y monitor `attachSystemWakeupMonitor`.
+- **[FE-TAB-010] Coordinador Multi-Pestaña con Elección de Líder Único (`prioritask-frontend/src/sync/tabCoordinator.ts`, `src/hooks/useRoomEvents.ts`)**:
+  - Elección exclusiva mediante Web Locks API (`navigator.locks.request`) con fallback en `BroadcastChannel("prioritask_sync")` y guardia `isAuthorizedSender`.
+  - Refactorización de `useRoomEvents.ts` para mantener una única conexión `EventSource` SSE en la pestaña líder y retransmitir eventos en tiempo real a las pestañas seguidoras con failover automático.
+- **[FE-REM-010] Motor de Recordatorios Accionables en Segundo Plano (`prioritask-frontend/src/notifications/reminderScheduler.ts`, `public/sw-reminders.js`)**:
+  - Planificador persistente en IndexedDB (`prioritask_reminders_db`), mapa `activeNotifications` contra recolección de basura prematura, catch-up tras suspensión (`triggerWakeupCatchUp`), acciones `action.complete`, `action.snooze.30m`, `action.snooze.3h`, `action.snooze.tomorrow9am` y Service Worker `sw-reminders.js`.
+- **[QA-SYNC-020] Puerta de Calidad y Seguridad Consolidada (`tests/integration/test_sync_batch.py`, `tests/unit/test_sync_endpoint_unit.py`)**:
+  - **341 tests backend en verde (100% pass rate)** con **73.90% de cobertura global** (`100%` en `app/api/v1/endpoints/sync.py`), **34 suites unitarias frontend en Vitest (173 tests en verde)**, **0 errores en Ruff y ESLint**, y pipeline CI/CD completo en verde.
+
+---
+
 ## 🔄 Versión 1.7.0 (Motor de Sincronización Offline, Optimistic UI, Cola de Comandos Transaccionales & Análisis REA Todoist Desktop) — [2026-10-11]
 
 ### ⚡ Motor de Sincronización Offline, Optimistic UI y Cola Persistente (Frontend & Arquitectura)

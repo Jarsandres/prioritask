@@ -32,6 +32,7 @@ Prioritask es una API REST desarrollada con FastAPI que permite gestionar tareas
 | `POST /api/v1/tasks/ai/suggest`    | Sugiere tareas contextuales con IA (**Protegido con JWT**)        |
 | `POST /api/v1/auth/login`          | Autenticación mediante JWT con soporte para refresh tokens       |
 | `CRUD /api/v1/tasks`               | Gestión integral de tareas con soft delete e historial de eventos |
+| `POST /api/v1/sync/batch`          | Sincronización transaccional por lotes offline-first con idempotencia, OCC y fusión por campo HLC |
 
 ---
 
@@ -133,7 +134,7 @@ CORS_ORIGINS=["http://localhost:5173","https://miapp.com"]
 ## 🖥️ Frontend
 
 La carpeta `prioritask-frontend` contiene la interfaz SPA desarrollada con React, TypeScript y Vite.
-Incorpora un **sistema de diseño Retro 90's mobile-first**, barra de navegación dock ergonómica (`MobileBottomNav`), **soporte completo de modo Claro/Oscuro** persistente y arquitectura basada en componentes comunes (`TaskCard`, `RetroWindow`).
+Incorpora un **sistema de diseño Retro 90's mobile-first**, barra de navegación dock ergonómica (`MobileBottomNav`), **soporte completo de modo Claro/Oscuro** persistente, arquitectura basada en componentes comunes (`TaskCard`, `RetroWindow`), **motor de sincronización offline-first con Reloj Lógico Híbrido (HLC)** (`OfflineSyncEngine` + `HybridLogicalClock`), **coordinador multi-pestaña de líder único para SSE** (`TabLeaderCoordinator`) y **notificaciones accionables en segundo plano** (`BackgroundReminderScheduler` + Service Worker `sw-reminders.js`).
 
 ```bash
 cd prioritask-frontend
