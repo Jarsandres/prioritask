@@ -25,7 +25,7 @@ class TestParseDatetimeUtc:
         assert _parse_datetime_utc("") is None
 
     def test_parses_naive_and_aware_datetime_objects(self):
-        naive_dt = datetime(2026, 6, 15, 12, 30, 0)  # noqa: DTZ001
+        naive_dt = datetime.fromisoformat("2026-06-15T12:30:00")
         res_naive = _parse_datetime_utc(naive_dt)
         assert res_naive is not None
         assert res_naive.tzinfo == UTC
