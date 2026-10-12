@@ -4,24 +4,40 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import QuickAddTaskBar from "../QuickAddTaskBar";
 import api from "../../../api";
+import { RoomContext, type RoomContextType } from "../../../context/RoomContext";
 import { ToastProvider } from "../../../context/ToastContext";
 import { TaskUpdateProvider } from "../../../context/TaskUpdateContext";
 import type { Task } from "../../../types/task";
+
+const mockRoomCtx: RoomContextType = {
+  roomId: "room-1",
+  setRoomId: vi.fn(),
+  rooms: [
+    { id: "room-1", nombre: "Cocina", members: [] },
+    { id: "room-2", nombre: "Terraza", members: [] },
+  ],
+  activeRoom: { id: "room-1", nombre: "Cocina", members: [] },
+  selectRoom: vi.fn(),
+  refreshRooms: vi.fn().mockResolvedValue(undefined),
+  loadingRooms: false,
+};
 
 const renderQuickAdd = (
   props: Partial<React.ComponentProps<typeof QuickAddTaskBar>> = {}
 ) => {
   return render(
     <BrowserRouter>
-      <ToastProvider>
-        <TaskUpdateProvider>
-          <QuickAddTaskBar
-            roomId="room-1"
-            onTaskCreated={vi.fn()}
-            {...props}
-          />
-        </TaskUpdateProvider>
-      </ToastProvider>
+      <RoomContext.Provider value={mockRoomCtx}>
+        <ToastProvider>
+          <TaskUpdateProvider>
+            <QuickAddTaskBar
+              roomId="room-1"
+              onTaskCreated={vi.fn()}
+              {...props}
+            />
+          </TaskUpdateProvider>
+        </ToastProvider>
+      </RoomContext.Provider>
     </BrowserRouter>
   );
 };
@@ -29,9 +45,12 @@ const renderQuickAdd = (
 describe("QuickAddTaskBar Component (Todoist Inline Composer)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(api, "get").mockResolvedValue({
+      data: [{ id: "tag-hogar", nombre: "hogar" }],
+    });
   });
 
-  it("muestra inicialmente el botón compacto '+ Añadir tarea...' y se expande al hacer clic", () => {
+  it("muestra inicialmente el botón compacto '+ Añadir tarea...' y se expande al hacer clic", async () => {
     renderQuickAdd();
 
     const trigger = screen.getByTestId("quick-add-task-trigger");
@@ -39,6 +58,7 @@ describe("QuickAddTaskBar Component (Todoist Inline Composer)", () => {
     expect(screen.getByText("Añadir tarea...")).toBeInTheDocument();
 
     fireEvent.click(trigger);
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
 
     expect(screen.getByTestId("quick-add-task-composer")).toBeInTheDocument();
     expect(screen.getByTestId("quick-add-title-input")).toBeInTheDocument();
@@ -65,6 +85,7 @@ describe("QuickAddTaskBar Component (Todoist Inline Composer)", () => {
 
     // Expandir compositor
     fireEvent.click(screen.getByTestId("quick-add-task-trigger"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
 
     // Escribir título y descripción
     fireEvent.change(screen.getByTestId("quick-add-title-input"), {
@@ -114,6 +135,7 @@ describe("QuickAddTaskBar Component (Todoist Inline Composer)", () => {
 
     renderQuickAdd();
     fireEvent.click(screen.getByTestId("quick-add-task-trigger"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
 
     fireEvent.change(screen.getByTestId("quick-add-title-input"), {
       target: { value: "Reparar tubería rota del fregadero" },
@@ -139,9 +161,10 @@ describe("QuickAddTaskBar Component (Todoist Inline Composer)", () => {
     );
   });
 
-  it("cierra primero el popover abierto al pulsar Escape y en el segundo Escape colapsa el compositor", () => {
+  it("cierra primero el popover abierto al pulsar Escape y en el segundo Escape colapsa el compositor", async () => {
     renderQuickAdd();
     fireEvent.click(screen.getByTestId("quick-add-task-trigger"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
 
     const composer = screen.getByTestId("quick-add-task-composer");
     fireEvent.click(screen.getByTestId("quick-add-priority-trigger"));
@@ -174,6 +197,7 @@ describe("QuickAddTaskBar Component (Todoist Inline Composer)", () => {
 
     renderQuickAdd({ onTaskCreated });
     fireEvent.click(screen.getByTestId("quick-add-task-trigger"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
 
     fireEvent.change(screen.getByTestId("quick-add-title-input"), {
       target: { value: "Comprar detergente mañana p1 #compras cada! 7 días" },
@@ -200,9 +224,52 @@ describe("QuickAddTaskBar Component (Todoist Inline Composer)", () => {
     });
   });
 
-  it("acepta sugerencia del popover contextual al pulsar Enter sin enviar el formulario y revierte atributos al borrar el token NLP", () => {
+  it("resuelve ~sala y @tags (auto-creando etiquetas nuevas con POST /tags) en el compositor inline", async () => {
+    const postSpy = vi.spyOn(api, "post").mockImplementation((url: string) => {
+      if (url === "/tags") {
+        return Promise.resolve({
+          data: { id: "tag-jardin", nombre: "jardin" },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          id: "task-inline-tags",
+          titulo: "Regar plantas",
+          categoria: "MANTENIMIENTO",
+          peso: 2,
+          estado: "TODO",
+          room_id: "room-2",
+        },
+      });
+    });
+
     renderQuickAdd();
     fireEvent.click(screen.getByTestId("quick-add-task-trigger"));
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith("/tags", expect.anything()));
+
+    fireEvent.change(screen.getByTestId("quick-add-title-input"), {
+      target: { value: "Regar plantas ~terraza @hogar @jardin #mantenimiento" },
+    });
+
+    fireEvent.click(screen.getByTestId("quick-add-submit-btn"));
+
+    await waitFor(() => {
+      expect(postSpy).toHaveBeenCalledWith("/tags", { nombre: "jardin" });
+      expect(postSpy).toHaveBeenCalledWith(
+        "/tasks",
+        expect.objectContaining({
+          titulo: "Regar plantas",
+          room_id: "room-2",
+          tag_ids: ["tag-hogar", "tag-jardin"],
+        })
+      );
+    });
+  });
+
+  it("acepta sugerencia del popover contextual al pulsar Enter sin enviar el formulario y revierte atributos al borrar el token NLP", async () => {
+    renderQuickAdd();
+    fireEvent.click(screen.getByTestId("quick-add-task-trigger"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
 
     const titleInput = screen.getByTestId("quick-add-title-input");
 

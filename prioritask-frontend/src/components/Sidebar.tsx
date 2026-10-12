@@ -20,6 +20,8 @@ import {
   LuHash,
   LuChartBar,
   LuStar,
+  LuCalendarCheck,
+  LuCalendarRange,
 } from "react-icons/lu";
 import api from "../api";
 import { useTheme } from "../context/ThemeContext";
@@ -33,6 +35,7 @@ interface SidebarProps {
   onClose?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onOpenQuickAdd?: () => void;
 }
 
 const PROJECT_COLORS = [
@@ -49,6 +52,7 @@ const Sidebar = ({
   onClose,
   isCollapsed = false,
   onToggleCollapse,
+  onOpenQuickAdd,
 }: SidebarProps) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -95,6 +99,10 @@ const Sidebar = ({
     if (onClose) onClose();
     navigate(`/rooms/${selectedId}/tasks`);
   };
+
+  const searchParams = new URLSearchParams(location.search);
+  const activeViewParam =
+    location.pathname === "/tasks" ? searchParams.get("view") : null;
 
   return (
     <>
@@ -151,7 +159,11 @@ const Sidebar = ({
             className="sidebar-quick-add-btn"
             onClick={() => {
               if (onClose) onClose();
-              navigate("/tasks/create");
+              if (onOpenQuickAdd) {
+                onOpenQuickAdd();
+              } else {
+                navigate("/tasks/create");
+              }
             }}
             title="Añadir tarea rápida (Atajo: C)"
             aria-label="Añadir tarea"
@@ -185,7 +197,9 @@ const Sidebar = ({
               to="/tasks"
               onClick={handleNavClick}
               end
-              className={({ isActive }) => (isActive ? "active" : "")}
+              className={({ isActive }) =>
+                isActive && !activeViewParam ? "active" : ""
+              }
               title="Tareas"
             >
               <LuSquareCheck
@@ -194,6 +208,46 @@ const Sidebar = ({
                 aria-hidden="true"
               />
               <span className="nav-label">Tareas</span>
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/tasks?view=today"
+              onClick={handleNavClick}
+              data-testid="sidebar-nav-today"
+              className={() =>
+                location.pathname === "/tasks" && activeViewParam === "today"
+                  ? "active"
+                  : ""
+              }
+              title="Hoy"
+            >
+              <LuCalendarCheck
+                size={18}
+                className="nav-icon-amber"
+                aria-hidden="true"
+              />
+              <span className="nav-label">Hoy</span>
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/tasks?view=upcoming"
+              onClick={handleNavClick}
+              data-testid="sidebar-nav-upcoming"
+              className={() =>
+                location.pathname === "/tasks" && activeViewParam === "upcoming"
+                  ? "active"
+                  : ""
+              }
+              title="Próximo"
+            >
+              <LuCalendarRange
+                size={18}
+                className="nav-icon-violet"
+                aria-hidden="true"
+              />
+              <span className="nav-label">Próximo</span>
             </NavLink>
           </li>
           {visibleModules.groupedAi && (

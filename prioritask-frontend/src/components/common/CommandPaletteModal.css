@@ -327,3 +327,116 @@
   background: #1e293b;
   border-color: #475569;
 }
+
+/* Inline Task Checkbox Button (RN-02) */
+.command-palette-check-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #94a3b8;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  color: transparent;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.command-palette-check-btn:hover {
+  border-color: #10b981;
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.command-palette-check-btn.is-done {
+  border-color: #10b981;
+  background-color: #10b981;
+  color: #ffffff;
+}
+
+.command-palette-item-title.is-done {
+  text-decoration: line-through;
+  opacity: 0.65;
+}
+
+/* Priority Badges (P1 - P4) */
+.command-palette-priority-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.command-palette-priority-p1 {
+  background-color: rgba(220, 38, 38, 0.14);
+  color: #dc2626;
+}
+
+[data-theme="dark"] .command-palette-priority-p1 {
+  background-color: rgba(248, 113, 113, 0.22);
+  color: #fca5a5;
+}
+
+.command-palette-priority-p2 {
+  background-color: rgba(217, 119, 6, 0.15);
+  color: #d97706;
+}
+
+[data-theme="dark"] .command-palette-priority-p2 {
+  background-color: rgba(251, 191, 36, 0.22);
+  color: #fcd34d;
+}
+
+.command-palette-priority-p3 {
+  background-color: rgba(37, 99, 235, 0.14);
+  color: #2563eb;
+}
+
+[data-theme="dark"] .command-palette-priority-p3 {
+  background-color: rgba(96, 165, 250, 0.22);
+  color: #93c5fd;
+}
+
+.command-palette-priority-p4 {
+  background-color: rgba(100, 116, 139, 0.14);
+  color: #64748b;
+}
+
+[data-theme="dark"] .command-palette-priority-p4 {
+  background-color: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+}
+
+.command-palette-due-badge {
+  font-size: 0.7rem;
+  color: #64748b;
+  background-color: rgba(100, 116, 139, 0.1);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+[data-theme="dark"] .command-palette-due-badge {
+  color: #94a3b8;
+  background-color: rgba(148, 163, 184, 0.15);
+}
+
+.command-palette-mode-pill {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background-color: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .command-palette-mode-pill {
+  background-color: rgba(96, 165, 250, 0.2);
+  color: #93c5fd;
+}
+

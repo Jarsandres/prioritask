@@ -1,11 +1,105 @@
 import { useReducer, useCallback, useMemo, useRef } from "react";
 import api from "../api";
+import { enqueueMutation } from "../services/offlineQueue";
+import { savePersistedTaskOrder } from "../utils/taskGroupingAndSorting";
 import type { Task, TaskStatus, Subtask } from "../types/task";
 
 export type TaskPriorityLevel = "p1" | "p2" | "p3" | "p4";
 export type TaskMutationKind = "completing" | "updating" | "deleting";
 export type FocusNavigationDirection = "next" | "prev" | "first" | "last";
 export type TaskOverlayType = "peek" | "delete-confirm" | "quick-add" | "context-menu" | null;
+
+export type SnoozePresetKey =
+  | "30m"
+  | "3h"
+  | "tomorrow_9am"
+  | "today"
+  | "tomorrow"
+  | "next_week"
+  | "clear"
+  | "custom";
+
+export interface TaskSnapshotEntry {
+  task: Task;
+  index: number;
+}
+
+export interface SyncCommandPayload {
+  uuid: string;
+  temp_id?: string | null;
+  type:
+    | "task_create"
+    | "task_update"
+    | "task_complete"
+    | "task_uncomplete"
+    | "task_schedule_reminder"
+    | "task_delete";
+  args: Record<string, unknown>;
+  timestamp: number;
+}
+
+function formatLocalYmd(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Calcula las fechas de vencimiento (`due_date`) y recordatorio (`reminder_at`) para los presets de pospuesto rápido (`Snooze`),
+ * siguiendo las constantes de Todoist Desktop (`1,800,000` ms para +30m, `10,800,000` ms para +3h, 09:00 AM para mañana).
+ */
+export function computeSnoozePresetDate(
+  preset: SnoozePresetKey,
+  now: Date = new Date(),
+  customDate?: string
+): { due_date: string | null; reminder_at: string | null; label: string } {
+  switch (preset) {
+    case "30m": {
+      const iso = new Date(now.getTime() + 1_800_000).toISOString();
+      return { due_date: iso, reminder_at: iso, label: "+30 minutos" };
+    }
+    case "3h": {
+      const iso = new Date(now.getTime() + 10_800_000).toISOString();
+      return { due_date: iso, reminder_at: iso, label: "+3 horas" };
+    }
+    case "tomorrow_9am": {
+      const tomorrow9 = new Date(now.getTime());
+      tomorrow9.setDate(tomorrow9.getDate() + 1);
+      tomorrow9.setHours(9, 0, 0, 0);
+      const iso = tomorrow9.toISOString();
+      return { due_date: iso, reminder_at: iso, label: "Mañana a las 09:00" };
+    }
+    case "today": {
+      return { due_date: formatLocalYmd(now), reminder_at: null, label: "Hoy" };
+    }
+    case "tomorrow": {
+      const tomorrow = new Date(now.getTime());
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return { due_date: formatLocalYmd(tomorrow), reminder_at: null, label: "Mañana" };
+    }
+    case "next_week": {
+      const nextWeek = new Date(now.getTime());
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      return {
+        due_date: formatLocalYmd(nextWeek),
+        reminder_at: null,
+        label: "Próxima semana (+7 días)",
+      };
+    }
+    case "clear": {
+      return { due_date: null, reminder_at: null, label: "Sin fecha" };
+    }
+    case "custom":
+    default: {
+      return {
+        due_date: customDate || null,
+        reminder_at: null,
+        label: customDate || "Fecha personalizada",
+      };
+    }
+  }
+}
 
 export interface TaskOverlayState {
   type: TaskOverlayType;
@@ -113,8 +207,14 @@ type TasksAction =
   | { type: "SET_TASKS"; payload: Task[] }
   | { type: "UPSERT_TASK"; payload: { task: Task; position?: "prepend" | "append" } }
   | { type: "PATCH_TASK"; payload: { taskId: string; patch: Partial<Task> } }
+  | {
+      type: "BATCH_UPDATE_TASKS";
+      payload: { updates: Array<{ taskId: string; patch: Partial<Task> }> };
+    }
   | { type: "REMOVE_TASK"; payload: { taskId: string } }
+  | { type: "BATCH_REMOVE_TASKS"; payload: { taskIds: string[] } }
   | { type: "RESTORE_TASK"; payload: { task: Task; index: number } }
+  | { type: "RESTORE_TASKS"; payload: { entries: TaskSnapshotEntry[] } }
   | {
       type: "RECONCILE_SUBTASK_EVENT";
       payload: {
@@ -136,7 +236,9 @@ type TasksAction =
   | { type: "SET_PENDING"; payload: { taskId: string; kind: TaskMutationKind | null } }
   | { type: "SET_FOCUSED_TASK"; payload: { taskId: string | null } }
   | { type: "TOGGLE_SELECT_TASK"; payload: { taskId: string } }
+  | { type: "SET_SELECTED_TASKS"; payload: { taskIds: string[] } }
   | { type: "CLEAR_SELECTION" }
+  | { type: "REORDER_TASKS"; payload: { orderedIds: string[] } }
   | { type: "SET_OVERLAY"; payload: TaskOverlayState }
   | { type: "SET_ERROR"; payload: TaskActionError | null };
 
@@ -246,6 +348,23 @@ function tasksReducer(state: NormalizedTasksState, action: TasksAction): Normali
       };
     }
 
+    case "BATCH_UPDATE_TASKS": {
+      const { updates } = action.payload;
+      if (!updates || updates.length === 0) return state;
+      const nextById = { ...state.byId };
+      let mutated = false;
+      for (const { taskId, patch } of updates) {
+        if (!isSafeEntityId(taskId) || !hasOwnKey(nextById, taskId)) continue;
+        nextById[taskId] = { ...nextById[taskId], ...patch };
+        mutated = true;
+      }
+      if (!mutated) return state;
+      return {
+        ...state,
+        byId: nextById,
+      };
+    }
+
     case "REMOVE_TASK": {
       const { taskId } = action.payload;
       if (!isSafeEntityId(taskId) || !hasOwnKey(state.byId, taskId)) return state;
@@ -285,6 +404,45 @@ function tasksReducer(state: NormalizedTasksState, action: TasksAction): Normali
       };
     }
 
+    case "BATCH_REMOVE_TASKS": {
+      const removeSet = new Set(
+        action.payload.taskIds.filter((id) => isSafeEntityId(id) && hasOwnKey(state.byId, id))
+      );
+      if (removeSet.size === 0) return state;
+
+      const nextById = { ...state.byId };
+      const nextPending = { ...state.pendingById };
+      for (const id of removeSet) {
+        delete nextById[id];
+        delete nextPending[id];
+      }
+      const nextIds = state.ids.filter((id) => !removeSet.has(id));
+      const nextSelected = state.ui.selectedTaskIds.filter((id) => !removeSet.has(id));
+
+      let nextFocused = state.ui.focusedTaskId;
+      if (nextFocused && removeSet.has(nextFocused)) {
+        nextFocused = nextIds[0] ?? null;
+      }
+
+      const nextOverlay =
+        state.ui.activeOverlay.taskId && removeSet.has(state.ui.activeOverlay.taskId)
+          ? { type: null, taskId: null }
+          : state.ui.activeOverlay;
+
+      return {
+        ...state,
+        byId: nextById,
+        ids: nextIds,
+        pendingById: nextPending,
+        ui: {
+          ...state.ui,
+          focusedTaskId: nextFocused,
+          selectedTaskIds: nextSelected,
+          activeOverlay: nextOverlay,
+        },
+      };
+    }
+
     case "RESTORE_TASK": {
       const { task, index } = action.payload;
       if (!task || !isSafeEntityId(task.id)) return state;
@@ -305,6 +463,36 @@ function tasksReducer(state: NormalizedTasksState, action: TasksAction): Normali
         ui: {
           ...state.ui,
           focusedTaskId: state.ui.focusedTaskId ?? task.id,
+        },
+      };
+    }
+
+    case "RESTORE_TASKS": {
+      const { entries } = action.payload;
+      if (!entries || entries.length === 0) return state;
+      const sortedEntries = [...entries]
+        .filter((e) => e && e.task && isSafeEntityId(e.task.id))
+        .sort((a, b) => a.index - b.index);
+      if (sortedEntries.length === 0) return state;
+
+      const nextById = { ...state.byId };
+      const nextIds = [...state.ids];
+
+      for (const { task, index } of sortedEntries) {
+        nextById[task.id] = { ...task };
+        if (!nextIds.includes(task.id)) {
+          const insertAt = Math.max(0, Math.min(index, nextIds.length));
+          nextIds.splice(insertAt, 0, task.id);
+        }
+      }
+
+      return {
+        ...state,
+        byId: nextById,
+        ids: nextIds,
+        ui: {
+          ...state.ui,
+          focusedTaskId: state.ui.focusedTaskId ?? nextIds[0] ?? null,
         },
       };
     }
@@ -422,6 +610,24 @@ function tasksReducer(state: NormalizedTasksState, action: TasksAction): Normali
       };
     }
 
+    case "SET_SELECTED_TASKS": {
+      const seen = new Set<string>();
+      const nextSelected: string[] = [];
+      for (const rawId of action.payload.taskIds) {
+        if (isSafeEntityId(rawId) && hasOwnKey(state.byId, rawId) && !seen.has(rawId)) {
+          seen.add(rawId);
+          nextSelected.push(rawId);
+        }
+      }
+      return {
+        ...state,
+        ui: {
+          ...state.ui,
+          selectedTaskIds: nextSelected,
+        },
+      };
+    }
+
     case "CLEAR_SELECTION": {
       if (state.ui.selectedTaskIds.length === 0) return state;
       return {
@@ -430,6 +636,27 @@ function tasksReducer(state: NormalizedTasksState, action: TasksAction): Normali
           ...state.ui,
           selectedTaskIds: [],
         },
+      };
+    }
+
+    case "REORDER_TASKS": {
+      const seen = new Set<string>();
+      const nextIds: string[] = [];
+      for (const id of action.payload.orderedIds) {
+        if (isSafeEntityId(id) && hasOwnKey(state.byId, id) && !seen.has(id)) {
+          seen.add(id);
+          nextIds.push(id);
+        }
+      }
+      for (const id of state.ids) {
+        if (hasOwnKey(state.byId, id) && !seen.has(id)) {
+          seen.add(id);
+          nextIds.push(id);
+        }
+      }
+      return {
+        ...state,
+        ids: nextIds,
       };
     }
 
@@ -456,6 +683,12 @@ function tasksReducer(state: NormalizedTasksState, action: TasksAction): Normali
     default:
       return state;
   }
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function makeSyncUuid(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export interface UseTasksStateOptions {
@@ -593,9 +826,217 @@ export function useTasksState(options: UseTasksStateOptions = {}) {
     dispatch({ type: "TOGGLE_SELECT_TASK", payload: { taskId } });
   }, []);
 
+  const setSelectedTaskIds = useCallback((taskIds: string[]) => {
+    dispatch({ type: "SET_SELECTED_TASKS", payload: { taskIds } });
+  }, []);
+
+  const selectAllTasks = useCallback((visibleTaskIds?: string[]) => {
+    const targetIds = (visibleTaskIds ?? stateRef.current.ids).filter(
+      (id) => isSafeEntityId(id) && hasOwnKey(stateRef.current.byId, id)
+    );
+    if (targetIds.length === 0) {
+      dispatch({ type: "CLEAR_SELECTION" });
+      return;
+    }
+    const currentSelected = stateRef.current.ui.selectedTaskIds;
+    const allAlreadySelected =
+      targetIds.length > 0 && targetIds.every((id) => currentSelected.includes(id));
+    if (allAlreadySelected) {
+      dispatch({ type: "CLEAR_SELECTION" });
+    } else {
+      dispatch({ type: "SET_SELECTED_TASKS", payload: { taskIds: targetIds } });
+    }
+  }, []);
+
+  const selectTaskRange = useCallback(
+    (targetTaskId: string, anchorTaskId?: string | null, orderedVisibleIds?: string[]) => {
+      if (!isSafeEntityId(targetTaskId) || !hasOwnKey(stateRef.current.byId, targetTaskId)) {
+        return;
+      }
+      const list = orderedVisibleIds ?? stateRef.current.ids;
+      const currentSelected = stateRef.current.ui.selectedTaskIds;
+      const resolvedAnchor =
+        anchorTaskId ??
+        currentSelected[currentSelected.length - 1] ??
+        stateRef.current.ui.focusedTaskId;
+
+      const targetIdx = list.indexOf(targetTaskId);
+      const anchorIdx = resolvedAnchor ? list.indexOf(resolvedAnchor) : -1;
+
+      if (targetIdx === -1 || anchorIdx === -1) {
+        const merged = currentSelected.includes(targetTaskId)
+          ? currentSelected
+          : [...currentSelected, targetTaskId];
+        dispatch({ type: "SET_SELECTED_TASKS", payload: { taskIds: merged } });
+        return;
+      }
+
+      const startIdx = Math.min(anchorIdx, targetIdx);
+      const endIdx = Math.max(anchorIdx, targetIdx);
+      const rangeIds = list.slice(startIdx, endIdx + 1);
+      const merged = Array.from(new Set([...currentSelected, ...rangeIds]));
+      dispatch({ type: "SET_SELECTED_TASKS", payload: { taskIds: merged } });
+    },
+    []
+  );
+
   const clearSelection = useCallback(() => {
     dispatch({ type: "CLEAR_SELECTION" });
   }, []);
+
+  const restoreTasksSnapshot = useCallback((entries: TaskSnapshotEntry[]) => {
+    dispatch({ type: "RESTORE_TASKS", payload: { entries } });
+  }, []);
+
+  const setCustomTaskOrder = useCallback((orderedIds: string[]) => {
+    dispatch({ type: "REORDER_TASKS", payload: { orderedIds } });
+  }, []);
+
+  const reorderTasks = useCallback(
+    (
+      sourceTaskId: string,
+      targetTaskId: string,
+      position: "before" | "after" = "before",
+      roomId?: string | null
+    ): {
+      ok: boolean;
+      previousIds: string[];
+      nextIds: string[];
+      undo: () => void;
+    } => {
+      const previousIds = [...stateRef.current.ids];
+      if (
+        !isSafeEntityId(sourceTaskId) ||
+        !isSafeEntityId(targetTaskId) ||
+        sourceTaskId === targetTaskId ||
+        !hasOwnKey(stateRef.current.byId, sourceTaskId) ||
+        !hasOwnKey(stateRef.current.byId, targetTaskId)
+      ) {
+        return {
+          ok: false,
+          previousIds,
+          nextIds: previousIds,
+          undo: () => {},
+        };
+      }
+
+      const withoutSource = previousIds.filter((id) => id !== sourceTaskId);
+      const targetIndex = withoutSource.indexOf(targetTaskId);
+      if (targetIndex === -1) {
+        return {
+          ok: false,
+          previousIds,
+          nextIds: previousIds,
+          undo: () => {},
+        };
+      }
+
+      const insertAt = position === "after" ? targetIndex + 1 : targetIndex;
+      const nextIds = [
+        ...withoutSource.slice(0, insertAt),
+        sourceTaskId,
+        ...withoutSource.slice(insertAt),
+      ];
+
+      dispatch({ type: "REORDER_TASKS", payload: { orderedIds: nextIds } });
+      savePersistedTaskOrder(roomId, nextIds);
+
+      return {
+        ok: true,
+        previousIds,
+        nextIds,
+        undo: () => {
+          dispatch({ type: "REORDER_TASKS", payload: { orderedIds: previousIds } });
+          savePersistedTaskOrder(roomId, previousIds);
+        },
+      };
+    },
+    []
+  );
+
+  const moveTaskOrderByKeyboard = useCallback(
+    (
+      taskId: string,
+      direction: "up" | "down",
+      visibleTaskIds?: string[],
+      roomId?: string | null
+    ): {
+      ok: boolean;
+      previousIds: string[];
+      nextIds: string[];
+      undo: () => void;
+    } => {
+      const previousIds = [...stateRef.current.ids];
+      const list =
+        visibleTaskIds && visibleTaskIds.length > 0
+          ? visibleTaskIds
+          : stateRef.current.ids;
+      const idx = list.indexOf(taskId);
+      if (idx === -1) {
+        return { ok: false, previousIds, nextIds: previousIds, undo: () => {} };
+      }
+      const neighborIndex = direction === "up" ? idx - 1 : idx + 1;
+      if (neighborIndex < 0 || neighborIndex >= list.length) {
+        return { ok: false, previousIds, nextIds: previousIds, undo: () => {} };
+      }
+      const neighborId = list[neighborIndex];
+      return reorderTasks(
+        taskId,
+        neighborId,
+        direction === "up" ? "before" : "after",
+        roomId
+      );
+    },
+    [reorderTasks]
+  );
+
+  const executeBatchSync = useCallback(
+    async (
+      commands: SyncCommandPayload[],
+      roomId?: string | null,
+      fallbackFn?: () => Promise<void>
+    ): Promise<{ ok: boolean; offline: boolean }> => {
+      if (commands.length === 0) {
+        return { ok: true, offline: false };
+      }
+      const payload = {
+        sync_token: "*",
+        ...(roomId && UUID_REGEX.test(roomId) ? { room_id: roomId } : {}),
+        commands,
+      };
+      try {
+        const res = await api.post("/sync/batch", payload);
+        const syncStatus = (res?.data as { sync_status?: Record<string, unknown> } | undefined)
+          ?.sync_status;
+        if (syncStatus && typeof syncStatus === "object") {
+          const hasCommandError = Object.values(syncStatus).some((v) => v !== "ok");
+          if (hasCommandError && fallbackFn) {
+            await fallbackFn();
+          }
+        }
+        return { ok: true, offline: false };
+      } catch (err) {
+        if (!(err as { response?: unknown })?.response) {
+          await enqueueMutation({
+            url: "/sync/batch",
+            method: "POST",
+            data: payload,
+          });
+          return { ok: true, offline: true };
+        }
+        if (fallbackFn) {
+          try {
+            await fallbackFn();
+            return { ok: true, offline: false };
+          } catch {
+            return { ok: false, offline: false };
+          }
+        }
+        return { ok: false, offline: false };
+      }
+    },
+    []
+  );
 
   const openOverlay = useCallback(
     (type: Exclude<TaskOverlayType, null>, taskId: string | null = null) => {
@@ -900,6 +1341,322 @@ export function useTasksState(options: UseTasksStateOptions = {}) {
     []
   );
 
+  /**
+   * Alterna completado (`completeItem` / `uncompleteItem`) en lote de forma optimista y retorna acción de Deshacer (`undo`).
+   */
+  const batchToggleCompleteOptimistic = useCallback(
+    async (
+      taskIds: string[],
+      forcedCompleted?: boolean,
+      roomId?: string | null
+    ): Promise<{
+      ok: boolean;
+      nextCompleted: boolean;
+      snapshots: TaskSnapshotEntry[];
+      undo: () => Promise<boolean>;
+    }> => {
+      const validIds = Array.from(
+        new Set(
+          taskIds.filter((id) => isSafeEntityId(id) && hasOwnKey(stateRef.current.byId, id))
+        )
+      );
+      if (validIds.length === 0) {
+        return {
+          ok: false,
+          nextCompleted: false,
+          snapshots: [],
+          undo: async () => false,
+        };
+      }
+
+      const snapshots: TaskSnapshotEntry[] = validIds.map((id) => ({
+        task: { ...stateRef.current.byId[id] },
+        index: stateRef.current.ids.indexOf(id),
+      }));
+
+      const nextCompleted =
+        forcedCompleted !== undefined
+          ? forcedCompleted
+          : snapshots.some((s) => s.task.estado !== "DONE" && !s.task.completed);
+      const nextStatus: TaskStatus = nextCompleted ? "DONE" : "TODO";
+
+      dispatch({
+        type: "BATCH_UPDATE_TASKS",
+        payload: {
+          updates: validIds.map((taskId) => ({
+            taskId,
+            patch: { estado: nextStatus, completed: nextCompleted },
+          })),
+        },
+      });
+      dispatch({ type: "CLEAR_SELECTION" });
+
+      const nowTs = Date.now();
+      const commands: SyncCommandPayload[] = validIds.map((taskId) => ({
+        uuid: makeSyncUuid(nextCompleted ? "cmd-complete" : "cmd-uncomplete"),
+        type: nextCompleted ? "task_complete" : "task_uncomplete",
+        args: { id: taskId },
+        timestamp: nowTs,
+      }));
+
+      const syncRes = await executeBatchSync(commands, roomId, async () => {
+        await Promise.all(
+          validIds.map((id) => api.patch(`/tasks/${id}/status`, { estado: nextStatus }))
+        );
+      });
+
+      if (!syncRes.ok) {
+        dispatch({ type: "RESTORE_TASKS", payload: { entries: snapshots } });
+      }
+
+      const undo = async (): Promise<boolean> => {
+        dispatch({ type: "RESTORE_TASKS", payload: { entries: snapshots } });
+        const undoTs = Date.now();
+        const undoCommands: SyncCommandPayload[] = snapshots.map(({ task }) => {
+          const wasCompleted = task.estado === "DONE" || Boolean(task.completed);
+          return {
+            uuid: makeSyncUuid(wasCompleted ? "cmd-undo-complete" : "cmd-undo-uncomplete"),
+            type: wasCompleted ? "task_complete" : "task_uncomplete",
+            args: { id: task.id },
+            timestamp: undoTs,
+          };
+        });
+        const undoRes = await executeBatchSync(undoCommands, roomId, async () => {
+          await Promise.all(
+            snapshots.map(({ task }) =>
+              api.patch(`/tasks/${task.id}/status`, { estado: task.estado })
+            )
+          );
+        });
+        return undoRes.ok;
+      };
+
+      return { ok: syncRes.ok, nextCompleted, snapshots, undo };
+    },
+    [executeBatchSync]
+  );
+
+  /**
+   * Actualiza múltiples tareas en lote de forma optimista preservando snapshots heterogéneos (`RN-01`) para `undo()`.
+   */
+  const batchUpdateTasksOptimistic = useCallback(
+    async (
+      taskIds: string[],
+      patch: Partial<Task>,
+      roomId?: string | null
+    ): Promise<{
+      ok: boolean;
+      snapshots: TaskSnapshotEntry[];
+      undo: () => Promise<boolean>;
+    }> => {
+      const validIds = Array.from(
+        new Set(
+          taskIds.filter((id) => isSafeEntityId(id) && hasOwnKey(stateRef.current.byId, id))
+        )
+      );
+      if (validIds.length === 0) {
+        return {
+          ok: false,
+          snapshots: [],
+          undo: async () => false,
+        };
+      }
+
+      const snapshots: TaskSnapshotEntry[] = validIds.map((id) => ({
+        task: { ...stateRef.current.byId[id] },
+        index: stateRef.current.ids.indexOf(id),
+      }));
+
+      dispatch({
+        type: "BATCH_UPDATE_TASKS",
+        payload: {
+          updates: validIds.map((taskId) => ({ taskId, patch })),
+        },
+      });
+      dispatch({ type: "CLEAR_SELECTION" });
+
+      const nowTs = Date.now();
+      const commands: SyncCommandPayload[] = validIds.map((taskId) => ({
+        uuid: makeSyncUuid("cmd-update"),
+        type: "task_update",
+        args: { id: taskId, ...patch },
+        timestamp: nowTs,
+      }));
+
+      const syncRes = await executeBatchSync(commands, roomId, async () => {
+        await Promise.all(validIds.map((id) => api.patch(`/tasks/${id}`, patch)));
+      });
+
+      if (!syncRes.ok) {
+        dispatch({ type: "RESTORE_TASKS", payload: { entries: snapshots } });
+      }
+
+      const patchKeys = Object.keys(patch) as Array<keyof Task>;
+      const undo = async (): Promise<boolean> => {
+        dispatch({ type: "RESTORE_TASKS", payload: { entries: snapshots } });
+        const undoTs = Date.now();
+        const undoCommands: SyncCommandPayload[] = snapshots.map(({ task }) => {
+          const revertPatch: Record<string, unknown> = { id: task.id };
+          for (const key of patchKeys) {
+            revertPatch[key] = task[key] ?? null;
+          }
+          return {
+            uuid: makeSyncUuid("cmd-undo-update"),
+            type: "task_update",
+            args: revertPatch,
+            timestamp: undoTs,
+          };
+        });
+        const undoRes = await executeBatchSync(undoCommands, roomId, async () => {
+          await Promise.all(
+            snapshots.map(({ task }) => {
+              const revertPatch: Record<string, unknown> = {};
+              for (const key of patchKeys) {
+                revertPatch[key] = task[key] ?? null;
+              }
+              return api.patch(`/tasks/${task.id}`, revertPatch);
+            })
+          );
+        });
+        return undoRes.ok;
+      };
+
+      return { ok: syncRes.ok, snapshots, undo };
+    },
+    [executeBatchSync]
+  );
+
+  /**
+   * Elimina múltiples tareas en lote con ventana de gracia configurable (`graceMs = 5000` por defecto).
+   * Si se invoca `undo()` antes de que expire la ventana de gracia, se cancela el temporizador y no se ejecuta borrado en el servidor (`EC-04`).
+   */
+  const batchDeleteTasksOptimistic = useCallback(
+    async (
+      taskIds: string[],
+      options?: {
+        graceMs?: number;
+        roomId?: string | null;
+        onCommitted?: (deletedIds: string[]) => void;
+      }
+    ): Promise<{
+      ok: boolean;
+      snapshots: TaskSnapshotEntry[];
+      undo: () => Promise<boolean>;
+    }> => {
+      const validIds = Array.from(
+        new Set(
+          taskIds.filter((id) => isSafeEntityId(id) && hasOwnKey(stateRef.current.byId, id))
+        )
+      );
+      if (validIds.length === 0) {
+        return {
+          ok: false,
+          snapshots: [],
+          undo: async () => false,
+        };
+      }
+
+      const snapshots: TaskSnapshotEntry[] = validIds.map((id) => ({
+        task: { ...stateRef.current.byId[id] },
+        index: stateRef.current.ids.indexOf(id),
+      }));
+
+      for (const id of validIds) {
+        delete inFlightRef.current[id];
+      }
+
+      dispatch({ type: "BATCH_REMOVE_TASKS", payload: { taskIds: validIds } });
+      dispatch({ type: "CLEAR_SELECTION" });
+
+      const graceMs = options?.graceMs ?? 5000;
+      const roomId = options?.roomId;
+      let committed = false;
+      let undone = false;
+      let timerId: ReturnType<typeof setTimeout> | null = null;
+
+      const commitDeletion = async (): Promise<boolean> => {
+        if (undone || committed) return true;
+        committed = true;
+        const nowTs = Date.now();
+        const commands: SyncCommandPayload[] = validIds.map((taskId) => ({
+          uuid: makeSyncUuid("cmd-delete"),
+          type: "task_delete",
+          args: { id: taskId },
+          timestamp: nowTs,
+        }));
+        const syncRes = await executeBatchSync(commands, roomId, async () => {
+          await Promise.all(validIds.map((id) => api.delete(`/tasks/${id}`)));
+        });
+        if (syncRes.ok) {
+          options?.onCommitted?.(validIds);
+        } else {
+          dispatch({ type: "RESTORE_TASKS", payload: { entries: snapshots } });
+        }
+        return syncRes.ok;
+      };
+
+      let initialOk = true;
+      if (graceMs <= 0) {
+        initialOk = await commitDeletion();
+      } else {
+        timerId = setTimeout(() => {
+          void commitDeletion();
+        }, graceMs);
+      }
+
+      const undo = async (): Promise<boolean> => {
+        if (undone) return true;
+        undone = true;
+        if (timerId !== null) {
+          clearTimeout(timerId);
+          timerId = null;
+        }
+        dispatch({ type: "RESTORE_TASKS", payload: { entries: snapshots } });
+        if (!committed) {
+          return true;
+        }
+        const undoTs = Date.now();
+        const recreateCommands: SyncCommandPayload[] = snapshots.map(({ task }) => ({
+          uuid: makeSyncUuid("cmd-undo-delete"),
+          temp_id: task.id,
+          type: "task_create",
+          args: {
+            titulo: task.titulo,
+            descripcion: task.descripcion ?? null,
+            categoria: task.categoria,
+            estado: task.estado,
+            peso: task.peso,
+            due_date: task.due_date ?? null,
+            reminder_at: task.reminder_at ?? null,
+            completed: Boolean(task.completed || task.estado === "DONE"),
+            is_recurring: Boolean(task.is_recurring),
+            room_id: task.room_id ?? roomId ?? undefined,
+          },
+          timestamp: undoTs,
+        }));
+        const undoRes = await executeBatchSync(recreateCommands, roomId, async () => {
+          await Promise.all(
+            snapshots.map(({ task }) =>
+              api.post("/tasks/", {
+                titulo: task.titulo,
+                descripcion: task.descripcion ?? null,
+                categoria: task.categoria,
+                estado: task.estado,
+                peso: task.peso,
+                due_date: task.due_date ?? null,
+                reminder_at: task.reminder_at ?? null,
+              })
+            )
+          );
+        });
+        return undoRes.ok;
+      };
+
+      return { ok: initialOk, snapshots, undo };
+    },
+    [executeBatchSync]
+  );
+
   const tasks = useMemo(
     () => state.ids.map((id) => state.byId[id]).filter((t): t is Task => Boolean(t)),
     [state.ids, state.byId]
@@ -946,18 +1703,29 @@ export function useTasksState(options: UseTasksStateOptions = {}) {
     setTasks,
     upsertTask,
     removeTask,
+    restoreTasksSnapshot,
+    setCustomTaskOrder,
+    reorderTasks,
+    moveTaskOrderByKeyboard,
     reconcileLiveEvent,
 
-    // Mutaciones optimistas con rollback automático
+    // Mutaciones optimistas con rollback automático (individuales y en lote)
     toggleCompleteOptimistic,
     updateTaskOptimistic,
     setPriorityOptimistic,
     deleteTaskOptimistic,
+    executeBatchSync,
+    batchToggleCompleteOptimistic,
+    batchUpdateTasksOptimistic,
+    batchDeleteTasksOptimistic,
 
-    // Acciones de UI y foco por teclado (roving tabindex)
+    // Acciones de UI, selección múltiple y foco por teclado (roving tabindex)
     setFocusedTaskId,
     moveFocus,
     toggleSelectTask,
+    setSelectedTaskIds,
+    selectAllTasks,
+    selectTaskRange,
     clearSelection,
     openOverlay,
     closeOverlay,

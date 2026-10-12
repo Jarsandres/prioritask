@@ -16,6 +16,7 @@ import {
   type FocusNavigationDirection,
   type TaskMutationKind,
   type TaskPriorityLevel,
+  type SnoozePresetKey,
 } from "../../hooks/useTasksState";
 import {
   getMemberInitials,
@@ -38,6 +39,7 @@ import {
   LuUserPlus,
   LuFlag,
   LuRotateCw,
+  LuClock,
 } from "react-icons/lu";
 import "./tasks.css";
 
@@ -74,7 +76,18 @@ export interface TaskItemProps {
   onFocusTask?: (taskId: string) => void;
   onNavigateFocus?: (direction: FocusNavigationDirection, currentTaskId: string) => void;
   onToggleSelect?: (taskId: string) => void;
+  onSelectRange?: (taskId: string) => void;
+  onSnoozeTask?: (
+    taskId: string,
+    preset: SnoozePresetKey,
+    customDate?: string
+  ) => void | Promise<void>;
   onAssignMember?: (taskId: string, member: QuickAssignee) => void | Promise<void>;
+  draggableRow?: boolean;
+  onRowDragStart?: (taskId: string, e: DragEvent<HTMLDivElement>) => void;
+  onRowDragOver?: (taskId: string, e: DragEvent<HTMLDivElement>) => void;
+  onRowDrop?: (targetTaskId: string, e: DragEvent<HTMLDivElement>) => void;
+  onMoveTaskOrder?: (taskId: string, direction: "up" | "down") => void;
   className?: string;
 }
 
@@ -105,7 +118,14 @@ const TaskItemComponent = ({
   onFocusTask,
   onNavigateFocus,
   onToggleSelect,
+  onSelectRange,
+  onSnoozeTask,
   onAssignMember,
+  draggableRow = false,
+  onRowDragStart,
+  onRowDragOver,
+  onRowDrop,
+  onMoveTaskOrder,
   className = "",
 }: TaskItemProps) => {
   const rowRef = useRef<HTMLDivElement>(null);
@@ -124,6 +144,7 @@ const TaskItemComponent = ({
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchCurrentX, setTouchCurrentX] = useState<number | null>(null);
   const [isSwiping, setIsSwiping] = useState(false);
+  const [isSnoozeOpen, setIsSnoozeOpen] = useState(false);
 
   // Sincronización de foco DOM para roving tabindex solo cuando `isFocused` transiciona de false -> true
   // y el usuario no está escribiendo en un input externo (evita robo de foco en montajes o filtros).
@@ -168,6 +189,20 @@ const TaskItemComponent = ({
         : e.target;
 
     if (isEditableElement(innerTarget)) return;
+
+    // 0. Reordenación accesible por teclado (Alt+ArrowUp / Alt+ArrowDown — RN-03)
+    if (
+      e.altKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      (e.key === "ArrowUp" || e.key === "ArrowDown")
+    ) {
+      if (onMoveTaskOrder && !isBusy) {
+        e.preventDefault();
+        onMoveTaskOrder(task.id, e.key === "ArrowUp" ? "up" : "down");
+      }
+      return;
+    }
 
     // Ignorar combinaciones con Ctrl / Cmd / Alt para no colisionar con atajos del navegador o Command Palette
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -297,13 +332,33 @@ const TaskItemComponent = ({
       : 0;
   const clampedOffset = Math.max(-90, Math.min(90, swipeOffset));
 
-  const handleMemberDragOver = (e: DragEvent) => {
-    if (!onAssignMember) return;
-    if (e.dataTransfer.types.includes("application/x-prioritask-member")) {
+  const handleRowDragStart = (e: DragEvent<HTMLDivElement>) => {
+    if (!draggableRow) return;
+    if (e.dataTransfer) {
+      e.dataTransfer.setData("application/x-prioritask-task-id", task.id);
+      e.dataTransfer.setData("text/plain", task.id);
+      e.dataTransfer.effectAllowed = "move";
+    }
+    onRowDragStart?.(task.id, e);
+  };
+
+  const handleMemberDragOver = (e: DragEvent<HTMLDivElement>) => {
+    const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+    if (onAssignMember && types.includes("application/x-prioritask-member")) {
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = "copy";
       setIsMemberDragOver(true);
+      return;
+    }
+    if (
+      onRowDragOver &&
+      (types.includes("application/x-prioritask-task-id") ||
+        types.includes("text/plain") ||
+        types.length === 0)
+    ) {
+      e.preventDefault();
+      onRowDragOver(task.id, e);
     }
   };
 
@@ -313,20 +368,25 @@ const TaskItemComponent = ({
     }
   };
 
-  const handleMemberDrop = (e: DragEvent) => {
-    if (!onAssignMember) return;
-    const rawMember = e.dataTransfer.getData("application/x-prioritask-member");
-    if (!rawMember) return;
-    e.preventDefault();
-    e.stopPropagation();
-    setIsMemberDragOver(false);
-    try {
-      const parsed = JSON.parse(rawMember) as QuickAssignee;
-      if (parsed && parsed.userId) {
-        onAssignMember(task.id, parsed);
+  const handleMemberDrop = (e: DragEvent<HTMLDivElement>) => {
+    const rawMember = e.dataTransfer?.getData("application/x-prioritask-member");
+    if (onAssignMember && rawMember) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsMemberDragOver(false);
+      try {
+        const parsed = JSON.parse(rawMember) as QuickAssignee;
+        if (parsed && parsed.userId) {
+          onAssignMember(task.id, parsed);
+        }
+      } catch {
+        // Ignorar payload inválido
       }
-    } catch {
-      // Ignorar payload inválido
+      return;
+    }
+    if (onRowDrop) {
+      e.preventDefault();
+      onRowDrop(task.id, e);
     }
   };
 
@@ -337,6 +397,7 @@ const TaskItemComponent = ({
       ref={rowRef}
       role={role}
       tabIndex={computedTabIndex}
+      draggable={draggableRow || undefined}
       aria-selected={role === "row" ? isSelected : undefined}
       aria-busy={isBusy || undefined}
       aria-label={`${task.titulo} — ${priorityMeta.label}${
@@ -352,6 +413,7 @@ const TaskItemComponent = ({
       } ${className}`.trim()}
       onFocus={() => onFocusTask?.(task.id)}
       onKeyDown={handleKeyDown}
+      onDragStart={draggableRow ? handleRowDragStart : undefined}
       onDragOver={handleMemberDragOver}
       onDragLeave={handleMemberDragLeave}
       onDrop={handleMemberDrop}
@@ -372,8 +434,28 @@ const TaskItemComponent = ({
             : undefined,
       }}
     >
-      {/* 1. Checkbox circular con anillo de prioridad Todoist P1..P4 */}
+      {/* 1. Selección múltiple + Checkbox circular con anillo de prioridad Todoist P1..P4 */}
       <div className="d-flex align-items-center">
+        {(onToggleSelect || onSelectRange) && (
+          <button
+            type="button"
+            className={`task-item-select-btn ${isSelected ? "is-selected" : ""}`.trim()}
+            aria-label={`Seleccionar tarea ${task.titulo}`}
+            aria-pressed={isSelected}
+            title="Seleccionar tarea (Atajo: S o Shift+Clic para rango)"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (e.shiftKey && onSelectRange) {
+                onSelectRange(task.id);
+              } else {
+                onToggleSelect?.(task.id);
+              }
+            }}
+            data-testid={`task-item-select-${task.id}`}
+          >
+            {isSelected ? "✓" : ""}
+          </button>
+        )}
         <button
           type="button"
           role="checkbox"
@@ -416,8 +498,16 @@ const TaskItemComponent = ({
       {/* 2. Celda principal: Título, subtareas, recurrencia, asignados y descripción */}
       <div
         className="task-list-title-cell"
-        onClick={() => onEdit?.(task)}
-        style={{ cursor: onEdit ? "pointer" : undefined }}
+        onClick={(e) => {
+          if (e.shiftKey && onSelectRange) {
+            e.preventDefault();
+            e.stopPropagation();
+            onSelectRange(task.id);
+            return;
+          }
+          onEdit?.(task);
+        }}
+        style={{ cursor: onEdit || onSelectRange ? "pointer" : undefined }}
       >
         <div className="d-flex align-items-center gap-2 flex-wrap">
           <span className="task-list-item-title">{task.titulo}</span>
@@ -542,6 +632,58 @@ const TaskItemComponent = ({
       {/* 6. Acciones rápidas */}
       <div className="task-list-actions">
         <StatusBadge status={task.estado} />
+        {onSnoozeTask && !isDone && (
+          <div className="task-item-snooze-wrapper">
+            <button
+              type="button"
+              className="task-list-action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsSnoozeOpen((prev) => !prev);
+              }}
+              aria-label={`Posponer tarea ${task.titulo}`}
+              aria-expanded={isSnoozeOpen}
+              title="Posponer tarea (Snooze)"
+              disabled={isBusy}
+              data-testid={`task-item-snooze-btn-${task.id}`}
+            >
+              <LuClock size={15} aria-hidden="true" />
+            </button>
+            {isSnoozeOpen && (
+              <div
+                className="task-item-snooze-popover"
+                role="menu"
+                aria-label={`Opciones de pospuesto para ${task.titulo}`}
+                onClick={(e) => e.stopPropagation()}
+                data-testid={`task-item-snooze-menu-${task.id}`}
+              >
+                {(
+                  [
+                    { key: "30m", label: "+30 min" },
+                    { key: "3h", label: "+3 horas" },
+                    { key: "tomorrow_9am", label: "Mañana 09:00" },
+                    { key: "tomorrow", label: "Mañana" },
+                    { key: "next_week", label: "+7 días" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    role="menuitem"
+                    className="task-bulk-popover-item"
+                    onClick={() => {
+                      setIsSnoozeOpen(false);
+                      void onSnoozeTask(task.id, opt.key);
+                    }}
+                    data-testid={`task-item-snooze-${opt.key}-${task.id}`}
+                  >
+                    <span>{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {task.is_recurring && onAdvance && !isDone && (
           <button
             type="button"
@@ -607,6 +749,7 @@ function areTaskItemPropsEqual(prev: TaskItemProps, next: TaskItemProps): boolea
     a.categoria !== b.categoria ||
     a.peso !== b.peso ||
     a.due_date !== b.due_date ||
+    a.reminder_at !== b.reminder_at ||
     a.is_recurring !== b.is_recurring ||
     a.subtasks_count !== b.subtasks_count ||
     a.subtasks_completed_count !== b.subtasks_completed_count ||
@@ -639,7 +782,14 @@ function areTaskItemPropsEqual(prev: TaskItemProps, next: TaskItemProps): boolea
     prev.onFocusTask === next.onFocusTask &&
     prev.onNavigateFocus === next.onNavigateFocus &&
     prev.onToggleSelect === next.onToggleSelect &&
-    prev.onAssignMember === next.onAssignMember
+    prev.onSelectRange === next.onSelectRange &&
+    prev.onSnoozeTask === next.onSnoozeTask &&
+    prev.onAssignMember === next.onAssignMember &&
+    prev.draggableRow === next.draggableRow &&
+    prev.onRowDragStart === next.onRowDragStart &&
+    prev.onRowDragOver === next.onRowDragOver &&
+    prev.onRowDrop === next.onRowDrop &&
+    prev.onMoveTaskOrder === next.onMoveTaskOrder
   );
 }
 

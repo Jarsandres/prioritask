@@ -2,6 +2,7 @@ export {
   useTasksState,
   pesoToPriorityLevel,
   priorityLevelToPeso,
+  computeSnoozePresetDate,
   PRIORITY_LEVEL_METADATA,
   type PriorityLevelMetadata,
   type TaskPriorityLevel,
@@ -12,5 +13,8 @@ export {
   type TaskActionError,
   type NormalizedTasksState,
   type UseTasksStateOptions,
+  type SnoozePresetKey,
+  type TaskSnapshotEntry,
+  type SyncCommandPayload,
 } from "../../hooks/useTasksState";
 export { default } from "../../hooks/useTasksState";

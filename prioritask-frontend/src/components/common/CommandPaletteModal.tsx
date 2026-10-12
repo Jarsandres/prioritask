@@ -15,12 +15,29 @@ import {
   LuUser,
   LuArrowRight,
   LuLoader,
+  LuCalendarCheck,
+  LuCalendarRange,
+  LuCircleCheck,
+  LuSun,
+  LuMoon,
+  LuFlame,
+  LuCheck,
 } from "react-icons/lu";
 import api from "../../api";
 import { useRoom } from "../../context/RoomContext";
+import { useTheme } from "../../context/ThemeContext";
+import { useToast } from "../../context/ToastContext";
+import { useTaskUpdate } from "../../context/TaskUpdateContext";
 import { cacheManager, searchLRUCache } from "../../services/cacheManager";
+import { enqueueMutation } from "../../services/offlineQueue";
+import {
+  navigateTo,
+  parseCommandPaletteInput,
+  priorityCodeToWeightRange,
+  weightToPriorityBadge,
+} from "../../utils/navigationRouter";
 import type { TaskSearchResponse, SearchResultItem } from "../../types/search";
-import type { Room } from "../../types/task";
+import type { Room, Tag, Task, TaskStatus } from "../../types/task";
 import "./CommandPaletteModal.css";
 
 export interface CommandPaletteModalProps {
@@ -28,6 +45,7 @@ export interface CommandPaletteModalProps {
   onClose: () => void;
   onOpenGamification?: () => void;
   onOpenShortcuts?: () => void;
+  onOpenQuickAdd?: () => void;
 }
 
 interface ActionCommandItem {
@@ -48,6 +66,15 @@ interface RoomCommandItem {
   action: () => void;
 }
 
+interface TagCommandItem {
+  id: string;
+  type: "tag";
+  title: string;
+  subtitle: string;
+  tag: Tag;
+  action: () => void;
+}
+
 interface TaskCommandItem {
   id: string;
   type: "task";
@@ -57,19 +84,28 @@ interface TaskCommandItem {
   action: () => void;
 }
 
-type PaletteCommandItem = ActionCommandItem | RoomCommandItem | TaskCommandItem;
+type PaletteCommandItem =
+  | ActionCommandItem
+  | RoomCommandItem
+  | TagCommandItem
+  | TaskCommandItem;
 
 export const CommandPaletteModal = ({
   isOpen,
   onClose,
   onOpenGamification,
   onOpenShortcuts,
+  onOpenQuickAdd,
 }: CommandPaletteModalProps) => {
   const navigate = useNavigate();
   const { rooms, activeRoom, selectRoom } = useRoom();
+  const { theme, toggleTheme } = useTheme();
+  const { toast } = useToast();
+  const { notifyUpdate } = useTaskUpdate();
 
   const [query, setQuery] = useState("");
   const [taskResults, setTaskResults] = useState<SearchResultItem[]>([]);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -84,26 +120,213 @@ export const CommandPaletteModal = ({
     initialFocusRef: inputRef,
   });
 
-  // Autoenfocar input al abrir
+  const parsedInput = useMemo(() => parseCommandPaletteInput(query), [query]);
+
+  // Autoenfocar input y cargar etiquetas al abrir
   useEffect(() => {
-    if (isOpen) {
-      setQuery("");
-      setTaskResults([]);
-      setSelectedIndex(0);
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-    }
+    if (!isOpen) return;
+
+    setQuery("");
+    setTaskResults([]);
+    setSelectedIndex(0);
+    const focusTimer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+
+    const controller = new AbortController();
+    api
+      .get<Tag[]>("/tags", { signal: controller.signal })
+      .then((res) => {
+        if (Array.isArray(res.data)) {
+          setAvailableTags(res.data);
+        }
+      })
+      .catch(() => {
+        // Manejo silencioso si falla la carga opcional de etiquetas
+      });
+
+    return () => {
+      clearTimeout(focusTimer);
+      controller.abort();
+    };
   }, [isOpen]);
 
-  // Lista base de acciones rápidas
+  // Acción rápida inline: Completar o reabrir tarea sin cerrar la paleta (RN-02)
+  const handleInlineToggleTaskComplete = useCallback(
+    async (task: Task, e?: React.MouseEvent | React.KeyboardEvent) => {
+      e?.stopPropagation();
+
+      const wasDone = task.estado === "DONE" || Boolean(task.completed);
+      const nextEstado: TaskStatus = wasDone ? "TODO" : "DONE";
+      const nextCompleted = !wasDone;
+
+      const applyLocalTaskState = (
+        targetId: string,
+        estadoVal: TaskStatus,
+        completedVal: boolean
+      ) => {
+        setTaskResults((prev) =>
+          prev.map((item) =>
+            item.task.id === targetId
+              ? {
+                  ...item,
+                  task: {
+                    ...item.task,
+                    estado: estadoVal,
+                    completed: completedVal,
+                  },
+                }
+              : item
+          )
+        );
+        if (task.room_id) {
+          cacheManager.updateTaskInCache(task.room_id, {
+            id: targetId,
+            estado: estadoVal,
+            completed: completedVal,
+          });
+        }
+      };
+
+      // Actualización optimista inmediata
+      applyLocalTaskState(task.id, nextEstado, nextCompleted);
+
+      try {
+        await api.patch<Task>(`/tasks/${task.id}`, {
+          estado: nextEstado,
+          completed: nextCompleted,
+        });
+      } catch (err: unknown) {
+        const isNetworkError =
+          typeof err === "object" &&
+          err !== null &&
+          !("response" in err && (err as { response?: unknown }).response);
+        if (isNetworkError) {
+          await enqueueMutation({
+            url: `/tasks/${task.id}`,
+            method: "PATCH",
+            data: { estado: nextEstado, completed: nextCompleted },
+          });
+        } else {
+          // Revertir si hubo error de servidor (4xx/5xx)
+          applyLocalTaskState(task.id, task.estado, Boolean(task.completed));
+          toast.error("No se pudo actualizar el estado de la tarea.");
+          return;
+        }
+      }
+
+      notifyUpdate();
+      toast.success(wasDone ? "Tarea reabierta" : "Tarea completada", {
+        duration: 6000,
+        action: {
+          label: "Deshacer",
+          onClick: () => {
+            applyLocalTaskState(task.id, task.estado, Boolean(task.completed));
+            void api
+              .patch<Task>(`/tasks/${task.id}`, {
+                estado: task.estado,
+                completed: Boolean(task.completed),
+              })
+              .then(() => notifyUpdate())
+              .catch(() => {});
+          },
+        },
+      });
+    },
+    [notifyUpdate, toast]
+  );
+
+  // Lista base de acciones rápidas estilo Todoist Desktop
   const defaultActions: ActionCommandItem[] = useMemo(() => {
     return [
       {
+        id: "act-quick-add",
+        type: "action",
+        title: "Captura Rápida (Quick Add)",
+        subtitle: "Abrir ventana flotante de creación con NLP (C / Ctrl+Espacio)",
+        icon: <LuPlus size={18} />,
+        action: () => {
+          onClose();
+          if (onOpenQuickAdd) {
+            onOpenQuickAdd();
+          } else {
+            navigate("/tasks/create");
+          }
+        },
+      },
+      {
+        id: "act-view-today",
+        type: "action",
+        title: "Ir a Hoy",
+        subtitle: "Ver tareas que vencen hoy (/tasks?view=today)",
+        icon: <LuCalendarCheck size={18} />,
+        action: () => {
+          onClose();
+          navigateTo(navigate, { view: { type: "today" } });
+        },
+      },
+      {
+        id: "act-view-upcoming",
+        type: "action",
+        title: "Ir a Próximo (7 días)",
+        subtitle: "Ver agenda de tareas de los próximos 7 días (/tasks?view=upcoming)",
+        icon: <LuCalendarRange size={18} />,
+        action: () => {
+          onClose();
+          navigateTo(navigate, { view: { type: "upcoming" } });
+        },
+      },
+      {
+        id: "act-view-completed",
+        type: "action",
+        title: "Ver Tareas Completadas",
+        subtitle: "Consultar tareas finalizadas (/tasks?view=completed)",
+        icon: <LuCircleCheck size={18} />,
+        action: () => {
+          onClose();
+          navigateTo(navigate, { view: { type: "completed" } });
+        },
+      },
+      {
+        id: "act-toggle-theme",
+        type: "action",
+        title: "Alternar Tema Claro / Oscuro",
+        subtitle: `Cambiar apariencia actual (${
+          theme === "dark" ? "Oscuro → Claro" : "Claro → Oscuro"
+        })`,
+        icon: theme === "dark" ? <LuSun size={18} /> : <LuMoon size={18} />,
+        action: () => {
+          toggleTheme();
+          onClose();
+        },
+      },
+      {
+        id: "act-priority-p1",
+        type: "action",
+        title: "Filtrar Prioridad P1 (Urgente)",
+        subtitle: "Ver tareas de máxima urgencia (/tasks?priority=p1)",
+        icon: <LuFlame size={18} />,
+        action: () => {
+          onClose();
+          navigateTo(navigate, { view: { type: "priority", priority: "p1" } });
+        },
+      },
+      {
+        id: "act-priority-p2",
+        type: "action",
+        title: "Filtrar Prioridad P2 (Alta)",
+        subtitle: "Ver tareas de prioridad alta (/tasks?priority=p2)",
+        icon: <LuFlame size={18} />,
+        action: () => {
+          onClose();
+          navigateTo(navigate, { view: { type: "priority", priority: "p2" } });
+        },
+      },
+      {
         id: "act-create-task",
         type: "action",
-        title: "Nueva Tarea",
-        subtitle: "Crear una nueva tarea en el hogar",
+        title: "Nueva Tarea (Formulario Completo)",
+        subtitle: "Crear una nueva tarea avanzada en el hogar",
         icon: <LuPlus size={18} />,
         action: () => {
           onClose();
@@ -118,7 +341,7 @@ export const CommandPaletteModal = ({
         icon: <LuSquareCheck size={18} />,
         action: () => {
           onClose();
-          navigate("/tasks");
+          navigateTo(navigate, { view: { type: "inbox" } });
         },
       },
       {
@@ -142,7 +365,7 @@ export const CommandPaletteModal = ({
         icon: <LuChartBar size={18} />,
         action: () => {
           onClose();
-          navigate("/dashboard");
+          navigateTo(navigate, { view: { type: "dashboard" } });
         },
       },
       {
@@ -153,7 +376,7 @@ export const CommandPaletteModal = ({
         icon: <LuClock size={18} />,
         action: () => {
           onClose();
-          navigate("/history");
+          navigateTo(navigate, { view: { type: "history" } });
         },
       },
       {
@@ -164,7 +387,7 @@ export const CommandPaletteModal = ({
         icon: <LuTag size={18} />,
         action: () => {
           onClose();
-          navigate("/tags");
+          navigateTo(navigate, { view: { type: "tag" } });
         },
       },
       {
@@ -175,7 +398,7 @@ export const CommandPaletteModal = ({
         icon: <LuUser size={18} />,
         action: () => {
           onClose();
-          navigate("/profile");
+          navigateTo(navigate, { view: { type: "profile" } });
         },
       },
       {
@@ -192,11 +415,27 @@ export const CommandPaletteModal = ({
         },
       },
     ];
-  }, [navigate, onClose, onOpenGamification, onOpenShortcuts]);
+  }, [
+    navigate,
+    onClose,
+    onOpenGamification,
+    onOpenShortcuts,
+    onOpenQuickAdd,
+    theme,
+    toggleTheme,
+  ]);
 
-  // Lista de salas disponibles
+  // Lista de salas disponibles (filtradas según modo semántico `#` o general)
   const roomItems: RoomCommandItem[] = useMemo(() => {
-    const qLower = query.trim().toLowerCase();
+    if (
+      parsedInput.mode === "actions" ||
+      parsedInput.mode === "tags" ||
+      parsedInput.mode === "priority"
+    ) {
+      return [];
+    }
+
+    const qLower = parsedInput.cleanQuery.toLowerCase();
     const filteredRooms = qLower
       ? rooms.filter((r) => r.nombre.toLowerCase().includes(qLower))
       : rooms;
@@ -213,25 +452,76 @@ export const CommandPaletteModal = ({
       action: () => {
         selectRoom(room.id);
         onClose();
-        navigate(`/rooms/${room.id}/tasks`);
+        navigateTo(navigate, { view: { type: "room", roomId: room.id } });
       },
     }));
-  }, [rooms, query, activeRoom, selectRoom, onClose, navigate]);
+  }, [rooms, parsedInput, activeRoom, selectRoom, onClose, navigate]);
 
-  // Filtrado de acciones por query
+  // Lista de etiquetas disponibles (`@tag`)
+  const tagItems: TagCommandItem[] = useMemo(() => {
+    if (parsedInput.mode !== "tags" && parsedInput.mode !== "all") {
+      return [];
+    }
+    const qLower = parsedInput.cleanQuery.toLowerCase();
+    if (parsedInput.mode === "all" && !qLower) {
+      return [];
+    }
+    const matched = qLower
+      ? availableTags.filter((t) => t.nombre.toLowerCase().includes(qLower))
+      : availableTags;
+
+    return matched.map((tag) => ({
+      id: `tag-${tag.id}`,
+      type: "tag",
+      title: `@${tag.nombre}`,
+      subtitle: `Filtrar por etiqueta "${tag.nombre}"`,
+      tag,
+      action: () => {
+        onClose();
+        navigateTo(navigate, { view: { type: "tag", tagName: tag.nombre } });
+      },
+    }));
+  }, [availableTags, parsedInput, onClose, navigate]);
+
+  // Filtrado de acciones rápidas por query y modo semántico
   const filteredActions = useMemo(() => {
-    const qLower = query.trim().toLowerCase();
+    if (parsedInput.mode === "rooms" || parsedInput.mode === "tags") {
+      return [];
+    }
+    if (parsedInput.mode === "priority" && parsedInput.priorityFilter) {
+      const prioCode = parsedInput.priorityFilter.toLowerCase();
+      return defaultActions.filter((a) =>
+        a.title.toLowerCase().includes(prioCode)
+      );
+    }
+
+    const qLower = parsedInput.cleanQuery.toLowerCase();
     if (!qLower) return defaultActions;
     return defaultActions.filter(
       (a) =>
         a.title.toLowerCase().includes(qLower) ||
         a.subtitle.toLowerCase().includes(qLower)
     );
-  }, [defaultActions, query]);
+  }, [defaultActions, parsedInput]);
 
-  // Conversión de resultados de búsqueda de tareas
+  // Conversión de resultados de búsqueda de tareas con apertura directa en TaskPeekDrawer (RN-01)
   const taskCommandItems: TaskCommandItem[] = useMemo(() => {
-    return taskResults.map((item) => ({
+    if (parsedInput.mode === "actions" || parsedInput.mode === "rooms") {
+      return [];
+    }
+
+    let items = taskResults;
+    if (parsedInput.mode === "priority" && parsedInput.priorityFilter) {
+      const range = priorityCodeToWeightRange(parsedInput.priorityFilter);
+      if (range.pesoMin !== null && range.pesoMax !== null) {
+        items = items.filter(
+          (item) =>
+            item.task.peso >= range.pesoMin! && item.task.peso <= range.pesoMax!
+        );
+      }
+    }
+
+    return items.map((item) => ({
       id: `task-${item.task.id}`,
       type: "task",
       title: item.task.titulo,
@@ -243,39 +533,71 @@ export const CommandPaletteModal = ({
         onClose();
         if (item.task.room_id) {
           selectRoom(item.task.room_id);
-          navigate(`/rooms/${item.task.room_id}/tasks`);
-        } else {
-          navigate("/tasks");
         }
+        navigateTo(navigate, {
+          task: {
+            id: item.task.id,
+            roomId: item.task.room_id,
+          },
+        });
       },
     }));
-  }, [taskResults, onClose, selectRoom, navigate]);
+  }, [taskResults, parsedInput, onClose, selectRoom, navigate]);
 
   // Búsqueda Multi-Capa (Capa 1: In-Memory 0ms, Capa 2: LRU Cache, Capa 3: Backend Debounced 150ms)
   useEffect(() => {
-    const trimmed = query.trim();
-    if (!trimmed) {
+    if (parsedInput.mode === "actions" || parsedInput.mode === "rooms") {
       setTaskResults([]);
       setLoading(false);
       return;
     }
 
-    const qLower = trimmed.toLowerCase();
+    const searchText = parsedInput.cleanQuery;
+    const isPriorityOnlySearch =
+      parsedInput.mode === "priority" &&
+      Boolean(parsedInput.priorityFilter) &&
+      !searchText;
+
+    if (!searchText && !isPriorityOnlySearch) {
+      setTaskResults([]);
+      setLoading(false);
+      return;
+    }
+
+    const qLower = searchText.toLowerCase();
+    const prioRange = parsedInput.priorityFilter
+      ? priorityCodeToWeightRange(parsedInput.priorityFilter)
+      : null;
 
     // ── CAPA 1 (0 ms): Búsqueda inmediata síncrona en memoria sobre tareas cacheadas ──
     const allCached = cacheManager.getAllCachedTasks();
     const layer1Matches: SearchResultItem[] = allCached
-      .filter(
-        (t) =>
+      .filter((t) => {
+        const matchesPrio =
+          !prioRange ||
+          prioRange.pesoMin === null ||
+          prioRange.pesoMax === null ||
+          (t.peso >= prioRange.pesoMin && t.peso <= prioRange.pesoMax);
+        if (!matchesPrio) return false;
+        if (!qLower) return true;
+        return (
           t.titulo.toLowerCase().includes(qLower) ||
-          (t.descripcion && t.descripcion.toLowerCase().includes(qLower)) ||
-          (t.categoria && t.categoria.toLowerCase().includes(qLower))
-      )
+          Boolean(t.descripcion && t.descripcion.toLowerCase().includes(qLower)) ||
+          Boolean(t.categoria && t.categoria.toLowerCase().includes(qLower)) ||
+          Boolean(t.tags?.some((tag) => tag.nombre.toLowerCase().includes(qLower)))
+        );
+      })
       .map((t) => ({
         task: t,
         relevance_score: 1.0,
         matched_fields: ["titulo"],
       }));
+
+    if (isPriorityOnlySearch) {
+      setTaskResults(layer1Matches);
+      setLoading(false);
+      return;
+    }
 
     // ── CAPA 2 (LRU Cache): Consulta de resultados previos cacheados de consultas idénticas ──
     const lruCached = searchLRUCache.get(qLower);
@@ -300,7 +622,7 @@ export const CommandPaletteModal = ({
     const timer = setTimeout(async () => {
       try {
         const params: Record<string, string | number> = {
-          q: trimmed,
+          q: searchText,
           limit: 15,
         };
         if (activeRoom?.id) {
@@ -339,12 +661,26 @@ export const CommandPaletteModal = ({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, activeRoom?.id]);
+  }, [parsedInput, activeRoom?.id]);
 
-  // Lista aplanada de todos los elementos seleccionables en orden
+  // Lista aplanada de todos los elementos seleccionables en orden según modo semántico
   const flatItems: PaletteCommandItem[] = useMemo(() => {
-    return [...taskCommandItems, ...roomItems, ...filteredActions];
-  }, [taskCommandItems, roomItems, filteredActions]);
+    if (parsedInput.mode === "actions") {
+      return [...filteredActions];
+    }
+    if (parsedInput.mode === "rooms") {
+      return [...roomItems];
+    }
+    if (parsedInput.mode === "tags") {
+      return [...tagItems, ...taskCommandItems];
+    }
+    return [
+      ...taskCommandItems,
+      ...tagItems,
+      ...roomItems,
+      ...filteredActions,
+    ];
+  }, [parsedInput.mode, taskCommandItems, tagItems, roomItems, filteredActions]);
 
   // Mantener selectedIndex dentro de los límites
   useEffect(() => {
@@ -353,7 +689,7 @@ export const CommandPaletteModal = ({
     }
   }, [flatItems.length, selectedIndex]);
 
-  // Manejo de teclado (↑, ↓, Enter, Esc)
+  // Manejo de teclado (↑, ↓, Enter, Ctrl+Enter, Esc)
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "ArrowDown") {
@@ -366,6 +702,12 @@ export const CommandPaletteModal = ({
         setSelectedIndex((prev) =>
           prev > 0 ? prev - 1 : Math.max(0, flatItems.length - 1)
         );
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        const selected = flatItems[selectedIndex];
+        if (selected && selected.type === "task") {
+          e.preventDefault();
+          void handleInlineToggleTaskComplete(selected.searchItem.task, e);
+        }
       } else if (e.key === "Enter") {
         e.preventDefault();
         const selected = flatItems[selectedIndex];
@@ -377,7 +719,7 @@ export const CommandPaletteModal = ({
         onClose();
       }
     },
-    [flatItems, selectedIndex, onClose]
+    [flatItems, selectedIndex, onClose, handleInlineToggleTaskComplete]
   );
 
   // Scroll automático hacia el elemento activo en navegación de teclado
@@ -392,6 +734,17 @@ export const CommandPaletteModal = ({
   }, [selectedIndex]);
 
   if (!isOpen) return null;
+
+  const modePillLabel =
+    parsedInput.mode === "actions"
+      ? "> Comandos"
+      : parsedInput.mode === "rooms"
+        ? "# Hogares"
+        : parsedInput.mode === "tags"
+          ? "@ Etiquetas"
+          : parsedInput.mode === "priority"
+            ? `! Prioridad ${parsedInput.priorityFilter?.toUpperCase() || ""}`
+            : null;
 
   return (
     <div
@@ -414,11 +767,19 @@ export const CommandPaletteModal = ({
             className="command-palette-search-icon"
             aria-hidden="true"
           />
+          {modePillLabel && (
+            <span
+              className="command-palette-mode-pill"
+              data-testid="command-palette-mode-pill"
+            >
+              {modePillLabel.trim()}
+            </span>
+          )}
           <input
             ref={inputRef}
             type="text"
             className="command-palette-input"
-            placeholder="Buscar tareas, cambiar de hogar o ejecutar acción..."
+            placeholder="Buscar tareas, > comando, # hogar, @ etiqueta o !p1..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -470,7 +831,93 @@ export const CommandPaletteModal = ({
                 const globalIndex = flatItems.findIndex((x) => x.id === item.id);
                 const isSelected = globalIndex === selectedIndex;
                 const task = item.searchItem.task;
+                const isDone =
+                  task.estado === "DONE" || Boolean(task.completed);
                 const statusClass = `command-palette-badge-status-${task.estado.toLowerCase()}`;
+                const priorityBadge = weightToPriorityBadge(task.peso);
+                const shortDueDate = task.due_date
+                  ? String(task.due_date).slice(0, 10)
+                  : null;
+
+                return (
+                  <div
+                    key={item.id}
+                    data-index={globalIndex}
+                    data-testid={`palette-task-item-${task.id}`}
+                    className={`command-palette-item ${isSelected ? "active" : ""}`}
+                    onClick={item.action}
+                    onMouseEnter={() => setSelectedIndex(globalIndex)}
+                    role="option"
+                    aria-selected={isSelected}
+                    tabIndex={-1}
+                  >
+                    <div className="command-palette-item-main">
+                      <button
+                        type="button"
+                        data-testid={`palette-complete-task-${task.id}`}
+                        className={`command-palette-check-btn ${
+                          isDone ? "is-done" : ""
+                        }`}
+                        aria-label={
+                          isDone
+                            ? `Reabrir tarea ${task.titulo}`
+                            : `Completar tarea ${task.titulo}`
+                        }
+                        title={
+                          isDone
+                            ? "Reabrir tarea (Ctrl+Enter)"
+                            : "Completar tarea sin salir (Ctrl+Enter)"
+                        }
+                        onClick={(e) => {
+                          void handleInlineToggleTaskComplete(task, e);
+                        }}
+                      >
+                        <LuCheck size={12} aria-hidden="true" />
+                      </button>
+                      <div className="command-palette-item-text">
+                        <span
+                          className={`command-palette-item-title ${
+                            isDone ? "is-done" : ""
+                          }`}
+                        >
+                          {item.title}
+                        </span>
+                        <span className="command-palette-item-subtitle">
+                          {item.subtitle}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="command-palette-item-meta">
+                      <span
+                        className={`command-palette-priority-badge ${priorityBadge.colorClass}`}
+                      >
+                        {priorityBadge.label}
+                      </span>
+                      {shortDueDate && (
+                        <span className="command-palette-due-badge">
+                          {shortDueDate}
+                        </span>
+                      )}
+                      <span className={`command-palette-badge ${statusClass}`}>
+                        {task.estado}
+                      </span>
+                      <LuArrowRight size={14} className="text-muted" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Sección 2: Etiquetas (@tag) */}
+          {tagItems.length > 0 && (
+            <div role="group" aria-label="Etiquetas">
+              <div className="command-palette-section-title">
+                Etiquetas ({tagItems.length})
+              </div>
+              {tagItems.map((item) => {
+                const globalIndex = flatItems.findIndex((x) => x.id === item.id);
+                const isSelected = globalIndex === selectedIndex;
 
                 return (
                   <button
@@ -485,7 +932,7 @@ export const CommandPaletteModal = ({
                   >
                     <div className="command-palette-item-main">
                       <div className="command-palette-item-icon">
-                        <LuSquareCheck size={18} />
+                        <LuTag size={18} />
                       </div>
                       <div className="command-palette-item-text">
                         <span className="command-palette-item-title">
@@ -497,9 +944,6 @@ export const CommandPaletteModal = ({
                       </div>
                     </div>
                     <div className="command-palette-item-meta">
-                      <span className={`command-palette-badge ${statusClass}`}>
-                        {task.estado}
-                      </span>
                       <LuArrowRight size={14} className="text-muted" />
                     </div>
                   </button>
@@ -508,7 +952,7 @@ export const CommandPaletteModal = ({
             </div>
           )}
 
-          {/* Sección 2: Hogares */}
+          {/* Sección 3: Hogares (#) */}
           {roomItems.length > 0 && (
             <div role="group" aria-label="Hogares y Salas">
               <div className="command-palette-section-title">
@@ -556,7 +1000,7 @@ export const CommandPaletteModal = ({
             </div>
           )}
 
-          {/* Sección 3: Acciones Rápidas */}
+          {/* Sección 4: Acciones Rápidas (>) */}
           {filteredActions.length > 0 && (
             <div role="group" aria-label="Acciones Rápidas">
               <div className="command-palette-section-title">
@@ -612,7 +1056,10 @@ export const CommandPaletteModal = ({
               <kbd>↑</kbd> <kbd>↓</kbd> Navegar
             </span>
             <span className="command-palette-footer-shortcut">
-              <kbd>↵</kbd> Seleccionar
+              <kbd>↵</kbd> Abrir
+            </span>
+            <span className="command-palette-footer-shortcut">
+              <kbd>Ctrl+↵</kbd> Completar
             </span>
             <span className="command-palette-footer-shortcut">
               <kbd>ESC</kbd> Cerrar

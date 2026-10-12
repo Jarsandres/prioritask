@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, MemoryRouter } from "react-router-dom";
 import TaskForm from "../TaskForm";
 import api from "../../api";
 import { ToastProvider } from "../../context/ToastContext";
@@ -26,7 +26,12 @@ describe("TaskForm Component", () => {
     vi.clearAllMocks();
     vi.spyOn(api, "get").mockImplementation((url: string) => {
       if (url === "/tags") {
-        return Promise.resolve({ data: [{ id: "tag-1", nombre: "Limpieza" }] });
+        return Promise.resolve({
+          data: [
+            { id: "tag-1", nombre: "Limpieza" },
+            { id: "tag-2", nombre: "Ferretería" },
+          ],
+        });
       }
       return Promise.resolve({ data: {} });
     });
@@ -179,6 +184,74 @@ describe("TaskForm Component", () => {
           }),
         })
       );
+    });
+  });
+
+  it("hidrata título, descripción, prioridad, etiquetas (tagIds y tags por nombre) y room_id desde location.state.prefill al escalar desde Quick Add (CA-06)", async () => {
+    const postSpy = vi.spyOn(api, "post").mockResolvedValue({
+      data: { id: "prefilled-task-99" },
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/tasks/create",
+            state: {
+              prefill: {
+                titulo: "Cambiar grifo de cocina",
+                descripcion: "Comprar junta de teflón",
+                categoria: "MANTENIMIENTO",
+                peso: 4,
+                roomId: "room-cocina-prefill",
+                tagIds: ["tag-1"],
+                tags: ["ferreteria"],
+                assigneeId: "user-maria",
+              },
+            },
+          },
+        ]}
+      >
+        <ThemeProvider>
+          <ToastProvider>
+            <TaskUpdateProvider>
+              <TaskForm />
+            </TaskUpdateProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    const titleInput = screen.getByLabelText(/Título de la tarea/i) as HTMLInputElement;
+    const descInput = screen.getByLabelText(/Descripción/i) as HTMLTextAreaElement;
+    expect(titleInput.value).toBe("Cambiar grifo de cocina");
+    expect(descInput.value).toBe("Comprar junta de teflón");
+    expect(screen.getByTestId("priority-btn-4")).toHaveAttribute("aria-checked", "true");
+
+    // Esperar a que GET /tags hidrate selectedTags ("Limpieza" por tagId y "Ferretería" por nombre insensible a tildes)
+    await waitFor(() => {
+      expect(screen.getByText("Ferretería")).toBeInTheDocument();
+    });
+
+    const submitBtn = screen.getByRole("button", { name: /Crear Tarea/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(postSpy).toHaveBeenCalledWith(
+        "/tasks",
+        expect.objectContaining({
+          titulo: "Cambiar grifo de cocina",
+          descripcion: "Comprar junta de teflón",
+          categoria: "MANTENIMIENTO",
+          peso: 4,
+          room_id: "room-cocina-prefill",
+          tag_ids: ["tag-1", "tag-2"],
+        })
+      );
+      expect(postSpy).toHaveBeenCalledWith("/tasks/assign", {
+        task_id: "prefilled-task-99",
+        user_id: "user-maria",
+      });
     });
   });
 });

@@ -1,11 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import api from "../api";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, useLocation, Link } from "react-router-dom";
 import Select from "react-select";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
 import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
 import { getCurrentRoomId } from "../utils/room";
+import { toggleMemberTaskAssignmentLocal } from "../utils/kudosStore";
 import { getModernSelectStyles } from "../utils/selectStyles";
 import {
   parseRecurrenceExpression,
@@ -80,9 +81,17 @@ const TaskForm = () => {
 
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { notifyUpdate } = useTaskUpdate();
   const { theme } = useTheme();
   const { toast } = useToast();
+
+  const prefillAppliedRef = useRef(false);
+  const prefillTagsHydratedRef = useRef(false);
+  const [prefillRoomId, setPrefillRoomId] = useState<string | null>(null);
+  const [prefillAssigneeId, setPrefillAssigneeId] = useState<string | null>(null);
+  const [prefillTagIds, setPrefillTagIds] = useState<string[]>([]);
+  const [prefillTagNames, setPrefillTagNames] = useState<string[]>([]);
 
   const [draftSubtasks, setDraftSubtasks] = useState<string[]>([]);
   const [draftSubtaskInput, setDraftSubtaskInput] = useState("");
@@ -130,6 +139,85 @@ const TaskForm = () => {
     }
     setRecurrenceDslFeedback(`Regla detectada: ${formatRecurrenceRule(parsed)}`);
   };
+
+  useEffect(() => {
+    if (taskId || prefillAppliedRef.current) return;
+    const stateObj = location.state as
+      | {
+          prefill?: {
+            titulo?: string;
+            descripcion?: string;
+            categoria?: string;
+            peso?: number;
+            dueDate?: string;
+            recurrenceExpr?: string;
+            roomId?: string | null;
+            tagIds?: string[];
+            tags?: string[];
+            assigneeId?: string | null;
+          };
+        }
+      | null
+      | undefined;
+
+    const prefill = stateObj?.prefill;
+    if (!prefill) return;
+    prefillAppliedRef.current = true;
+
+    if (prefill.titulo) setTitulo(prefill.titulo);
+    if (prefill.descripcion) setDescripcion(prefill.descripcion);
+    if (prefill.categoria) setCategoria(prefill.categoria);
+    if (typeof prefill.peso === "number") setPeso(prefill.peso);
+    if (prefill.dueDate) setDueDate(prefill.dueDate);
+    if (prefill.roomId) setPrefillRoomId(prefill.roomId);
+    if (prefill.assigneeId) setPrefillAssigneeId(prefill.assigneeId);
+    if (Array.isArray(prefill.tagIds) && prefill.tagIds.length > 0) {
+      setPrefillTagIds(prefill.tagIds);
+    }
+    if (Array.isArray(prefill.tags) && prefill.tags.length > 0) {
+      setPrefillTagNames(prefill.tags);
+    }
+    if (prefill.recurrenceExpr) {
+      setIsRecurring(true);
+      applyDslExpression(prefill.recurrenceExpr);
+    }
+  }, [taskId, location.state]);
+
+  useEffect(() => {
+    if (taskId || prefillTagsHydratedRef.current || tags.length === 0) return;
+    if (prefillTagIds.length === 0 && prefillTagNames.length === 0) return;
+
+    prefillTagsHydratedRef.current = true;
+    const normalizeTagKey = (val: string): string =>
+      val
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim()
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ");
+
+    const normNames = prefillTagNames.map((n) => normalizeTagKey(n));
+    const matched = tags.filter(
+      (t) =>
+        prefillTagIds.includes(t.id) ||
+        normNames.includes(normalizeTagKey(t.nombre))
+    );
+
+    if (matched.length > 0) {
+      setSelectedTags((prev) => {
+        const existingIds = new Set(prev.map((item) => item.value));
+        const merged = [...prev];
+        for (const tg of matched) {
+          if (!existingIds.has(tg.id)) {
+            merged.push({ value: tg.id, label: tg.nombre });
+            existingIds.add(tg.id);
+          }
+        }
+        return merged;
+      });
+    }
+  }, [taskId, tags, prefillTagIds, prefillTagNames]);
 
   const activeRecurrenceRuleConfig = useMemo<RecurrenceRuleConfig>(
     () => ({
@@ -324,7 +412,7 @@ const TaskForm = () => {
       }
 
       if (!taskId) {
-        const activeRoomId = getCurrentRoomId();
+        const activeRoomId = prefillRoomId || getCurrentRoomId();
         if (activeRoomId) {
           payload.room_id = activeRoomId;
         }
@@ -336,6 +424,21 @@ const TaskForm = () => {
       } else {
         const res = await api.post<{ id: string }>("/tasks", payload);
         createdTaskId = res.data.id;
+      }
+
+      if (!taskId && createdTaskId && prefillAssigneeId) {
+        const effectiveRoomForAssign =
+          prefillRoomId || getCurrentRoomId() || "default";
+        toggleMemberTaskAssignmentLocal(effectiveRoomForAssign, createdTaskId, {
+          userId: prefillAssigneeId,
+          label: prefillAssigneeId,
+        });
+        api
+          .post("/tasks/assign", {
+            task_id: createdTaskId,
+            user_id: prefillAssigneeId,
+          })
+          .catch(() => {});
       }
 
       if (!taskId && createdTaskId && draftSubtasks.length > 0) {

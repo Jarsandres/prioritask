@@ -24,13 +24,38 @@ const SHORTCUTS: ShortcutItem[] = [
     category: "General",
   },
   {
+    keys: [">", "#", "@", "!"],
+    description:
+      "Prefijos en la Paleta de Comandos: > acciones, # hogares, @ etiquetas, !p1..p4 prioridad",
+    category: "General",
+  },
+  {
+    keys: ["Ctrl", "Enter"],
+    description:
+      "Completar o reabrir tarea seleccionada dentro de la Paleta de Comandos sin cerrarla",
+    category: "General",
+  },
+  {
     keys: ["?"],
     description: "Abrir esta ventana de ayuda de atajos de teclado",
     category: "General",
   },
   {
+    keys: ["Ctrl", "Espacio"],
+    description:
+      "Abrir ventana flotante de Captura Rápida (Quick Add) desde cualquier vista",
+    category: "Tareas",
+  },
+  {
     keys: ["c"],
-    description: "Crear una nueva tarea rápidamente desde cualquier pantalla",
+    description:
+      "Abrir ventana flotante de Captura Rápida (Quick Add) sin abandonar la pantalla",
+    category: "Tareas",
+  },
+  {
+    keys: ["Ctrl", "Enter"],
+    description:
+      "Crear tarea y mantener abierto el Quick Add para captura en ráfaga",
     category: "Tareas",
   },
   {
@@ -54,8 +79,23 @@ const SHORTCUTS: ShortcutItem[] = [
     category: "Tareas",
   },
   {
+    keys: ["Shift", "Clic"],
+    description: "Seleccionar un rango continuo de tareas para acciones en lote",
+    category: "Tareas",
+  },
+  {
+    keys: ["Ctrl", "Shift", "A"],
+    description: "Seleccionar o deseleccionar todas las tareas visibles",
+    category: "Tareas",
+  },
+  {
     keys: ["Supr"],
     description: "Solicitar eliminación de la tarea enfocada",
+    category: "Tareas",
+  },
+  {
+    keys: ["Alt", "↑ / ↓"],
+    description: "Mover la tarea enfocada hacia arriba o abajo en el orden manual de la lista",
     category: "Tareas",
   },
   {
@@ -70,7 +110,7 @@ const SHORTCUTS: ShortcutItem[] = [
   },
   {
     keys: ["Escape"],
-    description: "Cerrar modales, menús desplegables y paletas abiertas",
+    description: "Cerrar modales, menús desplegables o limpiar selección múltiple activa",
     category: "Navegación",
   },
   {
