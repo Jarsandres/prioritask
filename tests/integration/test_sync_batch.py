@@ -687,3 +687,135 @@ async def test_sync_batch_conflict_completion_and_status_sync(
     assert res_c_default.status_code == 200
     assert res_c_default.json()["sync_status"][default_room_cmd] == "ok"
 
+
+@pytest.mark.asyncio
+async def test_sync_batch_savepoint_isolation_and_hlc_poisoning_and_owner_room_access(
+    async_client: AsyncClient,
+    user_a_headers: dict[str, str],
+    user_b_headers: dict[str, str],
+    room_owner_a,
+    room_member_b,
+):
+    # 1. Rechazo de HLC Poisoning con timestamp futuro lejano -> 422
+    poison_res = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "room_id": str(room_owner_a.id),
+            "commands": [
+                {
+                    "uuid": str(uuid4()),
+                    "type": "task_create",
+                    "args": {"titulo": "Intento HLC Poisoning"},
+                    "timestamp": 1700000400000,
+                    "hlc_timestamp": "9999999999999:ffff:node",
+                }
+            ],
+        },
+        headers=user_a_headers,
+    )
+    assert poison_res.status_code == 422
+
+    # 2. Aislamiento con savepoint ante IntegrityError y validación de descripcion > 500 chars
+    first_ok_uuid = str(uuid4())
+    dup_err_uuid = str(uuid4())
+    desc_err_uuid = str(uuid4())
+    peso_err_uuid = str(uuid4())
+    first_temp_id = f"temp_{uuid4().hex[:8]}"
+
+    batch_res = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "room_id": str(room_owner_a.id),
+            "commands": [
+                {
+                    "uuid": first_ok_uuid,
+                    "temp_id": first_temp_id,
+                    "type": "task_create",
+                    "args": {
+                        "titulo": "Tarea Persistida Pre-Savepoint",
+                        "descripcion": "Descripción válida",
+                        "peso": 3.0,
+                        "room_id": str(room_owner_a.id),
+                    },
+                    "timestamp": 1700000401000,
+                    "hlc_timestamp": "1700000401000:0000:nodeB",
+                },
+                {
+                    "uuid": dup_err_uuid,
+                    "type": "task_create",
+                    "args": {
+                        "titulo": "Tarea Persistida Pre-Savepoint",
+                        "peso": 2.0,
+                        "room_id": str(room_owner_a.id),
+                    },
+                    "timestamp": 1700000402000,
+                },
+                {
+                    "uuid": desc_err_uuid,
+                    "type": "task_create",
+                    "args": {
+                        "titulo": "Tarea Descripcion Excesiva",
+                        "descripcion": "d" * 501,
+                        "peso": 2.0,
+                    },
+                    "timestamp": 1700000403000,
+                },
+                {
+                    "uuid": peso_err_uuid,
+                    "type": "task_create",
+                    "args": {
+                        "titulo": "Tarea Peso Fuera Rango",
+                        "peso": 0,
+                    },
+                    "timestamp": 1700000404000,
+                },
+            ],
+        },
+        headers=user_b_headers,
+    )
+    assert batch_res.status_code == 200
+    batch_data = batch_res.json()
+    assert batch_data["sync_status"][first_ok_uuid] == "ok"
+    assert batch_data["sync_status"][dup_err_uuid]["error_code"] == 422
+    assert batch_data["sync_status"][dup_err_uuid]["error_tag"] == "VALIDATION_ERROR"
+    assert batch_data["sync_status"][desc_err_uuid]["error_code"] == 422
+    assert batch_data["sync_status"][peso_err_uuid]["error_code"] == 422
+
+    # Verificar que la tarea creada antes del IntegrityError persistió en BD
+    persisted_task_id = batch_data["temp_id_mapping"][first_temp_id]
+    get_b = await async_client.get(
+        f"/api/v1/tasks/{persisted_task_id}",
+        headers=user_b_headers,
+    )
+    assert get_b.status_code == 200
+    assert get_b.json()["titulo"] == "Tarea Persistida Pre-Savepoint"
+
+    # 3. El propietario del hogar (user_a) puede acceder y actualizar la tarea creada por el miembro (user_b)
+    owner_upd_uuid = str(uuid4())
+    owner_upd_res = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "room_id": str(room_owner_a.id),
+            "commands": [
+                {
+                    "uuid": owner_upd_uuid,
+                    "type": "task_update",
+                    "args": {
+                        "id": persisted_task_id,
+                        "peso": 7.5,
+                    },
+                    "timestamp": 1700000405000,
+                    "base_version": 1,
+                    "field_hlc": {"peso": "1700000405000:0000:nodeA"},
+                }
+            ],
+        },
+        headers=user_a_headers,
+    )
+    assert owner_upd_res.status_code == 200
+    assert owner_upd_res.json()["sync_status"][owner_upd_uuid] == "ok"
+
+

@@ -1,4 +1,6 @@
+import inspect
 import json
+import math
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -19,6 +21,7 @@ from app.models import CategoriaTarea, Room, RoomMember
 from app.models.task import EstadoTarea, ProcessedSyncCommand, Task, TaskHistory
 from app.models.user import Usuario
 from app.schemas.sync import (
+    _MUTABLE_TASK_FIELDS,
     SyncBatchRequest,
     SyncBatchResponse,
     SyncCommandError,
@@ -30,18 +33,6 @@ from app.services.events import event_broadcaster
 from app.services.gamification import award_task_points
 
 router = APIRouter(prefix="/sync", tags=["Gestión de tareas"])
-
-_MUTABLE_TASK_FIELDS = {
-    "titulo",
-    "descripcion",
-    "categoria",
-    "estado",
-    "peso",
-    "due_date",
-    "reminder_at",
-    "completed",
-    "is_recurring",
-}
 
 
 def _parse_datetime_utc(value: Any) -> datetime | None:
@@ -126,8 +117,10 @@ def _extract_candidate_fields(cmd: SyncCommandIn) -> dict[str, Any]:
         elif key == "estado":
             candidates[key] = val if isinstance(val, EstadoTarea) else EstadoTarea(val)
         elif key == "peso":
+            if isinstance(val, bool):
+                raise ValueError("El peso debe ser mayor a 0 y menor a 100")
             peso_val = float(val)
-            if peso_val <= 0 or peso_val >= 100:
+            if not math.isfinite(peso_val) or peso_val <= 0 or peso_val >= 100:
                 raise ValueError("El peso debe ser mayor a 0 y menor a 100")
             candidates[key] = peso_val
         elif key in {"due_date", "reminder_at"}:
@@ -184,10 +177,19 @@ async def sync_batch(
             continue
 
         if cmd.type == "task_create":
+            savepoint = None
             try:
                 titulo = cmd.args.get("titulo")
                 if not isinstance(titulo, str) or not (3 <= len(titulo.strip()) <= 100):
                     raise ValueError("El título debe tener entre 3 y 100 caracteres")
+
+                descripcion = cmd.args.get("descripcion")
+                if descripcion is not None and (
+                    not isinstance(descripcion, str) or len(descripcion) > 500
+                ):
+                    raise ValueError(
+                        "La descripción no puede superar 500 caracteres"
+                    )
 
                 raw_cat = cmd.args.get("categoria", CategoriaTarea.OTRO)
                 categoria = (
@@ -201,7 +203,13 @@ async def sync_batch(
                     if isinstance(raw_estado, EstadoTarea)
                     else EstadoTarea(raw_estado)
                 )
-                peso = float(cmd.args.get("peso", 1.0))
+                raw_peso = cmd.args.get("peso", 1.0)
+                if isinstance(raw_peso, bool):
+                    raise ValueError("El peso debe ser mayor a 0 y menor a 100")
+                peso = float(raw_peso)
+                if not math.isfinite(peso) or peso <= 0 or peso >= 100:
+                    raise ValueError("El peso debe ser mayor a 0 y menor a 100")
+
                 due_date = _parse_datetime_utc(cmd.args.get("due_date"))
                 reminder_at = _parse_datetime_utc(cmd.args.get("reminder_at"))
                 completed = bool(cmd.args.get("completed", estado == EstadoTarea.DONE))
@@ -234,9 +242,10 @@ async def sync_batch(
                         if k in cmd.args:
                             initial_hlc[k] = cmd.hlc_timestamp
 
+                savepoint = await session.begin_nested()
                 new_task = Task(
                     titulo=titulo,
-                    descripcion=cmd.args.get("descripcion"),
+                    descripcion=descripcion,
                     categoria=categoria,
                     estado=estado,
                     peso=peso,
@@ -275,6 +284,9 @@ async def sync_batch(
                     )
                 )
                 await session.flush()
+                sp_commit = savepoint.commit()
+                if inspect.isawaitable(sp_commit):
+                    await sp_commit
                 await session.refresh(
                     new_task, ["etiquetas", "subtasks", "colaboradores", "recurrence_rule"]
                 )
@@ -303,7 +315,12 @@ async def sync_batch(
                     retryable=False,
                 )
             except IntegrityError:
-                await session.rollback()
+                if savepoint is not None:
+                    sp_rollback = savepoint.rollback()
+                    if inspect.isawaitable(sp_rollback):
+                        await sp_rollback
+                else:
+                    await session.rollback()
                 sync_status[cmd.uuid] = SyncCommandError(
                     error_code=422,
                     error="Ya existe una tarea activa con este título para el usuario.",

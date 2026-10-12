@@ -25,6 +25,7 @@ from app.models.task import EstadoTarea, Task, TaskHistory
 from app.models.user import Usuario
 from app.schemas.history import TaskHistoryRead
 from app.schemas.search import TaskSearchResponse
+from app.schemas.sync import filter_valid_field_hlc
 from app.schemas.task import (
     RecurrenceRuleInput,
     TaskAssignmentCreate,
@@ -274,14 +275,18 @@ async def _get_task_with_access(
     is_collaborator = any(c.user_id == current_user.id for c in task.colaboradores)
 
     if not is_collaborator and allow_collaborator and task.room_id:
-        room_member_res = await session.exec(
-            select(RoomMember).where(
-                RoomMember.room_id == task.room_id,
-                RoomMember.user_id == current_user.id,
-            )
-        )
-        if room_member_res.first() is not None:
+        room = await session.get(Room, task.room_id)
+        if room is not None and room.owner_id == current_user.id:
             is_collaborator = True
+        else:
+            room_member_res = await session.exec(
+                select(RoomMember).where(
+                    RoomMember.room_id == task.room_id,
+                    RoomMember.user_id == current_user.id,
+                )
+            )
+            if room_member_res.first() is not None:
+                is_collaborator = True
 
     if not is_owner and not (allow_collaborator and is_collaborator):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para acceder a esta tarea")
@@ -657,7 +662,9 @@ async def update_task(
         changes["recurrence_rule"] = raw_dump.get("recurrence_rule") or {"is_recurring": task.is_recurring}
 
     if isinstance(task_in.field_hlc, dict):
-        task.field_hlc = {**(task.field_hlc or {}), **task_in.field_hlc}
+        valid_hlc = filter_valid_field_hlc(task_in.field_hlc)
+        if valid_hlc:
+            task.field_hlc = {**(task.field_hlc or {}), **valid_hlc}
 
     if not changes:
         return task
@@ -792,7 +799,9 @@ async def patch_task(
             setattr(task, key, value)
 
         if isinstance(payload.field_hlc, dict):
-            task.field_hlc = {**(task.field_hlc or {}), **payload.field_hlc}
+            valid_hlc = filter_valid_field_hlc(payload.field_hlc)
+            if valid_hlc:
+                task.field_hlc = {**(task.field_hlc or {}), **valid_hlc}
 
         await _sync_task_recurrence_rule(
             session=session,

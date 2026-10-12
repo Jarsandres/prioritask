@@ -1,7 +1,8 @@
+import json
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.enums import UserRole
 
@@ -27,6 +28,20 @@ class UsuarioUpdate(BaseModel):
     nombre: str | None = Field(default=None, min_length=1, max_length=100)
     email: EmailStr | None = None
     preferences: dict[str, Any] | None = None
+
+    @field_validator("preferences")
+    @classmethod
+    def validate_preferences(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v is None:
+            return None
+        if len(v) > 32:
+            raise ValueError("Las preferencias no pueden contener más de 32 claves")
+        if len(json.dumps(v)) > 16384:
+            raise ValueError("Las preferencias no pueden superar 16384 bytes")
+        return v
+
+
+UserUpdate = UsuarioUpdate
 
 
 class PasswordChangeRequest(BaseModel):

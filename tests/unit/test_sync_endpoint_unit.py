@@ -164,7 +164,17 @@ class TestExtractCandidateFields:
             ):
                 _extract_candidate_fields(cmd)
 
-        for bad_weight in (0, -2.5, 100, 150.0):
+        for bad_weight in (
+            0,
+            -2.5,
+            100,
+            150.0,
+            float("nan"),
+            float("inf"),
+            float("-inf"),
+            True,
+            False,
+        ):
             cmd = SyncCommandIn(
                 uuid="cmd-err-weight",
                 type="task_update",
@@ -668,3 +678,142 @@ class TestSyncBatchEndpointUnit:
         assert res.sync_status["mut-direct-estado"] == "ok"
         assert task_direct_estado.completed is True
         assert mock_award.await_count == 4
+
+    @pytest.mark.asyncio
+    async def test_sync_batch_task_create_rejects_nan_inf_weight_and_long_description(self):
+        user = self._make_user()
+        room_id = uuid4()
+        session = AsyncMock()
+        session.add = MagicMock()
+        session.get.return_value = None
+
+        payload = SyncBatchRequest(
+            sync_token="*",
+            room_id=room_id,
+            commands=[
+                SyncCommandIn(
+                    uuid="create-nan-peso",
+                    type="task_create",
+                    args={"titulo": "Tarea NaN", "peso": float("nan")},
+                    timestamp=1700000000000,
+                ),
+                SyncCommandIn(
+                    uuid="create-inf-peso",
+                    type="task_create",
+                    args={"titulo": "Tarea Inf", "peso": float("inf")},
+                    timestamp=1700000000000,
+                ),
+                SyncCommandIn(
+                    uuid="create-bool-peso",
+                    type="task_create",
+                    args={"titulo": "Tarea Bool", "peso": True},
+                    timestamp=1700000000000,
+                ),
+                SyncCommandIn(
+                    uuid="create-long-desc",
+                    type="task_create",
+                    args={"titulo": "Tarea Desc Larga", "descripcion": "x" * 501},
+                    timestamp=1700000000000,
+                ),
+            ],
+        )
+
+        with (
+            patch(
+                "app.api.v1.endpoints.sync._fetch_tasks",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.api.v1.endpoints.sync.event_broadcaster.broadcast",
+                new=AsyncMock(),
+            ),
+        ):
+            res = await sync_batch(payload=payload, session=session, current_user=user)
+
+        for cmd_uuid in (
+            "create-nan-peso",
+            "create-inf-peso",
+            "create-bool-peso",
+            "create-long-desc",
+        ):
+            err = res.sync_status[cmd_uuid]
+            assert isinstance(err, SyncCommandError)
+            assert err.error_code == 422
+            assert err.error_tag == "VALIDATION_ERROR"
+
+    def test_hlc_poisoning_and_schema_bounds(self):
+        from pydantic import ValidationError as PydanticValidationError
+
+        from app.schemas.sync import filter_valid_field_hlc
+        from app.schemas.user import UsuarioUpdate
+
+        # Future HLC poisoning rejected in hlc_timestamp
+        with pytest.raises(PydanticValidationError):
+            SyncCommandIn(
+                uuid="cmd-poison-1",
+                type="task_create",
+                args={"titulo": "Poison"},
+                timestamp=1700000000000,
+                hlc_timestamp="9999999999999:ffff:node",
+            )
+
+        # Future HLC poisoning rejected in field_hlc
+        with pytest.raises(PydanticValidationError):
+            SyncCommandIn(
+                uuid="cmd-poison-2",
+                type="task_update",
+                args={"titulo": "Poison"},
+                timestamp=1700000000000,
+                field_hlc={"titulo": "9999999999999:ffff:node"},
+            )
+
+        # Malformed HLC rejected
+        with pytest.raises(PydanticValidationError):
+            SyncCommandIn(
+                uuid="cmd-malformed-hlc",
+                type="task_update",
+                args={"titulo": "Bad HLC"},
+                timestamp=1700000000000,
+                hlc_timestamp="not-an-hlc",
+            )
+
+        # More than 16 keys in field_hlc rejected
+        with pytest.raises(PydanticValidationError):
+            SyncCommandIn(
+                uuid="cmd-too-many-hlc",
+                type="task_update",
+                args={"titulo": "Too many"},
+                timestamp=1700000000000,
+                field_hlc={f"k{i}": "1700000001000:0000:node" for i in range(17)},
+            )
+
+        # Non-mutable keys stripped from SyncCommandIn.field_hlc and filter_valid_field_hlc
+        valid_cmd = SyncCommandIn(
+            uuid="cmd-strip-unknown",
+            type="task_update",
+            args={"titulo": "Clean"},
+            timestamp=1700000000000,
+            field_hlc={
+                "titulo": "1700000001000:0000:node",
+                "malicious_key": "1700000001000:0000:node",
+            },
+        )
+        assert valid_cmd.field_hlc == {"titulo": "1700000001000:0000:node"}
+
+        cleaned = filter_valid_field_hlc(
+            {
+                "titulo": "1700000001000:0000:node",
+                "unknown": "1700000001000:0000:node",
+                "peso": "9999999999999:ffff:node",
+                "estado": "bad-format",
+            }
+        )
+        assert cleaned == {"titulo": "1700000001000:0000:node"}
+
+        # UsuarioUpdate preferences limits (>32 keys and >16KB)
+        with pytest.raises(PydanticValidationError):
+            UsuarioUpdate(preferences={f"k{i}": i for i in range(33)})
+
+        with pytest.raises(PydanticValidationError):
+            UsuarioUpdate(preferences={"big": "a" * 17000})
+
