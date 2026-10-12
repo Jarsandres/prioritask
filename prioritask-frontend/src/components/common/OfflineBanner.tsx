@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { LuWifiOff, LuWifi, LuRefreshCw } from "react-icons/lu";
+import { LuWifiOff, LuWifi, LuRefreshCw, LuTrash2 } from "react-icons/lu";
 import useNetworkStatus from "../../hooks/useNetworkStatus";
 import {
   getPendingMutations,
   removeMutation,
+  clearQueue,
   type OfflineMutation,
 } from "../../services/offlineQueue";
 import api from "../../api";
@@ -19,6 +20,7 @@ export const OfflineBanner = () => {
   const { toast } = useToast();
   const { notifyUpdate } = useTaskUpdate();
   const isSyncingRef = useRef(false);
+  const lastAutoSyncAttemptRef = useRef<number>(0);
 
   // Consultar periódicamente o ante cambios de red el conteo de mutaciones encoladas
   const refreshPendingCount = useCallback(async () => {
@@ -87,6 +89,18 @@ export const OfflineBanner = () => {
     }
   }, [toast, notifyUpdate]);
 
+  // Sincronización automática cuando el navegador está online y hay tareas encoladas
+  useEffect(() => {
+    if (isOnline && !isOffline && pendingCount > 0 && !isSyncingRef.current) {
+      const now = Date.now();
+      // Esperar al menos 5 segundos entre reintentos automáticos continuos
+      if (now - lastAutoSyncAttemptRef.current > 5000) {
+        lastAutoSyncAttemptRef.current = now;
+        syncOfflineQueue();
+      }
+    }
+  }, [isOnline, isOffline, pendingCount, syncOfflineQueue]);
+
   // Escuchar cuando el navegador vuelve a estar online
   useEffect(() => {
     const handleWindowOnline = () => {
@@ -111,6 +125,24 @@ export const OfflineBanner = () => {
       window.removeEventListener("online", handleWindowOnline);
     };
   }, [wasOffline, isOnline, syncOfflineQueue]);
+
+  const handleManualSync = async () => {
+    if (isOffline) {
+      toast.warning("Sin conexión a internet. Conéctate para sincronizar.");
+      return;
+    }
+    await syncOfflineQueue();
+  };
+
+  const handleClearQueue = async () => {
+    try {
+      await clearQueue();
+      setPendingCount(0);
+      toast.info("Cambios offline descartados correctamente");
+    } catch (err) {
+      console.error("Error al descartar la cola offline:", err);
+    }
+  };
 
   if (!isOffline && !showRestored && pendingCount === 0) {
     return null;
@@ -148,7 +180,7 @@ export const OfflineBanner = () => {
 
   return (
     <aside
-      className="offline-banner position-fixed shadow-lg rounded-4 px-3 py-2 px-md-4 py-md-3 d-flex align-items-center gap-3 border animate-bounce-subtle"
+      className="offline-banner position-fixed shadow-lg rounded-4 px-3 py-2 px-md-4 py-md-3 d-flex flex-wrap align-items-center gap-3 border animate-bounce-subtle"
       style={{
         bottom: "24px",
         left: "50%",
@@ -160,7 +192,7 @@ export const OfflineBanner = () => {
         color: "#ffffff",
         borderColor: "rgba(245, 158, 11, 0.45)",
         boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px rgba(245, 158, 11, 0.15)",
-        maxWidth: "92vw",
+        maxWidth: "94vw",
         width: "max-content",
       }}
       role="alert"
@@ -207,6 +239,44 @@ export const OfflineBanner = () => {
             : "Las acciones se conservarán localmente hasta que vuelva la conexión."}
         </p>
       </div>
+
+      {pendingCount > 0 && (
+        <div className="d-flex align-items-center gap-2 ms-auto">
+          {!isOffline && (
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="btn btn-sm text-dark fw-bold d-flex align-items-center gap-1 shadow-sm px-2 py-1"
+              style={{
+                backgroundColor: "#f59e0b",
+                borderColor: "#d97706",
+                fontSize: "11px",
+                borderRadius: "8px",
+              }}
+              title="Reintentar sincronización ahora"
+            >
+              <LuRefreshCw size={12} className={isSyncing ? "ui-btn-spinner" : ""} />
+              <span>{isSyncing ? "Sincronizando..." : "Sincronizar"}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleClearQueue}
+            disabled={isSyncing}
+            className="btn btn-sm btn-outline-secondary text-white-50 d-flex align-items-center gap-1 px-2 py-1"
+            style={{
+              fontSize: "11px",
+              borderRadius: "8px",
+              borderColor: "rgba(255, 255, 255, 0.2)",
+            }}
+            title="Descartar cambios en cola"
+          >
+            <LuTrash2 size={12} />
+            <span>Descartar</span>
+          </button>
+        </div>
+      )}
     </aside>
   );
 };
