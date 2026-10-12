@@ -314,6 +314,18 @@
   opacity: 0.7;
 }
 
+.task-list-row:focus-visible,
+.task-list-row.task-row-focused {
+  outline: none;
+  background-color: var(--bg-hover);
+  box-shadow: inset 3px 0 0 0 var(--primary-500, #3b82f6);
+}
+
+.task-list-row.task-row-selected {
+  background-color: var(--primary-50, rgba(59, 130, 246, 0.08));
+  box-shadow: inset 3px 0 0 0 var(--primary-600, #2563eb);
+}
+
 .task-list-title-cell {
   display: flex;
   flex-direction: column;

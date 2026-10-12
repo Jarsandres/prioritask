@@ -19,6 +19,7 @@ import TaskCalendarView from "../components/tasks/TaskCalendarView";
 import QuickAddTaskBar from "../components/tasks/QuickAddTaskBar";
 import TaskPeekDrawer from "../components/tasks/TaskPeekDrawer";
 import { useRoomEvents, type RoomSyncEvent } from "../hooks/useRoomEvents";
+import { useTasksState } from "../hooks/useTasksState";
 import { usePixelConfetti } from "../hooks/usePixelConfetti";
 import { cacheManager } from "../services/cacheManager";
 import {
@@ -28,7 +29,7 @@ import {
   type QuickAssignee,
   type KudosEmoji,
 } from "../utils/kudosStore";
-import type { Task, Room, TaskStatus, Subtask } from "../types/task";
+import type { Task, Room, TaskStatus } from "../types/task";
 import type { GamificationOverview } from "../types/gamification";
 import {
   LuHouse,
@@ -62,7 +63,27 @@ const RoomTasks = () => {
   const cachedData = roomId ? cacheManager.getRoomTasks(roomId) : null;
   const cachedGamification = roomId ? cacheManager.getRoomGamification(roomId) : null;
 
-  const [tasks, setTasks] = useState<Task[]>(() => cachedData?.tasks || []);
+  const {
+    byId,
+    tasks,
+    pendingById,
+    ui: tasksUi,
+    getTaskById,
+    setTasks,
+    upsertTask,
+    reconcileLiveEvent,
+    toggleCompleteOptimistic,
+    updateTaskOptimistic,
+    setPriorityOptimistic,
+    deleteTaskOptimistic,
+    setFocusedTaskId,
+    moveFocus,
+    toggleSelectTask,
+  } = useTasksState({
+    initialTasks: cachedData?.tasks || [],
+    onOptimisticError: (err) => toast.error(err.message),
+  });
+
   const [roomName, setRoomName] = useState<string>("");
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
@@ -168,155 +189,35 @@ const RoomTasks = () => {
     return () => {
       controller.abort();
     };
-  }, [roomId, toast]);
+  }, [roomId, toast, setTasks]);
 
-  // Conciliación In-Place reactiva para SSE (Cero Flicker y Cero Skeletons destructivos)
+  // Conciliación In-Place O(1) reactiva para SSE y BroadcastChannel (Cero Flicker y Cero Skeletons destructivos)
   const handleLiveEvent = useCallback(
     (event: RoomSyncEvent) => {
       if (!event || !event.type) return;
 
-      switch (event.type) {
-        case "TASK_CREATED": {
-          const newTask = event.data as Task;
-          if (newTask && newTask.id) {
-            setTasks((prev) => {
-              if (prev.some((t) => t.id === newTask.id)) {
-                return prev.map((t) => (t.id === newTask.id ? { ...t, ...newTask } : t));
+      reconcileLiveEvent(event);
+
+      if (
+        event.type === "POINTS_AWARDED" ||
+        event.type === "STREAK_UPDATED" ||
+        event.type === "REWARD_REDEEMED"
+      ) {
+        // Refrescar datos de gamificación en segundo plano sin skeletons destructivos
+        if (roomId) {
+          api
+            .get<GamificationOverview>(`/rooms/${roomId}/gamification`)
+            .then((res) => {
+              if (res.data) {
+                setGamification(res.data);
+                cacheManager.setRoomGamification(roomId, res.data);
               }
-              return [newTask, ...prev];
-            });
-          }
-          break;
-        }
-
-        case "TASK_UPDATED": {
-          const updated = event.data as Partial<Task> & { id: string };
-          if (updated && updated.id) {
-            setTasks((prev) =>
-              prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
-            );
-          }
-          break;
-        }
-
-        case "TASK_DELETED": {
-          const payload = event.data as { id?: string; task_id?: string } | string;
-          const deletedId =
-            typeof payload === "string" ? payload : payload?.id || payload?.task_id;
-          if (deletedId) {
-            setTasks((prev) => prev.filter((t) => t.id !== deletedId));
-          }
-          break;
-        }
-
-        case "SUBTASK_TOGGLED":
-        case "SUBTASK_CREATED": {
-          const subtaskPayload = event.data as {
-            task_id?: string;
-            subtask?: Subtask;
-            subtasks_count?: number;
-            subtasks_completed_count?: number;
-          };
-          if (subtaskPayload?.task_id) {
-            setTasks((prev) =>
-              prev.map((t) => {
-                if (t.id !== subtaskPayload.task_id) return t;
-                let updatedSubtasks = t.subtasks;
-                if (subtaskPayload.subtask) {
-                  if (updatedSubtasks?.some((s) => s.id === subtaskPayload.subtask?.id)) {
-                    updatedSubtasks = updatedSubtasks.map((s) =>
-                      s.id === subtaskPayload.subtask?.id ? subtaskPayload.subtask! : s
-                    );
-                  } else if (updatedSubtasks) {
-                    updatedSubtasks = [...updatedSubtasks, subtaskPayload.subtask];
-                  }
-                }
-                const total =
-                  subtaskPayload.subtasks_count ??
-                  (updatedSubtasks ? updatedSubtasks.length : t.subtasks_count);
-                const completed =
-                  subtaskPayload.subtasks_completed_count ??
-                  (updatedSubtasks
-                    ? updatedSubtasks.filter((s) => s.completada).length
-                    : t.subtasks_completed_count);
-                return {
-                  ...t,
-                  subtasks: updatedSubtasks,
-                  subtasks_count: total,
-                  subtasks_completed_count: completed,
-                };
-              })
-            );
-          }
-          break;
-        }
-
-        case "COMMENT_ADDED":
-        case "COMMENT_DELETED": {
-          const commentPayload = event.data as {
-            task_id?: string;
-            comments_count?: number;
-          };
-          if (commentPayload?.task_id) {
-            setTasks((prev) =>
-              prev.map((t) => {
-                if (t.id !== commentPayload.task_id) return t;
-                const countDiff = event.type === "COMMENT_ADDED" ? 1 : -1;
-                return {
-                  ...t,
-                  comments_count:
-                    commentPayload.comments_count ??
-                    Math.max(0, (t.comments_count ?? 0) + countDiff),
-                };
-              })
-            );
-          }
-          break;
-        }
-
-        case "ATTACHMENT_ADDED":
-        case "ATTACHMENT_DELETED": {
-          const attPayload = event.data as {
-            task_id?: string;
-            attachments_count?: number;
-          };
-          if (attPayload?.task_id) {
-            setTasks((prev) =>
-              prev.map((t) => {
-                if (t.id !== attPayload.task_id) return t;
-                const countDiff = event.type === "ATTACHMENT_ADDED" ? 1 : -1;
-                return {
-                  ...t,
-                  attachments_count:
-                    attPayload.attachments_count ??
-                    Math.max(0, (t.attachments_count ?? 0) + countDiff),
-                };
-              })
-            );
-          }
-          break;
-        }
-
-        case "POINTS_AWARDED":
-        case "STREAK_UPDATED":
-        case "REWARD_REDEEMED": {
-          // Refrescar datos de gamificación en segundo plano sin skeletons destructivos
-          if (roomId) {
-            api
-              .get<GamificationOverview>(`/rooms/${roomId}/gamification`)
-              .then((res) => {
-                if (res.data) {
-                  setGamification(res.data);
-                  cacheManager.setRoomGamification(roomId, res.data);
-                }
-              })
-              .catch(() => {});
-          }
-          break;
+            })
+            .catch(() => {});
         }
       }
     },
-    [roomId]
+    [roomId, reconcileLiveEvent]
   );
 
   // Cliente de Sincronización en Vivo SSE y BroadcastChannel con conciliación atómica
@@ -324,11 +225,14 @@ const RoomTasks = () => {
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     setCompletingId(taskId);
-    try {
-      await api.patch(`/tasks/${taskId}/status`, { estado: newStatus });
-      setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, estado: newStatus } : t))
-      );
+    const ok = await updateTaskOptimistic(
+      taskId,
+      { estado: newStatus, completed: newStatus === "DONE" },
+      async (id) =>
+        (await api.patch<Task>(`/tasks/${id}/status`, { estado: newStatus })).data
+    );
+    setCompletingId(null);
+    if (ok) {
       if (roomId) {
         cacheManager.updateTaskInCache(roomId, { id: taskId, estado: newStatus });
       }
@@ -341,26 +245,65 @@ const RoomTasks = () => {
       } else {
         toast.info("Tarea movida a Por Hacer");
       }
-    } catch (err) {
-      console.error("Error al actualizar el estado de la tarea:", err);
-      toast.error("Error al actualizar el estado de la tarea.");
-    } finally {
-      setCompletingId(null);
     }
   };
 
   const handleToggleComplete = async (taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    const nextStatus: TaskStatus = task.estado === "DONE" ? "TODO" : "DONE";
-    await handleStatusChange(taskId, nextStatus);
+    const prev = getTaskById(taskId);
+    if (!prev) return;
+    const nextStatus: TaskStatus = prev.estado === "DONE" ? "TODO" : "DONE";
+    setCompletingId(taskId);
+    const ok = await toggleCompleteOptimistic(taskId);
+    setCompletingId(null);
+    if (ok) {
+      if (roomId) {
+        cacheManager.updateTaskInCache(roomId, { id: taskId, estado: nextStatus });
+      }
+      notifyUpdate();
+      if (nextStatus === "DONE") {
+        triggerCelebration();
+        toast.success("¡Tarea completada! 🎉");
+      } else {
+        toast.info("Tarea movida a Por Hacer");
+      }
+    }
+  };
+
+  const handlePriorityChange = async (taskId: string, nextPeso: number) => {
+    const ok = await setPriorityOptimistic(taskId, nextPeso);
+    if (ok) {
+      if (roomId) {
+        cacheManager.updateTaskInCache(roomId, { id: taskId, peso: nextPeso });
+      }
+      notifyUpdate();
+    }
   };
 
   const handleAdvanceTask = async (taskId: string) => {
     try {
-      await api.post(`/tasks/${taskId}/advance`);
+      const res = await api.post<Task>(`/tasks/${taskId}/advance`);
+      reconcileLiveEvent({
+        type: "TASK_UPDATED",
+        data: { id: taskId, estado: "DONE", completed: true },
+      });
+      if (roomId) {
+        cacheManager.updateTaskInCache(roomId, {
+          id: taskId,
+          estado: "DONE",
+          completed: true,
+        });
+      }
+      if (res.data?.id) {
+        upsertTask(res.data, "prepend");
+        if (roomId) {
+          cacheManager.addTaskToCache(roomId, res.data);
+        }
+      }
       notifyUpdate();
-      toast.success("Rutina avanzada al siguiente ciclo 🔄");
+      const nextDueStr = res.data?.due_date
+        ? ` (próxima: ${String(res.data.due_date).slice(0, 10)})`
+        : "";
+      toast.success(`Rutina avanzada al siguiente ciclo 🔄${nextDueStr}`);
     } catch (err: unknown) {
       console.error("Error al avanzar la tarea recurrente:", err);
       toast.error("Error al avanzar la tarea recurrente.");
@@ -375,20 +318,15 @@ const RoomTasks = () => {
     if (!taskToDelete) return;
     const id = taskToDelete.id;
     setDeletingId(id);
-    try {
-      await api.delete(`/tasks/${id}`);
-      setTasks((prev) => prev.filter((t) => t.id !== id));
+    setTaskToDelete(null);
+    const ok = await deleteTaskOptimistic(id);
+    setDeletingId(null);
+    if (ok) {
       if (roomId) {
         cacheManager.removeTaskFromCache(roomId, id);
       }
       notifyUpdate();
-      setTaskToDelete(null);
       toast.success("Tarea eliminada correctamente");
-    } catch (err) {
-      console.error("Error al eliminar tarea:", err);
-      toast.error("Ocurrió un error al eliminar la tarea.");
-    } finally {
-      setDeletingId(null);
     }
   };
 
@@ -687,12 +625,8 @@ const RoomTasks = () => {
       <QuickAddTaskBar
         roomId={roomId || null}
         onTaskCreated={(createdTask) => {
-          setTasks((prev) => {
-            const exists = prev.some((t) => t.id === createdTask.id);
-            const updated = exists ? prev : [createdTask, ...prev];
-            if (roomId) cacheManager.setRoomTasks(roomId, updated);
-            return updated;
-          });
+          upsertTask(createdTask, "prepend");
+          if (roomId) cacheManager.addTaskToCache(roomId, createdTask);
           notifyUpdate();
         }}
       />
@@ -740,8 +674,14 @@ const RoomTasks = () => {
                 onEdit={(t) => setPeekTask(t)}
                 onDelete={promptDelete}
                 onAdvance={handleAdvanceTask}
-                isCompleting={completingId === task.id}
-                isDeleting={deletingId === task.id}
+                isCompleting={
+                  pendingById[task.id] === "completing" ||
+                  completingId === task.id
+                }
+                isDeleting={
+                  pendingById[task.id] === "deleting" ||
+                  deletingId === task.id
+                }
                 assignedMembers={assigneesMap[task.id] || []}
                 onAssignMember={handleAssignMemberToTask}
                 activeAssigneeForClick={activeAssigneeForClick}
@@ -756,8 +696,16 @@ const RoomTasks = () => {
           onComplete={handleToggleComplete}
           onEdit={(t) => setPeekTask(t)}
           onDelete={promptDelete}
+          onAdvance={handleAdvanceTask}
+          onPriorityChange={handlePriorityChange}
           completingId={completingId}
           deletingId={deletingId}
+          pendingById={pendingById}
+          focusedTaskId={tasksUi.focusedTaskId}
+          selectedTaskIds={tasksUi.selectedTaskIds}
+          onFocusTask={setFocusedTaskId}
+          onNavigateFocus={moveFocus}
+          onToggleSelect={toggleSelectTask}
           assigneesMap={assigneesMap}
           onAssignMember={handleAssignMemberToTask}
           activeAssigneeForClick={activeAssigneeForClick}
@@ -788,7 +736,7 @@ const RoomTasks = () => {
 
       {/* Slide-Over Task Peek Drawer (Edición y detalle sin cambio de página) */}
       <TaskPeekDrawer
-        task={peekTask}
+        task={peekTask ? (byId[peekTask.id] ?? peekTask) : null}
         isOpen={Boolean(peekTask)}
         onClose={() => setPeekTask(null)}
         onComplete={handleToggleComplete}
@@ -796,9 +744,7 @@ const RoomTasks = () => {
         onAdvance={handleAdvanceTask}
         onKudosReaction={handleKudosReaction}
         onTaskUpdated={(updated) => {
-          setTasks((prev) =>
-            prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
-          );
+          upsertTask(updated);
           if (roomId) {
             cacheManager.updateTaskInCache(roomId, updated);
           }

@@ -34,13 +34,38 @@ const SHORTCUTS: ShortcutItem[] = [
     category: "Tareas",
   },
   {
+    keys: ["Espacio", "/", "x"],
+    description: "Completar o reabrir la tarea enfocada en la vista de lista",
+    category: "Tareas",
+  },
+  {
+    keys: ["e", "/", "Enter"],
+    description: "Abrir el panel de detalle y edición (Peek Drawer) de la tarea enfocada",
+    category: "Tareas",
+  },
+  {
+    keys: ["1", "2", "3", "4"],
+    description: "Asignar prioridad instantánea (P1 Urgente, P2 Alta, P3 Media, P4 Baja)",
+    category: "Tareas",
+  },
+  {
+    keys: ["Shift", "Espacio"],
+    description: "Seleccionar o deseleccionar tarea para acciones en lote (también tecla s)",
+    category: "Tareas",
+  },
+  {
+    keys: ["Supr"],
+    description: "Solicitar eliminación de la tarea enfocada",
+    category: "Tareas",
+  },
+  {
     keys: ["↑", "↓"],
-    description: "Navegar hacia arriba o abajo en listas y menús interactivos",
+    description: "Navegar entre tareas (Roving Focus) y menús interactivos",
     category: "Navegación",
   },
   {
-    keys: ["Enter"],
-    description: "Confirmar selección o ejecutar acción destacada",
+    keys: ["Inicio", "Fin"],
+    description: "Saltar a la primera o última tarea de la lista activa",
     category: "Navegación",
   },
   {

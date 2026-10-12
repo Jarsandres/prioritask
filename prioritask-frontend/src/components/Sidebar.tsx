@@ -18,11 +18,14 @@ import {
   LuChevronDown,
   LuChevronRight,
   LuHash,
+  LuChartBar,
   LuStar,
 } from "react-icons/lu";
+import api from "../api";
 import { useTheme } from "../context/ThemeContext";
 import { useRoom } from "../context/RoomContext";
 import { useSettings } from "../context/SettingsContext";
+import { clearClientSessionData } from "../services/sessionCleanup";
 import "./Sidebar.css";
 
 interface SidebarProps {
@@ -71,10 +74,13 @@ const Sidebar = ({
     return null;
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("roomId");
+  const handleLogout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // Continuar limpieza local aunque falle la red
+    }
+    await clearClientSessionData();
     setRoomId(null);
     if (onClose) onClose();
     navigate("/login");
@@ -221,6 +227,23 @@ const Sidebar = ({
                   aria-hidden="true"
                 />
                 <span className="nav-label">Asignar</span>
+              </NavLink>
+            </li>
+          )}
+          {visibleModules.analytics && (
+            <li>
+              <NavLink
+                to="/analytics"
+                onClick={handleNavClick}
+                className={({ isActive }) => (isActive ? "active" : "")}
+                title="Analíticas"
+              >
+                <LuChartBar
+                  size={18}
+                  className="nav-icon-blue"
+                  aria-hidden="true"
+                />
+                <span className="nav-label">Analíticas</span>
               </NavLink>
             </li>
           )}

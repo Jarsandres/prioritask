@@ -13,6 +13,43 @@ const DEFAULT_REMINDER_ACTIONS = [
   { action: "action.snooze.tomorrow9am", title: "Mañana 09:00" },
 ];
 
+const ALLOWED_ACTIONS = new Set([
+  "default",
+  "action.complete",
+  "action.snooze.30m",
+  "action.snooze.3h",
+  "action.snooze.tomorrow9am",
+]);
+
+function sanitizeReminderUrl(rawUrl) {
+  if (typeof rawUrl !== "string") {
+    return "/dashboard";
+  }
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return "/dashboard";
+  }
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+    return trimmed;
+  }
+  try {
+    const currentOrigin =
+      self.location && typeof self.location.origin === "string"
+        ? self.location.origin
+        : "";
+    if (!currentOrigin) {
+      return "/dashboard";
+    }
+    const parsed = new URL(trimmed);
+    if (parsed.origin === currentOrigin) {
+      return parsed.href;
+    }
+  } catch {
+    // URL malformada -> fallback seguro
+  }
+  return "/dashboard";
+}
+
 self.addEventListener("message", (event) => {
   const data = event.data;
   if (!data || data.type !== "PRIORITASK_SHOW_REMINDER") {
@@ -29,7 +66,7 @@ self.addEventListener("message", (event) => {
     data: {
       notificationUuid: data.notificationUuid,
       taskId: data.taskId,
-      url: data.url || "/dashboard",
+      url: sanitizeReminderUrl(data.url),
     },
   };
 
@@ -47,12 +84,18 @@ self.addEventListener("notificationclick", (event) => {
     notification.close();
   }
 
+  if (!ALLOWED_ACTIONS.has(selectedAction)) {
+    return;
+  }
+
   const payload = {
     type: "PRIORITASK_NOTIFICATION_ACTION",
     action: selectedAction,
     taskId: notifData.taskId,
     notificationUuid: notifData.notificationUuid,
   };
+
+  const targetUrl = sanitizeReminderUrl(notifData.url);
 
   event.waitUntil(
     self.clients
@@ -69,7 +112,7 @@ self.addEventListener("notificationclick", (event) => {
           return undefined;
         }
         if (self.clients.openWindow) {
-          return self.clients.openWindow(notifData.url || "/dashboard");
+          return self.clients.openWindow(targetUrl);
         }
         return undefined;
       })

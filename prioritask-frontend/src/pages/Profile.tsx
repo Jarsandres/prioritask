@@ -42,6 +42,7 @@ import {
   type NotificationSettings,
 } from "../context/SettingsContext";
 import { useRoom } from "../context/RoomContext";
+import { clearClientSessionData } from "../services/sessionCleanup";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
@@ -328,7 +329,7 @@ const Profile = () => {
     computeSnoozeTarget,
   } = useSettings();
 
-  const { rooms } = useRoom();
+  const { rooms, setRoomId } = useRoom();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -375,9 +376,8 @@ const Profile = () => {
     } catch {
       // Continuar limpieza local aunque falle la red
     }
-    localStorage.removeItem("token");
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refreshToken");
+    await clearClientSessionData();
+    setRoomId(null);
     toast.info("Has cerrado sesión.");
     navigate("/login");
   };
@@ -389,9 +389,8 @@ const Profile = () => {
     } catch {
       toast.info("Sesiones cerradas localmente.");
     }
-    localStorage.removeItem("token");
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refreshToken");
+    await clearClientSessionData();
+    setRoomId(null);
     navigate("/login");
   };
 
@@ -539,7 +538,7 @@ const Profile = () => {
     };
   }, [computeSnoozeTarget]);
 
-  const storageUsageKB = useMemo(() => estimateLocalStorageKB(), [settings]);
+  const storageUsageKB = estimateLocalStorageKB();
   const isOnline =
     typeof navigator !== "undefined" ? navigator.onLine !== false : true;
 

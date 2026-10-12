@@ -1,27 +1,14 @@
-import React, { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Task } from "../../types/task";
 import { useTheme } from "../../context/ThemeContext";
-import {
-  getMemberInitials,
-  type QuickAssignee,
-} from "../../utils/kudosStore";
-import {
-  PriorityBadge,
-  StatusBadge,
-  RecurringBadge,
-  CategoryIcon,
-} from "../common/Badges";
-import {
-  LuCheck,
-  LuCircleCheck,
-  LuCalendar,
-  LuPencil,
-  LuTrash2,
-  LuLoaderCircle,
-  LuListChecks,
-  LuUserPlus,
-} from "react-icons/lu";
+import type { QuickAssignee } from "../../utils/kudosStore";
+import type {
+  FocusNavigationDirection,
+  TaskMutationKind,
+  TaskPriorityLevel,
+} from "../../hooks/useTasksState";
+import TaskItem from "./TaskItem";
 import "./tasks.css";
 
 export const VIRTUALIZATION_THRESHOLD = 40;
@@ -31,332 +18,44 @@ export interface TaskListViewProps {
   onComplete?: (taskId: string) => void | Promise<void>;
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
+  onAdvance?: (taskId: string) => void | Promise<void>;
+  onPriorityChange?: (
+    taskId: string,
+    nextPeso: number,
+    nextLevel: TaskPriorityLevel
+  ) => void | Promise<void>;
   completingId?: string | null;
   deletingId?: string | null;
+  pendingById?: Record<string, TaskMutationKind>;
+  focusedTaskId?: string | null;
+  selectedTaskIds?: string[];
+  onFocusTask?: (taskId: string) => void;
+  onNavigateFocus?: (
+    direction: FocusNavigationDirection,
+    currentTaskId: string
+  ) => string | null | void;
+  onToggleSelect?: (taskId: string) => void;
   className?: string;
   assigneesMap?: Record<string, QuickAssignee[]>;
   onAssignMember?: (taskId: string, member: QuickAssignee) => void | Promise<void>;
   activeAssigneeForClick?: QuickAssignee | null;
 }
 
-interface TaskListRowProps {
-  task: Task;
-  onComplete?: (taskId: string) => void | Promise<void>;
-  onEdit?: (task: Task) => void;
-  onDelete?: (task: Task) => void;
-  isCompleting: boolean;
-  isDeleting: boolean;
-  assignedMembers?: QuickAssignee[];
-  onAssignMember?: (taskId: string, member: QuickAssignee) => void | Promise<void>;
-  activeAssigneeForClick?: QuickAssignee | null;
-}
-
-const TaskListRow = ({
-  task,
-  onComplete,
-  onEdit,
-  onDelete,
-  isCompleting,
-  isDeleting,
-  assignedMembers = [],
-  onAssignMember,
-  activeAssigneeForClick = null,
-}: TaskListRowProps) => {
-  const isDone = task.estado === "DONE";
-  const [isMemberDragOver, setIsMemberDragOver] = useState(false);
-
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [touchCurrentX, setTouchCurrentX] = useState<number | null>(null);
-  const [isSwiping, setIsSwiping] = useState(false);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.touches[0].clientX);
-    setTouchCurrentX(e.touches[0].clientX);
-    setIsSwiping(true);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartX === null) return;
-    setTouchCurrentX(e.touches[0].clientX);
-  };
-
-  const handleTouchEnd = () => {
-    if (touchStartX !== null && touchCurrentX !== null) {
-      const deltaX = touchCurrentX - touchStartX;
-      if (deltaX > 75 && onComplete && !isCompleting && !isDeleting) {
-        if (typeof navigator !== "undefined" && navigator.vibrate) {
-          navigator.vibrate(30);
-        }
-        onComplete(task.id);
-      } else if (deltaX < -75 && onDelete && !isDeleting && !isCompleting) {
-        if (typeof navigator !== "undefined" && navigator.vibrate) {
-          navigator.vibrate(30);
-        }
-        onDelete(task);
-      }
-    }
-    setTouchStartX(null);
-    setTouchCurrentX(null);
-    setIsSwiping(false);
-  };
-
-  const swipeOffset =
-    touchStartX !== null && touchCurrentX !== null
-      ? touchCurrentX - touchStartX
-      : 0;
-  const clampedOffset = Math.max(-90, Math.min(90, swipeOffset));
-
-  const priorityRingClass =
-    task.peso >= 4
-      ? "priority-ring-p1"
-      : task.peso === 3
-      ? "priority-ring-p2"
-      : task.peso === 2
-      ? "priority-ring-p3"
-      : "priority-ring-p4";
-
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const dueDateNormalized = task.due_date ? String(task.due_date).slice(0, 10) : "";
-  const dueStatusClass =
-    !dueDateNormalized || isDone
-      ? ""
-      : dueDateNormalized < todayIso
-      ? "due-overdue"
-      : dueDateNormalized === todayIso
-      ? "due-today"
-      : "due-upcoming";
-
-  const handleMemberDragOver = (e: React.DragEvent) => {
-    if (!onAssignMember) return;
-    if (e.dataTransfer.types.includes("application/x-prioritask-member")) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.dataTransfer.dropEffect = "copy";
-      setIsMemberDragOver(true);
-    }
-  };
-
-  const handleMemberDragLeave = () => {
-    if (isMemberDragOver) {
-      setIsMemberDragOver(false);
-    }
-  };
-
-  const handleMemberDrop = (e: React.DragEvent) => {
-    if (!onAssignMember) return;
-    const rawMember = e.dataTransfer.getData("application/x-prioritask-member");
-    if (!rawMember) return;
-    e.preventDefault();
-    e.stopPropagation();
-    setIsMemberDragOver(false);
-    try {
-      const parsed = JSON.parse(rawMember) as QuickAssignee;
-      if (parsed && parsed.userId) {
-        onAssignMember(task.id, parsed);
-      }
-    } catch {
-      // Ignorar payload inválido
-    }
-  };
-
-  return (
-    <div
-      className={`task-list-row ${isDone ? "task-done" : ""} ${
-        isMemberDragOver ? "is-member-drop-target" : ""
-      }`.trim()}
-      role="row"
-      onDragOver={handleMemberDragOver}
-      onDragLeave={handleMemberDragLeave}
-      onDrop={handleMemberDrop}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      style={{
-        transform:
-          isSwiping && Math.abs(clampedOffset) > 10
-            ? `translateX(${clampedOffset}px)`
-            : undefined,
-        transition: isSwiping ? "none" : "transform 0.2s ease",
-        backgroundColor:
-          clampedOffset > 40
-            ? "rgba(16, 185, 129, 0.08)"
-            : clampedOffset < -40
-            ? "rgba(239, 68, 68, 0.08)"
-            : undefined,
-      }}
-      data-testid={`task-list-row-${task.id}`}
-    >
-      {/* Checkbox circular */}
-      <div className="d-flex align-items-center">
-        <button
-          type="button"
-          className={`ui-task-checkbox ${priorityRingClass} ${isDone ? "checked" : ""}`.trim()}
-          onClick={() => onComplete && onComplete(task.id)}
-          disabled={isCompleting || isDeleting}
-          aria-label={
-            isDone ? `Desmarcar ${task.titulo}` : `Completar ${task.titulo}`
-          }
-          title={isDone ? "Completada" : "Marcar completada"}
-        >
-          {isCompleting ? (
-            <LuLoaderCircle
-              size={12}
-              className="ui-btn-spinner"
-              aria-hidden="true"
-            />
-          ) : isDone ? (
-            <LuCircleCheck size={16} aria-hidden="true" />
-          ) : (
-            <LuCheck size={11} aria-hidden="true" />
-          )}
-        </button>
-      </div>
-
-      {/* Título y descripción */}
-      <div
-        className="task-list-title-cell"
-        onClick={() => onEdit?.(task)}
-        onKeyDown={(e) => {
-          if (onEdit && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault();
-            onEdit(task);
-          }
-        }}
-        role={onEdit ? "button" : undefined}
-        tabIndex={onEdit ? 0 : undefined}
-        style={{ cursor: onEdit ? "pointer" : undefined }}
-      >
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <span className="task-list-item-title">{task.titulo}</span>
-          {task.is_recurring && <RecurringBadge />}
-          {(task.subtasks_count ?? task.subtasks?.length ?? 0) > 0 && (
-            <span
-              className="badge rounded-pill bg-light text-dark border d-inline-flex align-items-center gap-1 px-2 py-0 small"
-              style={{ fontSize: "11px", fontWeight: 600 }}
-              title={`Subtareas: ${
-                task.subtasks_completed_count ??
-                task.subtasks?.filter((s) => s.completada).length ??
-                0
-              }/${task.subtasks_count ?? task.subtasks?.length ?? 0}`}
-            >
-              <LuListChecks size={12} aria-hidden="true" />
-              <span>
-                {task.subtasks_completed_count ??
-                  task.subtasks?.filter((s) => s.completada).length ??
-                  0}
-                /{task.subtasks_count ?? task.subtasks?.length ?? 0}
-              </span>
-            </span>
-          )}
-          {assignedMembers.map((member) => (
-            <button
-              key={member.userId}
-              type="button"
-              className="ui-task-assignee-chip"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAssignMember?.(task.id, member);
-              }}
-              title={`Asignada a ${member.label} (clic para quitar)`}
-            >
-              <span className="ui-task-assignee-initials">
-                {getMemberInitials(member.label)}
-              </span>
-              <span className="ui-task-assignee-name">{member.label}</span>
-            </button>
-          ))}
-          {activeAssigneeForClick && onAssignMember && (
-            <button
-              type="button"
-              className="ui-task-quick-assign-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAssignMember(task.id, activeAssigneeForClick);
-              }}
-              data-testid={`list-quick-assign-btn-${task.id}`}
-            >
-              <LuUserPlus size={11} />
-              <span>
-                {assignedMembers.some(
-                  (m) => m.userId === activeAssigneeForClick.userId
-                )
-                  ? `Quitar ${activeAssigneeForClick.label}`
-                  : `Asignar a ${activeAssigneeForClick.label}`}
-              </span>
-            </button>
-          )}
-        </div>
-        {task.descripcion && (
-          <span className="task-list-item-desc">{task.descripcion}</span>
-        )}
-      </div>
-
-      {/* Categoría */}
-      <div className="task-list-category-cell">
-        <span className="badge rounded-pill bg-light text-dark border d-inline-flex align-items-center gap-1 px-2 py-1 small">
-          <CategoryIcon category={task.categoria} size={13} />
-          <span style={{ fontSize: "11px", fontWeight: 600 }}>
-            {task.categoria || "OTRO"}
-          </span>
-        </span>
-      </div>
-
-      {/* Prioridad */}
-      <div className="task-list-priority-cell">
-        <PriorityBadge peso={task.peso} />
-      </div>
-
-      {/* Fecha de vencimiento */}
-      <div className="task-list-due-cell">
-        {task.due_date ? (
-          <span
-            className={`ui-task-due-date ${dueStatusClass} d-inline-flex align-items-center gap-1 small`.trim()}
-          >
-            <LuCalendar size={13} aria-hidden="true" />
-            <span>{task.due_date}</span>
-          </span>
-        ) : (
-          <span className="text-muted small">—</span>
-        )}
-      </div>
-
-      {/* Acciones */}
-      <div className="task-list-actions">
-        <StatusBadge status={task.estado} />
-        {onEdit && (
-          <button
-            type="button"
-            className="task-list-action-btn"
-            onClick={() => onEdit(task)}
-            title="Editar tarea"
-            disabled={isDeleting || isCompleting}
-          >
-            <LuPencil size={15} aria-hidden="true" />
-          </button>
-        )}
-        {onDelete && (
-          <button
-            type="button"
-            className="task-list-action-btn danger"
-            onClick={() => onDelete(task)}
-            title="Eliminar tarea"
-            disabled={isDeleting || isCompleting}
-          >
-            <LuTrash2 size={15} aria-hidden="true" />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
-
 export const TaskListView = ({
   tasks,
   onComplete,
   onEdit,
   onDelete,
+  onAdvance,
+  onPriorityChange,
   completingId,
   deletingId,
+  pendingById,
+  focusedTaskId: controlledFocusedTaskId,
+  selectedTaskIds = [],
+  onFocusTask,
+  onNavigateFocus,
+  onToggleSelect,
   className = "",
   assigneesMap,
   onAssignMember,
@@ -365,6 +64,17 @@ export const TaskListView = ({
   const { density } = useTheme();
   const isVirtualized = tasks.length > VIRTUALIZATION_THRESHOLD;
   const parentRef = useRef<HTMLDivElement>(null);
+
+  const [internalFocusedId, setInternalFocusedId] = useState<string | null>(
+    () => tasks[0]?.id ?? null
+  );
+
+  const activeFocusedId =
+    controlledFocusedTaskId !== undefined
+      ? controlledFocusedTaskId
+      : internalFocusedId && tasks.some((t) => t.id === internalFocusedId)
+      ? internalFocusedId
+      : (tasks[0]?.id ?? null);
 
   const estimatedRowHeight =
     density === "compact" ? 38 : density === "cozy" ? 72 : 58;
@@ -375,6 +85,52 @@ export const TaskListView = ({
     estimateSize: () => estimatedRowHeight,
     overscan: 5,
   });
+
+  const handleFocusTask = useCallback(
+    (taskId: string) => {
+      if (controlledFocusedTaskId === undefined) {
+        setInternalFocusedId(taskId);
+      }
+      onFocusTask?.(taskId);
+    },
+    [controlledFocusedTaskId, onFocusTask]
+  );
+
+  const handleNavigateFocus = useCallback(
+    (direction: FocusNavigationDirection, currentTaskId: string) => {
+      if (tasks.length === 0) return;
+
+      const currentIndex = tasks.findIndex((t) => t.id === currentTaskId);
+      let nextIndex = 0;
+
+      if (direction === "first") {
+        nextIndex = 0;
+      } else if (direction === "last") {
+        nextIndex = tasks.length - 1;
+      } else if (currentIndex === -1) {
+        nextIndex = direction === "next" ? 0 : tasks.length - 1;
+      } else if (direction === "next") {
+        nextIndex = Math.min(currentIndex + 1, tasks.length - 1);
+      } else {
+        nextIndex = Math.max(currentIndex - 1, 0);
+      }
+
+      const targetTask = tasks[nextIndex];
+      if (!targetTask) return;
+
+      // Si la lista está virtualizada, asegurar que la fila destino esté montada en el viewport
+      if (isVirtualized) {
+        rowVirtualizer.scrollToIndex(nextIndex, { align: "auto" });
+      }
+
+      if (onNavigateFocus) {
+        onNavigateFocus(direction, currentTaskId);
+      } else {
+        setInternalFocusedId(targetTask.id);
+      }
+    },
+    [isVirtualized, onNavigateFocus, rowVirtualizer, tasks]
+  );
 
   return (
     <div className={`task-list-view ${className}`.trim()}>
@@ -422,16 +178,26 @@ export const TaskListView = ({
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                 >
-                  <TaskListRow
+                  <TaskItem
                     task={task}
-                    onComplete={onComplete}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
+                    role="row"
+                    rovingTabIndex={true}
+                    isFocused={activeFocusedId === task.id}
+                    isSelected={selectedTaskIds.includes(task.id)}
+                    pendingState={pendingById?.[task.id] ?? null}
                     isCompleting={completingId === task.id}
                     isDeleting={deletingId === task.id}
                     assignedMembers={assigneesMap?.[task.id]}
-                    onAssignMember={onAssignMember}
                     activeAssigneeForClick={activeAssigneeForClick}
+                    onToggleComplete={onComplete}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onAdvance={onAdvance}
+                    onPriorityChange={onPriorityChange}
+                    onFocusTask={handleFocusTask}
+                    onNavigateFocus={handleNavigateFocus}
+                    onToggleSelect={onToggleSelect}
+                    onAssignMember={onAssignMember}
                   />
                 </div>
               );
@@ -441,17 +207,27 @@ export const TaskListView = ({
       ) : (
         <div className="task-list-rows" role="rowgroup">
           {tasks.map((task) => (
-            <TaskListRow
+            <TaskItem
               key={task.id}
               task={task}
-              onComplete={onComplete}
-              onEdit={onEdit}
-              onDelete={onDelete}
+              role="row"
+              rovingTabIndex={true}
+              isFocused={activeFocusedId === task.id}
+              isSelected={selectedTaskIds.includes(task.id)}
+              pendingState={pendingById?.[task.id] ?? null}
               isCompleting={completingId === task.id}
               isDeleting={deletingId === task.id}
               assignedMembers={assigneesMap?.[task.id]}
-              onAssignMember={onAssignMember}
               activeAssigneeForClick={activeAssigneeForClick}
+              onToggleComplete={onComplete}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onAdvance={onAdvance}
+              onPriorityChange={onPriorityChange}
+              onFocusTask={handleFocusTask}
+              onNavigateFocus={handleNavigateFocus}
+              onToggleSelect={onToggleSelect}
+              onAssignMember={onAssignMember}
             />
           ))}
         </div>
@@ -461,3 +237,4 @@ export const TaskListView = ({
 };
 
 export default TaskListView;
+

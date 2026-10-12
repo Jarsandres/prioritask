@@ -420,7 +420,18 @@ export class TabLeaderCoordinator {
       case "LEADER_CLAIM":
       case "LEADER_HEARTBEAT": {
         if (message.leaderTabId && message.leaderTabId !== this.tabId) {
-          this.updateKnownLeader(message.leaderTabId);
+          if (this.releaseWebLockResolver !== null) {
+            this.isLeader = true;
+            this.leaderTabId = this.tabId;
+            this.postCoordinationMessage({
+              kind: "LEADER_HEARTBEAT",
+              senderTabId: this.tabId,
+              leaderTabId: this.tabId,
+              timestamp: Date.now(),
+            });
+          } else {
+            this.updateKnownLeader(message.leaderTabId);
+          }
         }
         break;
       }
@@ -436,7 +447,10 @@ export class TabLeaderCoordinator {
         break;
       }
       case "LEADER_STEPDOWN": {
-        if (message.leaderTabId === this.tabId) {
+        if (
+          message.leaderTabId === this.tabId ||
+          this.releaseWebLockResolver !== null
+        ) {
           this.promoteToLeader();
         } else if (message.leaderTabId) {
           this.updateKnownLeader(message.leaderTabId);
