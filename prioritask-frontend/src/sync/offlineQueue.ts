@@ -1,4 +1,6 @@
+import api from "../api";
 import type { Task, TaskStatus } from "../types/task";
+import { HybridLogicalClock, compareHlc } from "./hlc";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Esquema de Datos: Comandos de Sincronización, Sobre IPC y Cola Local
@@ -13,6 +15,7 @@ export type SyncCommandType =
   | "task_update"
   | "task_complete"
   | "task_uncomplete"
+  | "task_schedule_reminder"
   | "task_delete";
 
 /**
@@ -35,6 +38,7 @@ export interface TaskCreateArgs {
   peso?: number;
   estado?: TaskStatus;
   due_date?: string;
+  reminder_at?: string | null;
   room_id?: string | null;
 }
 
@@ -46,11 +50,18 @@ export interface TaskUpdateArgs {
   peso?: number;
   estado?: TaskStatus;
   due_date?: string;
+  reminder_at?: string | null;
   expected_updated_at?: string;
 }
 
 export interface TaskStatusToggleArgs {
   id: string;
+  expected_updated_at?: string;
+}
+
+export interface TaskScheduleReminderArgs {
+  id: string;
+  reminder_at: string | null;
   expected_updated_at?: string;
 }
 
@@ -63,6 +74,7 @@ export type SyncCommandArgsMap = {
   task_update: TaskUpdateArgs;
   task_complete: TaskStatusToggleArgs;
   task_uncomplete: TaskStatusToggleArgs;
+  task_schedule_reminder: TaskScheduleReminderArgs;
   task_delete: TaskDeleteArgs;
 };
 
@@ -73,6 +85,9 @@ export type SyncCommandArgsMap = {
  * - `type`: Verbo de dominio de la mutación.
  * - `args`: Payload de la operación.
  * - `timestamp`: Marca de tiempo Unix (ms) para ordenamiento causal FIFO y resolución LWW.
+ * - `hlc_timestamp`: Marca de Reloj Lógico Híbrido canónica.
+ * - `base_version`: Versión conocida de la entidad antes de la mutación.
+ * - `field_hlc`: Mapa de marcas HLC por campo mutado para resolución CRDT LWW-Element-Set.
  */
 export interface SyncCommand<T extends SyncCommandType = SyncCommandType> {
   uuid: string;
@@ -80,6 +95,9 @@ export interface SyncCommand<T extends SyncCommandType = SyncCommandType> {
   type: T;
   args: SyncCommandArgsMap[T];
   timestamp: number;
+  hlc_timestamp?: string;
+  base_version?: number;
+  field_hlc?: Record<string, string>;
   status: SyncCommandStatus;
   retryCount: number;
   lastError?: string;
@@ -153,7 +171,19 @@ export type CommandSyncResult =
  */
 export interface SyncBatchRequest {
   sync_token: string;
-  commands: Array<Pick<SyncCommand, "uuid" | "temp_id" | "type" | "args" | "timestamp">>;
+  commands: Array<
+    Pick<
+      SyncCommand,
+      | "uuid"
+      | "temp_id"
+      | "type"
+      | "args"
+      | "timestamp"
+      | "hlc_timestamp"
+      | "base_version"
+      | "field_hlc"
+    >
+  >;
 }
 
 /**
@@ -325,12 +355,169 @@ export class IndexedDBQueueStorageAdapter implements QueueStorageAdapter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Transporte de Sincronización y Simulador de Resolución de Conflictos
+// 4. Transporte de Sincronización, Cliente HTTP y Simulador de Conflictos
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type SyncTransportExecutor = (
   batch: SyncBatchRequest
 ) => Promise<SyncBatchResponse>;
+
+/**
+ * Clasifica errores transitorios de red o servidor (inspirado en
+ * `@doist/electron-utils/dist/network.js`) que ameritan reintento automático
+ * sin descartar comandos de la cola offline.
+ */
+export function isTransientNetworkError(error: unknown): boolean {
+  if (!error) return false;
+
+  const transientCodes = new Set([
+    "ERR_INTERNET_DISCONNECTED",
+    "ERR_NETWORK_CHANGED",
+    "ERR_CONNECTION_RESET",
+    "ERR_CONNECTION_REFUSED",
+    "ERR_NAME_NOT_RESOLVED",
+    "ETIMEDOUT",
+    "ECONNABORTED",
+    "ECONNRESET",
+    "ENETUNREACH",
+    "ERR_NETWORK",
+  ]);
+
+  const transientStatuses = new Set([408, 429, 502, 503, 504]);
+
+  if (typeof error === "object") {
+    const errObj = error as {
+      code?: string;
+      message?: string;
+      status?: number;
+      response?: { status?: number };
+    };
+
+    if (errObj.code && transientCodes.has(errObj.code)) {
+      return true;
+    }
+
+    const httpStatus = errObj.response?.status ?? errObj.status;
+    if (typeof httpStatus === "number" && transientStatuses.has(httpStatus)) {
+      return true;
+    }
+
+    const msg = errObj.message ?? "";
+    if (
+      msg.includes("Network Error") ||
+      msg.includes("Sin conexión a internet") ||
+      msg.includes("Failed to fetch") ||
+      msg.includes("timeout") ||
+      Array.from(transientCodes).some((code) => msg.includes(code))
+    ) {
+      return true;
+    }
+  }
+
+  if (typeof error === "string") {
+    return (
+      error.includes("Network Error") ||
+      error.includes("ETIMEDOUT") ||
+      Array.from(transientCodes).some((code) => error.includes(code))
+    );
+  }
+
+  return false;
+}
+
+/**
+ * Crea un transporte HTTP real conectado al endpoint `/api/v1/sync/batch`
+ * utilizando el cliente centralizado Axios (`src/api.ts`).
+ */
+export function createHttpSyncTransport(
+  customEndpoint = "/sync/batch"
+): SyncTransportExecutor {
+  return async (batch: SyncBatchRequest): Promise<SyncBatchResponse> => {
+    const response = await api.post<SyncBatchResponse>(customEndpoint, batch, {
+      _isOfflineSync: true,
+    } as Record<string, unknown>);
+    return response.data;
+  };
+}
+
+/**
+ * Monitor de reanudación del sistema y reconexión de red (inspirado en
+ * `powerMonitor.on("resume")` de Todoist `webpack/electron/electron.js`).
+ * Tras un retardo de estabilización (`settleDelayMs = 500`), dispara un
+ * sobre `sendRequestSync` hacia el `OfflineSyncEngine`.
+ */
+export function attachSystemWakeupMonitor(
+  engine: OfflineSyncEngine,
+  options?: {
+    settleDelayMs?: number;
+    checkIntervalMs?: number;
+    wakeupThresholdMs?: number;
+  }
+): () => void {
+  const settleDelayMs = options?.settleDelayMs ?? 500;
+  const checkIntervalMs = options?.checkIntervalMs ?? 10_000;
+  const wakeupThresholdMs = options?.wakeupThresholdMs ?? 30_000;
+
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastTickMs = Date.now();
+
+  const triggerWakeupSync = () => {
+    if (settleTimer !== null) {
+      clearTimeout(settleTimer);
+    }
+    settleTimer = setTimeout(() => {
+      settleTimer = null;
+      void engine.handleBridgeEnvelope({
+        type: "com.todoist.ipc.push",
+        id: generateSyncUuid(),
+        method: "sendRequestSync",
+      });
+    }, settleDelayMs);
+  };
+
+  const handleOnline = () => {
+    triggerWakeupSync();
+  };
+
+  const handleVisibilityChange = () => {
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "visible"
+    ) {
+      triggerWakeupSync();
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("online", handleOnline);
+  }
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+  }
+
+  const intervalId = setInterval(() => {
+    const now = Date.now();
+    const elapsed = now - lastTickMs;
+    lastTickMs = now;
+    if (elapsed > checkIntervalMs + wakeupThresholdMs) {
+      triggerWakeupSync();
+    }
+  }, checkIntervalMs);
+
+  return () => {
+    if (settleTimer !== null) {
+      clearTimeout(settleTimer);
+      settleTimer = null;
+    }
+    clearInterval(intervalId);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", handleOnline);
+    }
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }
+  };
+}
 
 /**
  * Crea un simulador de servidor Sync que mantiene estado remoto en memoria,
@@ -373,8 +560,12 @@ export function createSimulatedSyncTransport(
             categoria: args.categoria ?? "Hogar",
             peso: args.peso ?? 1,
             estado: args.estado ?? "TODO",
+            completed: args.estado === "DONE",
             due_date: args.due_date,
+            reminder_at: args.reminder_at ?? null,
             room_id: args.room_id ?? null,
+            version: 1,
+            field_hlc: cmd.field_hlc ? structuredClone(cmd.field_hlc) : {},
             created_at: nowIso,
             updated_at: nowIso,
           };
@@ -406,7 +597,10 @@ export function createSimulatedSyncTransport(
             : cmd.timestamp;
 
           // Detectar conflicto si el servidor tiene una versión modificada con posterioridad
-          if (serverUpdatedMs > cmd.timestamp || (args.expected_updated_at && serverUpdatedMs > expectedUpdatedMs)) {
+          if (
+            serverUpdatedMs > cmd.timestamp ||
+            (args.expected_updated_at && serverUpdatedMs > expectedUpdatedMs)
+          ) {
             sync_status[cmd.uuid] = {
               error_code: 409,
               error: "Conflicto de concurrencia: la tarea fue modificada en otro dispositivo.",
@@ -423,8 +617,16 @@ export function createSimulatedSyncTransport(
             ...(args.descripcion !== undefined ? { descripcion: args.descripcion } : {}),
             ...(args.categoria !== undefined ? { categoria: args.categoria } : {}),
             ...(args.peso !== undefined ? { peso: args.peso } : {}),
-            ...(args.estado !== undefined ? { estado: args.estado } : {}),
+            ...(args.estado !== undefined
+              ? { estado: args.estado, completed: args.estado === "DONE" }
+              : {}),
             ...(args.due_date !== undefined ? { due_date: args.due_date } : {}),
+            ...(args.reminder_at !== undefined ? { reminder_at: args.reminder_at } : {}),
+            version: (existing.version ?? 1) + 1,
+            field_hlc: {
+              ...(existing.field_hlc ?? {}),
+              ...(cmd.field_hlc ?? {}),
+            },
             updated_at: new Date(cmd.timestamp).toISOString(),
           };
           serverStore.set(resolvedId, updated);
@@ -461,9 +663,60 @@ export function createSimulatedSyncTransport(
             continue;
           }
 
+          const isComplete = cmd.type === "task_complete";
           const updated: Task = {
             ...existing,
-            estado: cmd.type === "task_complete" ? "DONE" : "TODO",
+            estado: isComplete ? "DONE" : "TODO",
+            completed: isComplete,
+            version: (existing.version ?? 1) + 1,
+            field_hlc: {
+              ...(existing.field_hlc ?? {}),
+              ...(cmd.field_hlc ?? {}),
+            },
+            updated_at: new Date(cmd.timestamp).toISOString(),
+          };
+          serverStore.set(resolvedId, updated);
+          sync_status[cmd.uuid] = "ok";
+          continue;
+        }
+
+        if (cmd.type === "task_schedule_reminder") {
+          const args = cmd.args as TaskScheduleReminderArgs;
+          const resolvedId = temp_id_mapping[args.id] ?? args.id;
+          const existing = serverStore.get(resolvedId);
+
+          if (!existing) {
+            sync_status[cmd.uuid] = {
+              error_code: 404,
+              error: `La tarea ${resolvedId} no existe en el servidor.`,
+              error_tag: "ENTITY_NOT_FOUND",
+              retryable: false,
+            };
+            continue;
+          }
+
+          const serverUpdatedMs = existing.updated_at
+            ? Date.parse(existing.updated_at)
+            : 0;
+          if (serverUpdatedMs > cmd.timestamp) {
+            sync_status[cmd.uuid] = {
+              error_code: 409,
+              error: "Conflicto de recordatorio: la tarea tiene una marca temporal más reciente en el servidor.",
+              error_tag: "CONFLICT_STALE_TIMESTAMP",
+              retryable: false,
+              server_record: structuredClone(existing),
+            };
+            continue;
+          }
+
+          const updated: Task = {
+            ...existing,
+            reminder_at: args.reminder_at,
+            version: (existing.version ?? 1) + 1,
+            field_hlc: {
+              ...(existing.field_hlc ?? {}),
+              ...(cmd.field_hlc ?? {}),
+            },
             updated_at: new Date(cmd.timestamp).toISOString(),
           };
           serverStore.set(resolvedId, updated);
@@ -500,6 +753,8 @@ export interface OfflineSyncEngineOptions {
   conflictStrategy?: ConflictResolutionStrategy;
   maxBatchSize?: number;
   isMainLogicWindow?: boolean;
+  nodeId?: string;
+  hlc?: HybridLogicalClock;
 }
 
 export type SyncStateListener = (
@@ -513,6 +768,7 @@ export class OfflineSyncEngine {
   private readonly conflictStrategy: ConflictResolutionStrategy;
   private readonly maxBatchSize: number;
   private isMainLogicWindow: boolean;
+  private readonly hlc: HybridLogicalClock;
 
   /** Estado local en memoria para la UI (Optimistic Store). */
   private readonly taskStore = new Map<string, Task>();
@@ -536,6 +792,11 @@ export class OfflineSyncEngine {
     this.conflictStrategy = options.conflictStrategy ?? "last-write-wins";
     this.maxBatchSize = options.maxBatchSize ?? 100;
     this.isMainLogicWindow = options.isMainLogicWindow ?? true;
+    this.hlc = options.hlc ?? new HybridLogicalClock(options.nodeId);
+  }
+
+  getClock(): HybridLogicalClock {
+    return this.hlc;
   }
 
   /**
@@ -609,19 +870,36 @@ export class OfflineSyncEngine {
 
   /**
    * (a) Registro optimista del cambio en el estado local y
-   * (b) Encolado persistente de la mutación.
+   * (b) Encolado persistente de la mutación con sellado HLC por campo.
    */
   async dispatchMutation<T extends SyncCommandType>(
     type: T,
     args: SyncCommandArgsMap[T],
-    options?: { uuid?: string; tempId?: string; timestamp?: number }
+    options?: {
+      uuid?: string;
+      tempId?: string;
+      timestamp?: number;
+      hlcTimestamp?: string;
+    }
   ): Promise<{ command: SyncCommand<T>; optimisticTask: Task | null }> {
     const timestamp = options?.timestamp ?? Date.now();
     const uuid = options?.uuid ?? generateSyncUuid();
+    const hlcTimestamp = options?.hlcTimestamp ?? this.hlc.now(timestamp);
     const tempId =
       type === "task_create"
         ? options?.tempId ?? generateTempTaskId()
         : undefined;
+
+    let baseVersion: number | undefined;
+    if (type !== "task_create" && "id" in args) {
+      const targetId = this.resolveEntityId((args as { id: string }).id);
+      const existing = this.taskStore.get(targetId);
+      if (existing) {
+        baseVersion = existing.version ?? 1;
+      }
+    }
+
+    const fieldHlc = this.computeFieldHlc(type, args, hlcTimestamp);
 
     const command: SyncCommand<T> = {
       uuid,
@@ -629,6 +907,9 @@ export class OfflineSyncEngine {
       type,
       args: structuredClone(args),
       timestamp,
+      hlc_timestamp: hlcTimestamp,
+      ...(baseVersion !== undefined ? { base_version: baseVersion } : {}),
+      ...(Object.keys(fieldHlc).length > 0 ? { field_hlc: fieldHlc } : {}),
       status: "pending",
       retryCount: 0,
     };
@@ -645,6 +926,62 @@ export class OfflineSyncEngine {
     this.notifyListeners();
 
     return { command, optimisticTask };
+  }
+
+  private computeFieldHlc<T extends SyncCommandType>(
+    type: T,
+    args: SyncCommandArgsMap[T],
+    hlcTimestamp: string
+  ): Record<string, string> {
+    const fieldHlc: Record<string, string> = {};
+
+    if (type === "task_create") {
+      const createArgs = args as TaskCreateArgs;
+      fieldHlc.titulo = hlcTimestamp;
+      fieldHlc.descripcion = hlcTimestamp;
+      fieldHlc.categoria = hlcTimestamp;
+      fieldHlc.peso = hlcTimestamp;
+      fieldHlc.estado = hlcTimestamp;
+      if (createArgs.due_date !== undefined) {
+        fieldHlc.due_date = hlcTimestamp;
+      }
+      if (createArgs.reminder_at !== undefined) {
+        fieldHlc.reminder_at = hlcTimestamp;
+      }
+      return fieldHlc;
+    }
+
+    if (type === "task_update") {
+      const updateArgs = args as TaskUpdateArgs;
+      if (updateArgs.titulo !== undefined) fieldHlc.titulo = hlcTimestamp;
+      if (updateArgs.descripcion !== undefined) {
+        fieldHlc.descripcion = hlcTimestamp;
+      }
+      if (updateArgs.categoria !== undefined) fieldHlc.categoria = hlcTimestamp;
+      if (updateArgs.peso !== undefined) fieldHlc.peso = hlcTimestamp;
+      if (updateArgs.estado !== undefined) {
+        fieldHlc.estado = hlcTimestamp;
+        fieldHlc.completed = hlcTimestamp;
+      }
+      if (updateArgs.due_date !== undefined) fieldHlc.due_date = hlcTimestamp;
+      if (updateArgs.reminder_at !== undefined) {
+        fieldHlc.reminder_at = hlcTimestamp;
+      }
+      return fieldHlc;
+    }
+
+    if (type === "task_complete" || type === "task_uncomplete") {
+      fieldHlc.estado = hlcTimestamp;
+      fieldHlc.completed = hlcTimestamp;
+      return fieldHlc;
+    }
+
+    if (type === "task_schedule_reminder") {
+      fieldHlc.reminder_at = hlcTimestamp;
+      return fieldHlc;
+    }
+
+    return fieldHlc;
   }
 
   /**
@@ -677,7 +1014,23 @@ export class OfflineSyncEngine {
             categoria: payload.categoria,
             peso: payload.peso,
             due_date: payload.due_date,
+            reminder_at: payload.reminder_at,
             room_id: payload.room_id,
+          });
+        }
+        break;
+      }
+      case "createReminder": {
+        const payload = (envelope.data ?? {}) as {
+          id?: string;
+          taskId?: string;
+          reminder_at?: string | null;
+        };
+        const targetId = payload.id ?? payload.taskId;
+        if (targetId && payload.reminder_at !== undefined) {
+          await this.dispatchMutation("task_schedule_reminder", {
+            id: targetId,
+            reminder_at: payload.reminder_at,
           });
         }
         break;
@@ -746,6 +1099,11 @@ export class OfflineSyncEngine {
           type: c.type,
           args: c.args,
           timestamp: c.timestamp,
+          ...(c.hlc_timestamp ? { hlc_timestamp: c.hlc_timestamp } : {}),
+          ...(c.base_version !== undefined
+            ? { base_version: c.base_version }
+            : {}),
+          ...(c.field_hlc ? { field_hlc: c.field_hlc } : {}),
         })),
       };
 
@@ -882,8 +1240,12 @@ export class OfflineSyncEngine {
         categoria: args.categoria ?? "Hogar",
         peso: args.peso ?? 1,
         estado: args.estado ?? "TODO",
+        completed: args.estado === "DONE",
         due_date: args.due_date,
+        reminder_at: args.reminder_at ?? null,
         room_id: args.room_id ?? null,
+        version: 1,
+        field_hlc: command.field_hlc ? structuredClone(command.field_hlc) : {},
         created_at: isoTimestamp,
         updated_at: isoTimestamp,
       };
@@ -911,8 +1273,15 @@ export class OfflineSyncEngine {
         ...(args.descripcion !== undefined ? { descripcion: args.descripcion } : {}),
         ...(args.categoria !== undefined ? { categoria: args.categoria } : {}),
         ...(args.peso !== undefined ? { peso: args.peso } : {}),
-        ...(args.estado !== undefined ? { estado: args.estado } : {}),
+        ...(args.estado !== undefined
+          ? { estado: args.estado, completed: args.estado === "DONE" }
+          : {}),
         ...(args.due_date !== undefined ? { due_date: args.due_date } : {}),
+        ...(args.reminder_at !== undefined ? { reminder_at: args.reminder_at } : {}),
+        field_hlc: {
+          ...(existing.field_hlc ?? {}),
+          ...(command.field_hlc ?? {}),
+        },
         updated_at: isoTimestamp,
       };
       this.taskStore.set(entityId, updated);
@@ -933,9 +1302,42 @@ export class OfflineSyncEngine {
         };
       }
 
+      const isComplete = command.type === "task_complete";
       const updated: Task = {
         ...existing,
-        estado: command.type === "task_complete" ? "DONE" : "TODO",
+        estado: isComplete ? "DONE" : "TODO",
+        completed: isComplete,
+        field_hlc: {
+          ...(existing.field_hlc ?? {}),
+          ...(command.field_hlc ?? {}),
+        },
+        updated_at: isoTimestamp,
+      };
+      this.taskStore.set(entityId, updated);
+      return structuredClone(updated);
+    }
+
+    if (command.type === "task_schedule_reminder") {
+      const args = command.args as TaskScheduleReminderArgs;
+      const entityId = this.resolveEntityId(args.id);
+      const existing = this.taskStore.get(entityId);
+      if (!existing) return null;
+
+      if (recordSnapshot && !this.queueState.snapshots[command.uuid]) {
+        this.queueState.snapshots[command.uuid] = {
+          commandUuid: command.uuid,
+          entityId,
+          previousState: structuredClone(existing),
+        };
+      }
+
+      const updated: Task = {
+        ...existing,
+        reminder_at: args.reminder_at,
+        field_hlc: {
+          ...(existing.field_hlc ?? {}),
+          ...(command.field_hlc ?? {}),
+        },
         updated_at: isoTimestamp,
       };
       this.taskStore.set(entityId, updated);
@@ -1001,11 +1403,20 @@ export class OfflineSyncEngine {
       ? Date.parse(serverRecord.updated_at)
       : 0;
 
+    if (serverRecord.field_hlc) {
+      for (const remoteHlc of Object.values(serverRecord.field_hlc)) {
+        if (remoteHlc) {
+          this.hlc.receive(remoteHlc);
+        }
+      }
+    }
+
     if (this.conflictStrategy === "client-wins" && localRecord) {
       const resolved: Task = {
         ...serverRecord,
         ...localRecord,
         id: entityId,
+        version: Math.max(serverRecord.version ?? 1, localRecord.version ?? 1),
         updated_at: new Date(Math.max(Date.now(), serverTime + 1)).toISOString(),
       };
       this.taskStore.set(entityId, resolved);
@@ -1021,20 +1432,65 @@ export class OfflineSyncEngine {
     if (this.conflictStrategy === "field-merge" && localRecord) {
       const snapshot = this.queueState.snapshots[command.uuid]?.previousState;
       const merged: Task = { ...serverRecord };
+      const mergedFieldHlc: Record<string, string> = {
+        ...(serverRecord.field_hlc ?? {}),
+      };
+      const localFieldHlc: Record<string, string> = {
+        ...(localRecord.field_hlc ?? {}),
+        ...(command.field_hlc ?? {}),
+      };
 
-      // Conservar campos modificados explícitamente por el cliente respecto al snapshot base
-      if (snapshot) {
-        if (localRecord.titulo !== snapshot.titulo) merged.titulo = localRecord.titulo;
-        if (localRecord.descripcion !== snapshot.descripcion) {
-          merged.descripcion = localRecord.descripcion;
-        }
-        if (localRecord.estado !== snapshot.estado) merged.estado = localRecord.estado;
-        if (localRecord.peso !== snapshot.peso) merged.peso = localRecord.peso;
-        if (localRecord.categoria !== snapshot.categoria) {
-          merged.categoria = localRecord.categoria;
+      const copyField = <K extends keyof Task>(
+        target: Task,
+        source: Task,
+        key: K
+      ): void => {
+        target[key] = source[key];
+      };
+
+      const mergeableFields = [
+        "titulo",
+        "descripcion",
+        "estado",
+        "completed",
+        "peso",
+        "categoria",
+        "due_date",
+        "reminder_at",
+      ] as const;
+
+      for (const field of mergeableFields) {
+        const clientHlc = localFieldHlc[field];
+        const serverHlc = serverRecord.field_hlc?.[field];
+        const changedFromSnapshot = snapshot
+          ? localRecord[field] !== snapshot[field]
+          : command.field_hlc?.[field] !== undefined;
+
+        if (clientHlc && serverHlc) {
+          // Ambos tienen reloj lógico para este campo: gana el HLC mayor
+          if (compareHlc(clientHlc, serverHlc) >= 0) {
+            copyField(merged, localRecord, field);
+            mergedFieldHlc[field] = clientHlc;
+          } else {
+            mergedFieldHlc[field] = serverHlc;
+          }
+        } else if (changedFromSnapshot) {
+          // Sin HLC en servidor para este campo, pero el cliente lo mutó explícitamente respecto al snapshot
+          copyField(merged, localRecord, field);
+          if (clientHlc) {
+            mergedFieldHlc[field] = clientHlc;
+          }
         }
       }
-      merged.updated_at = new Date(Math.max(command.timestamp, serverTime)).toISOString();
+
+      merged.field_hlc = mergedFieldHlc;
+      merged.version = Math.max(
+        serverRecord.version ?? 1,
+        localRecord.version ?? 1
+      );
+      merged.updated_at = new Date(
+        Math.max(command.timestamp, serverTime)
+      ).toISOString();
       this.taskStore.set(entityId, merged);
 
       return {
@@ -1052,6 +1508,10 @@ export class OfflineSyncEngine {
           ...serverRecord,
           ...localRecord,
           id: entityId,
+          version: Math.max(
+            serverRecord.version ?? 1,
+            localRecord.version ?? 1
+          ),
           updated_at: new Date(command.timestamp).toISOString(),
         };
         this.taskStore.set(entityId, resolved);

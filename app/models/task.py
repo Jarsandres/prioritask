@@ -63,7 +63,16 @@ class Task(SQLModel, table=True):
     peso: float = 1.0
     completed: bool = Field(default=False, index=True)
     due_date: datetime | None = None
+    reminder_at: datetime | None = Field(default=None, index=True)
     is_recurring: bool = Field(default=False, description="Indica si la tarea es recurrente")
+    version: int = Field(
+        default=1,
+        sa_column=sa.Column(sa.Integer, nullable=False, server_default="1"),
+    )
+    field_hlc: dict[str, str] = Field(
+        default_factory=dict,
+        sa_column=sa.Column(sa.JSON, nullable=False, server_default="{}"),
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = Field(default=None, index=True)
@@ -156,3 +165,19 @@ class TaskHistory(SQLModel, table=True):
     changes: str | None = None
 
     task: Optional["Task"] = Relationship(back_populates="history")
+
+
+class ProcessedSyncCommand(SQLModel, table=True):
+    __tablename__ = "processedsynccommand"
+    __table_args__ = (
+        sa.Index("ix_processedsynccommand_user_created", "user_id", "created_at"),
+    )
+
+    command_uuid: str = Field(primary_key=True, max_length=64)
+    user_id: UUID = Field(foreign_key="usuario.id", index=True)
+    room_id: UUID | None = Field(default=None, foreign_key="room.id", index=True)
+    task_id: UUID | None = Field(default=None, foreign_key="task.id", index=True)
+    command_type: str = Field(max_length=40)
+    status: str = Field(default="ok", max_length=32)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
+
