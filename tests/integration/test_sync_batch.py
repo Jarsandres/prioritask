@@ -538,3 +538,152 @@ async def test_sync_batch_validation_errors_and_command_uuid_collision_across_us
     assert err_status[invalid_weight_uuid]["error_code"] == 422
     assert err_status[lww_conflict_uuid]["error_code"] == 409
     assert err_status[lww_conflict_uuid]["error_tag"] == "CONFLICT_STALE_TIMESTAMP"
+
+
+@pytest.mark.asyncio
+async def test_sync_batch_conflict_completion_and_status_sync(
+    async_client: AsyncClient,
+    user_a_headers: dict[str, str],
+    user_b_headers: dict[str, str],
+    user_c_headers: dict[str, str],
+    room_owner_a,
+):
+    create_1_uuid = str(uuid4())
+    create_2_uuid = str(uuid4())
+    temp_1 = f"temp_{uuid4().hex[:8]}"
+    temp_2 = f"temp_{uuid4().hex[:8]}"
+
+    # 1. Miembro B crea dos tareas en room_owner_a (cubre resolución de RoomMember)
+    res_create = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "room_id": str(room_owner_a.id),
+            "commands": [
+                {
+                    "uuid": create_1_uuid,
+                    "type": "task_create",
+                    "args": {
+                        "temp_id": temp_1,
+                        "titulo": "Tarea Conflicto Completed",
+                        "peso": 2.0,
+                        "completed": False,
+                        "room_id": str(room_owner_a.id),
+                    },
+                    "timestamp": 1700000300000,
+                    "field_hlc": {"titulo": "1700000300000:0000:nodeB"},
+                },
+                {
+                    "uuid": create_2_uuid,
+                    "type": "task_create",
+                    "args": {
+                        "id": temp_2,
+                        "titulo": "Tarea Conflicto Estado",
+                        "peso": 3.0,
+                        "room_id": str(room_owner_a.id),
+                    },
+                    "timestamp": 1700000300100,
+                    "hlc_timestamp": "1700000300100:0000:nodeB",
+                },
+            ],
+        },
+        headers=user_a_headers,
+    )
+    assert res_create.status_code == 200
+    mapping = res_create.json()["temp_id_mapping"]
+    task_1_id = mapping[temp_1]
+    task_2_id = mapping[temp_2]
+
+    # 2. Conflicto HLC actualizando solo 'completed=True' (ajusta estado=DONE y otorga puntos)
+    # y conflicto HLC en tarea 2 actualizando solo 'estado=DONE' (ajusta completed=True)
+    conflict_completed_uuid = str(uuid4())
+    conflict_estado_uuid = str(uuid4())
+    direct_completed_uuid = str(uuid4())
+    direct_estado_uuid = str(uuid4())
+
+    res_conflict = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "room_id": str(room_owner_a.id),
+            "commands": [
+                {
+                    "uuid": conflict_completed_uuid,
+                    "type": "task_update",
+                    "args": {
+                        "id": task_1_id,
+                        "completed": True,
+                        "expected_updated_at": "invalid-date-ignored",
+                    },
+                    "timestamp": 1700000305000,
+                    "base_version": 0,
+                    "field_hlc": {"completed": "1700000305000:0000:nodeA"},
+                },
+                {
+                    "uuid": conflict_estado_uuid,
+                    "type": "task_update",
+                    "args": {
+                        "id": task_2_id,
+                        "estado": "DONE",
+                    },
+                    "timestamp": 1700000306000,
+                    "base_version": 0,
+                    "hlc_timestamp": "1700000306000:0000:nodeA",
+                },
+                {
+                    "uuid": direct_completed_uuid,
+                    "type": "task_update",
+                    "args": {
+                        "id": task_1_id,
+                        "completed": False,
+                    },
+                    "timestamp": 1700000307000,
+                    "base_version": 2,
+                },
+                {
+                    "uuid": direct_estado_uuid,
+                    "type": "task_update",
+                    "args": {
+                        "id": task_1_id,
+                        "estado": "DONE",
+                    },
+                    "timestamp": 1700000308000,
+                    "base_version": 3,
+                },
+            ],
+        },
+        headers=user_a_headers,
+    )
+    assert res_conflict.status_code == 200
+    status_data = res_conflict.json()["sync_status"]
+    assert status_data[conflict_completed_uuid]["error_code"] == 409
+    assert status_data[conflict_completed_uuid]["server_record"]["estado"] == "DONE"
+    assert status_data[conflict_completed_uuid]["server_record"]["completed"] is True
+    assert status_data[conflict_estado_uuid]["error_code"] == 409
+    assert status_data[conflict_estado_uuid]["server_record"]["completed"] is True
+    assert status_data[direct_completed_uuid] == "ok"
+    assert status_data[direct_estado_uuid] == "ok"
+
+    # 3. Usuario C (sin room previo) crea tarea sin room_id -> crea sala Default automáticamente
+    default_room_cmd = str(uuid4())
+    res_c_default = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "commands": [
+                {
+                    "uuid": default_room_cmd,
+                    "type": "task_create",
+                    "args": {
+                        "titulo": "Tarea en Default Room C",
+                        "completed": True,
+                    },
+                    "timestamp": 1700000310000,
+                }
+            ],
+        },
+        headers=user_c_headers,
+    )
+    assert res_c_default.status_code == 200
+    assert res_c_default.json()["sync_status"][default_room_cmd] == "ok"
+

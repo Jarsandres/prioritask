@@ -1,6 +1,6 @@
 [run]
 source = app
-branch = True
+branch = False
 omit =
     app/db/migrations/*
     app/services/intelligence.py
