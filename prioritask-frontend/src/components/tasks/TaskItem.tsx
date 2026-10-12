@@ -255,7 +255,7 @@ const TaskItemComponent = ({
       ((e.key === " " && !e.shiftKey) || e.key === "x" || e.key === "X") &&
       !isChildButton
     ) {
-      if (onToggleComplete && !isBusy) {
+      if (onToggleComplete && !effectiveCompleting && !effectiveDeleting) {
         e.preventDefault();
         onToggleComplete(task.id);
       }
