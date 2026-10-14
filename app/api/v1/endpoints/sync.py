@@ -441,7 +441,7 @@ async def sync_batch(
         server_version = task.version or 1
         is_conflict = False
 
-        if cmd.base_version is not None and cmd.base_version < server_version:
+        if cmd.base_version is not None and cmd.base_version != server_version:
             is_conflict = True
 
         expected_updated_raw = cmd.args.get("expected_updated_at")

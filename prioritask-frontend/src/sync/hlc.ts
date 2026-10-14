@@ -22,6 +22,7 @@ export interface ParsedHLC {
 }
 
 const MAX_COUNTER = 0xffff;
+export const MAX_HLC_FUTURE_DRIFT_MS = 300_000;
 
 function generateDefaultNodeId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -160,6 +161,11 @@ export class HybridLogicalClock {
   receive(remoteHlc: string, wallTimeMs: number = Date.now()): HLCString {
     const physicalNow = Math.floor(wallTimeMs);
     const remote = parseHlc(remoteHlc);
+
+    const maxAllowedMs = physicalNow + MAX_HLC_FUTURE_DRIFT_MS;
+    if (remote.physicalMs > maxAllowedMs) {
+      throw new Error("El timestamp HLC excede la deriva futura máxima permitida");
+    }
 
     if (
       physicalNow > this.lastPhysicalMs &&

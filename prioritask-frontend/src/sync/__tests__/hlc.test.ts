@@ -89,4 +89,14 @@ describe("HybridLogicalClock (HLC)", () => {
     expect(shuffled).toEqual([a, b, c, d]);
     expect(compareHlc(a, a)).toBe(0);
   });
+
+  it("rejects remote HLC timestamps exceeding maximum future drift threshold (+300s)", () => {
+    const clock = new HybridLogicalClock("test_node", 1000);
+    const wallTimeMs = 1_000_000;
+    const futureAttackerHlc = "9999999999999:0000:attacker";
+
+    expect(() => {
+      clock.receive(futureAttackerHlc, wallTimeMs);
+    }).toThrow("El timestamp HLC excede la deriva futura máxima permitida");
+  });
 });

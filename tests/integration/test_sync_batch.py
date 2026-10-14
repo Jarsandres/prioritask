@@ -819,3 +819,56 @@ async def test_sync_batch_savepoint_isolation_and_hlc_poisoning_and_owner_room_a
     assert owner_upd_res.json()["sync_status"][owner_upd_uuid] == "ok"
 
 
+@pytest.mark.asyncio
+async def test_sync_batch_divergent_future_base_version_triggers_conflict(
+    async_client: AsyncClient,
+    user_a_headers: dict[str, str],
+    room_owner_a,
+):
+    create_res = await async_client.post(
+        "/api/v1/tasks",
+        json={
+            "titulo": "Tarea OCC Base 1",
+            "categoria": "OTRO",
+            "peso": 2.0,
+            "room_id": str(room_owner_a.id),
+        },
+        headers=user_a_headers,
+    )
+    assert create_res.status_code == 201
+    task_id = create_res.json()["id"]
+    assert create_res.json()["version"] == 1
+
+    cmd_uuid = str(uuid4())
+    sync_res = await async_client.post(
+        "/api/v1/sync/batch",
+        json={
+            "sync_token": "*",
+            "room_id": str(room_owner_a.id),
+            "commands": [
+                {
+                    "uuid": cmd_uuid,
+                    "type": "task_update",
+                    "args": {
+                        "id": task_id,
+                        "titulo": "Título con Versión Divergente",
+                    },
+                    "timestamp": 1700000005000,
+                    "hlc_timestamp": "1700000005000:0000:clientA",
+                    "base_version": 5,
+                    "field_hlc": {
+                        "titulo": "1700000005000:0000:clientA",
+                    },
+                }
+            ],
+        },
+        headers=user_a_headers,
+    )
+    assert sync_res.status_code == 200
+    sync_data = sync_res.json()
+    cmd_result = sync_data["sync_status"][cmd_uuid]
+    assert isinstance(cmd_result, dict)
+    assert cmd_result["error_code"] == 409
+    assert cmd_result["error_tag"] == "CONFLICT_STALE_TIMESTAMP"
+    assert cmd_result["server_record"] is not None
+
