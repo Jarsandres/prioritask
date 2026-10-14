@@ -23,7 +23,7 @@ export interface ParsedHLC {
 
 const MAX_COUNTER = 0xffff;
 export const MAX_HLC_FUTURE_DRIFT_MS = 300_000;
-export const HLC_REGEX = /^\d{13}:[0-9a-fA-F]{4}:[a-zA-Z0-9_\-]{1,36}$/;
+export const HLC_REGEX = /^\d{13}:[0-9a-fA-F]{4}:[a-zA-Z0-9_-]{1,36}$/;
 
 export function isValidHlc(hlc: unknown): hlc is HLCString {
   return typeof hlc === "string" && HLC_REGEX.test(hlc);

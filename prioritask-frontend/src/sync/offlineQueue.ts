@@ -1,6 +1,7 @@
 import api from "../api";
 import type { Task, TaskStatus } from "../types/task";
 import { HybridLogicalClock, compareHlc } from "./hlc";
+import { isDesktopAvailable, onDesktopWakeup } from "../services/desktopBridge";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Esquema de Datos: Comandos de Sincronización, Sobre IPC y Cola Local
@@ -504,7 +505,18 @@ export function attachSystemWakeupMonitor(
     }
   }, checkIntervalMs);
 
+  let unsubscribeDesktopWakeup: (() => void) | null = null;
+  if (isDesktopAvailable()) {
+    unsubscribeDesktopWakeup = onDesktopWakeup(() => {
+      triggerWakeupSync();
+    });
+  }
+
   return () => {
+    if (unsubscribeDesktopWakeup) {
+      unsubscribeDesktopWakeup();
+      unsubscribeDesktopWakeup = null;
+    }
     if (settleTimer !== null) {
       clearTimeout(settleTimer);
       settleTimer = null;

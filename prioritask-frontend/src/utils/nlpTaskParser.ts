@@ -7,6 +7,7 @@ import {
 
 export type NlpTokenType =
   | "date"
+  | "time"
   | "priority"
   | "category"
   | "recurrence"
@@ -35,6 +36,7 @@ export interface NlpParsedTaskResult {
   cleanTitle: string;
   tokens: NlpDetectedToken[];
   dueDate?: string;
+  dueTime?: string;
   peso?: number;
   categoria?: string;
   recurrenceExpr?: string;
@@ -225,6 +227,24 @@ function getNextWeekdayIso(baseDate: Date, targetDow: number): string {
   return addDaysToBase(baseDate, diff);
 }
 
+function getNextWeekendSaturdayIso(baseDate: Date): string {
+  const currentDow = baseDate.getDay();
+  if (currentDow === 6) {
+    return baseDate.getHours() >= 18
+      ? addDaysToBase(baseDate, 7)
+      : addDaysToBase(baseDate, 0);
+  }
+  let diff = 6 - currentDow;
+  if (diff < 0) {
+    diff += 7;
+  }
+  return addDaysToBase(baseDate, diff);
+}
+
+function stripTrailingPunctuation(str: string): string {
+  return str.replace(/[,.;:]+$/, "");
+}
+
 /**
  * Parsea un título de tarea en lenguaje natural al estilo Todoist,
  * extrayendo tokens de fecha, prioridad (P1..P5, !!, !alta), categoría (#limpieza, #compras...),
@@ -248,6 +268,7 @@ export function parseNaturalTaskInput(
   let working = rawInput;
   const tokens: NlpDetectedToken[] = [];
   let dueDate: string | undefined;
+  let dueTime: string | undefined;
   let peso: number | undefined;
   let categoria: string | undefined;
   let recurrenceExpr: string | undefined;
@@ -282,7 +303,7 @@ export function parseNaturalTaskInput(
     }
   }
 
-  // 2. Detectar fechas compuestas ("pasado mañana", "próxima semana", "15 oct" / "15 de octubre")
+  // 2. Detectar fechas compuestas y relativas
   const pasadoMananaRegex = /\b(pasado\s+ma[ñn]ana)\b/i;
   const pmMatch = pasadoMananaRegex.exec(working);
   if (pmMatch) {
@@ -314,6 +335,111 @@ export function parseNaturalTaskInput(
         working.slice(0, psMatch.index) +
         " " +
         working.slice(psMatch.index + psMatch[0].length);
+    }
+  }
+
+  // Fechas relativas adicionales: "en N días", "en N semanas", "fin de semana"
+  if (!dueDate) {
+    const enDiasRegex = /\ben\s+(\d+)\s+d[ií]as?\b/i;
+    const edMatch = enDiasRegex.exec(working);
+    if (edMatch) {
+      const nDays = Number(edMatch[1]);
+      if (Number.isFinite(nDays) && nDays >= 0) {
+        dueDate = addDaysToBase(baseDate, nDays);
+        tokens.push({
+          type: "date",
+          raw: edMatch[0],
+          label: `En ${nDays} días`,
+          value: dueDate,
+        });
+        working =
+          working.slice(0, edMatch.index) +
+          " " +
+          working.slice(edMatch.index + edMatch[0].length);
+      }
+    }
+  }
+
+  if (!dueDate) {
+    const enSemanasRegex = /\ben\s+(\d+)\s+semanas?\b/i;
+    const esMatch = enSemanasRegex.exec(working);
+    if (esMatch) {
+      const nWeeks = Number(esMatch[1]);
+      if (Number.isFinite(nWeeks) && nWeeks >= 0) {
+        dueDate = addDaysToBase(baseDate, nWeeks * 7);
+        tokens.push({
+          type: "date",
+          raw: esMatch[0],
+          label: `En ${nWeeks} semanas`,
+          value: dueDate,
+        });
+        working =
+          working.slice(0, esMatch.index) +
+          " " +
+          working.slice(esMatch.index + esMatch[0].length);
+      }
+    }
+  }
+
+  if (!dueDate) {
+    const finDeSemanaRegex = /\b(?:este\s+)?fin\s+de\s+semana\b/i;
+    const fdsMatch = finDeSemanaRegex.exec(working);
+    if (fdsMatch) {
+      dueDate = getNextWeekendSaturdayIso(baseDate);
+      tokens.push({
+        type: "date",
+        raw: fdsMatch[0],
+        label: "Fin de semana",
+        value: dueDate,
+      });
+      working =
+        working.slice(0, fdsMatch.index) +
+        " " +
+        working.slice(fdsMatch.index + fdsMatch[0].length);
+    }
+  }
+
+  // Formatos numéricos de fecha: DD/MM o DD/MM/YYYY (o con -)
+  if (!dueDate) {
+    const numericDateRegex = /\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{4}))?\b/;
+    const ndMatch = numericDateRegex.exec(working);
+    if (ndMatch) {
+      const dayNum = Number(ndMatch[1]);
+      const monthNum = Number(ndMatch[2]);
+      const yearNum = ndMatch[3] ? Number(ndMatch[3]) : undefined;
+      if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+        const monthIdx = monthNum - 1;
+        let targetYear = yearNum ?? baseDate.getFullYear();
+        if (yearNum === undefined) {
+          const candidateDate = new Date(Date.UTC(targetYear, monthIdx, dayNum));
+          const todayUtc = new Date(
+            Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate())
+          );
+          if (candidateDate.getTime() < todayUtc.getTime()) {
+            targetYear += 1;
+          }
+        }
+        const resolved = new Date(Date.UTC(targetYear, monthIdx, dayNum));
+        if (
+          resolved.getUTCMonth() === monthIdx &&
+          resolved.getUTCDate() === dayNum
+        ) {
+          dueDate = toISODateString(resolved);
+          const displayLabel = yearNum
+            ? `${dayNum}/${monthNum}/${yearNum}`
+            : `${dayNum}/${monthNum}`;
+          tokens.push({
+            type: "date",
+            raw: ndMatch[0],
+            label: displayLabel,
+            value: dueDate,
+          });
+          working =
+            working.slice(0, ndMatch.index) +
+            " " +
+            working.slice(ndMatch.index + ndMatch[0].length);
+        }
+      }
     }
   }
 
@@ -352,17 +478,39 @@ export function parseNaturalTaskInput(
     }
   }
 
-  // 3. Evaluar palabras individuales y tokens entrecomillados (~"Habitación Principal", +"María José")
-  const words = working.match(/(?:[~+]["'][^"']+["']|\S+)/g) || [];
+  // 2.5. Extracción de horas ("a las 18:30", "18:30")
+  const timeRegex = /\b(?:a\s+las?\s+)?([01]?\d|2[0-3]):([0-5]\d)\b/i;
+  const timeMatch = timeRegex.exec(working);
+  if (timeMatch) {
+    const hh = timeMatch[1].padStart(2, "0");
+    const mm = timeMatch[2];
+    const formattedTime = `${hh}:${mm}`;
+    dueTime = formattedTime;
+    tokens.push({
+      type: "time",
+      raw: timeMatch[0],
+      label: formattedTime,
+      value: formattedTime,
+    });
+    working =
+      working.slice(0, timeMatch.index) +
+      " " +
+      working.slice(timeMatch.index + timeMatch[0].length);
+  }
+
+  // 3. Evaluar palabras individuales y tokens entrecomillados (~"Habitación Principal", #"Habitación Principal", +"María José")
+  const words = working.match(/(?:[~+#]["'][^"']+["']|\S+)/g) || [];
   const keptWords: string[] = [];
 
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     const lower = word.toLowerCase();
+    const cleanWord = stripTrailingPunctuation(word);
+    const cleanLower = stripTrailingPunctuation(lower);
 
     // Etiquetas (@tag) — RN-04: 1..30 chars alfanuméricos/guiones/underscores, normalizadas en minúsculas, sin duplicados, máx 10
-    if (word.startsWith("@") && word.length > 1) {
-      const tagMatch = /^@([a-zA-Z0-9áéíóúñÁÉÍÓÚÑ_-]{1,30})$/.exec(word);
+    if (cleanWord.startsWith("@") && cleanWord.length > 1) {
+      const tagMatch = /^@([a-zA-Z0-9áéíóúñÁÉÍÓÚÑ_-]{1,30})$/.exec(cleanWord);
       if (tagMatch) {
         const normalizedTag = tagMatch[1].toLowerCase();
         if (!tags.includes(normalizedTag) && tags.length < 10) {
@@ -386,7 +534,9 @@ export function parseNaturalTaskInput(
 
     // Habitaciones explícitas con ~ (~cocina, ~"Habitación Principal", ~habitacion_principal) — RN-03
     if (word.startsWith("~") && word.length > 1) {
-      const rawRoomToken = word.slice(1).replace(/^["']|["']$/g, "").trim();
+      const rawRoomToken = stripTrailingPunctuation(
+        word.slice(1).replace(/^["']|["']$/g, "").trim()
+      );
       if (roomId === undefined && rawRoomToken) {
         const matchedRoom = findMatchingRoom(rawRoomToken, context?.rooms, true);
         if (matchedRoom) {
@@ -407,7 +557,9 @@ export function parseNaturalTaskInput(
 
     // Asignación a miembros del hogar (+nombre, +"María José", +maria_jose) — RN-05
     if (word.startsWith("+") && word.length > 1) {
-      const rawMemberToken = word.slice(1).replace(/^["']|["']$/g, "").trim();
+      const rawMemberToken = stripTrailingPunctuation(
+        word.slice(1).replace(/^["']|["']$/g, "").trim()
+      );
       if (assigneeId === undefined && rawMemberToken) {
         const matchedMember = findMatchingMember(rawMemberToken, context?.members);
         if (matchedMember) {
@@ -431,8 +583,8 @@ export function parseNaturalTaskInput(
     }
 
     // Categorías (#limpieza, #compras, etc.)
-    if (categoria === undefined && lower in CATEGORY_MAP) {
-      const catInfo = CATEGORY_MAP[lower];
+    if (categoria === undefined && cleanLower in CATEGORY_MAP) {
+      const catInfo = CATEGORY_MAP[cleanLower];
       categoria = catInfo.value;
       tokens.push({
         type: "category",
@@ -444,8 +596,8 @@ export function parseNaturalTaskInput(
     }
 
     // Prioridades (p1..p5, !1..!5, !!, !!!, #urgente, !alta, !media, !baja)
-    if (peso === undefined && lower in PRIORITY_MAP) {
-      const prioInfo = PRIORITY_MAP[lower];
+    if (peso === undefined && cleanLower in PRIORITY_MAP) {
+      const prioInfo = PRIORITY_MAP[cleanLower];
       peso = prioInfo.peso;
       tokens.push({
         type: "priority",
@@ -458,7 +610,9 @@ export function parseNaturalTaskInput(
 
     // Desambiguación de #token contra habitaciones del usuario cuando no es categoría ni prioridad — RN-03
     if (word.startsWith("#") && word.length > 1 && roomId === undefined) {
-      const rawHashRoom = word.slice(1).trim();
+      const rawHashRoom = stripTrailingPunctuation(
+        word.slice(1).replace(/^["']|["']$/g, "").trim()
+      );
       const matchedRoom = findMatchingRoom(rawHashRoom, context?.rooms, true);
       if (matchedRoom) {
         roomId = matchedRoom.id;
@@ -475,7 +629,7 @@ export function parseNaturalTaskInput(
 
     // Fechas de una palabra ("hoy", "mañana", días de la semana)
     if (dueDate === undefined) {
-      if (lower === "hoy" || lower === "today") {
+      if (cleanLower === "hoy" || cleanLower === "today") {
         dueDate = addDaysToBase(baseDate, 0);
         tokens.push({
           type: "date",
@@ -485,7 +639,7 @@ export function parseNaturalTaskInput(
         });
         continue;
       }
-      if (lower === "mañana" || lower === "manana" || lower === "tomorrow") {
+      if (cleanLower === "mañana" || cleanLower === "manana" || cleanLower === "tomorrow") {
         dueDate = addDaysToBase(baseDate, 1);
         tokens.push({
           type: "date",
@@ -495,7 +649,7 @@ export function parseNaturalTaskInput(
         });
         continue;
       }
-      if (lower in WEEKDAY_MAP) {
+      if (cleanLower in WEEKDAY_MAP) {
         // Si la palabra anterior conservada era "el" o "este", la removemos del título limpio
         if (
           keptWords.length > 0 &&
@@ -504,8 +658,8 @@ export function parseNaturalTaskInput(
         ) {
           keptWords.pop();
         }
-        dueDate = getNextWeekdayIso(baseDate, WEEKDAY_MAP[lower]);
-        const capLabel = lower.charAt(0).toUpperCase() + lower.slice(1);
+        dueDate = getNextWeekdayIso(baseDate, WEEKDAY_MAP[cleanLower]);
+        const capLabel = cleanLower.charAt(0).toUpperCase() + cleanLower.slice(1);
         tokens.push({
           type: "date",
           raw: word,
@@ -519,12 +673,14 @@ export function parseNaturalTaskInput(
     keptWords.push(word);
   }
 
-  const cleanTitle = keptWords.join(" ").replace(/\s+/g, " ").trim();
+  let cleanTitle = keptWords.join(" ").replace(/\s+/g, " ").trim();
+  cleanTitle = cleanTitle.replace(/[,;]+$/, "").trim();
 
   return {
     cleanTitle: cleanTitle || rawInput.trim(),
     tokens,
     dueDate,
+    dueTime,
     peso,
     categoria,
     recurrenceExpr,

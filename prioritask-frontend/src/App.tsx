@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense, lazy } from "react";
+import { useState, useEffect, useCallback, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { LuMenu, LuSun, LuMoon, LuSearch } from "react-icons/lu";
 import Login from "./auth/Login";
@@ -34,7 +34,7 @@ const KeyboardShortcutsModal = lazy(() => import("./components/common/KeyboardSh
 const GlobalQuickAddModal = lazy(() => import("./components/tasks/GlobalQuickAddModal"));
 import type { QuickAddPrefill } from "./components/tasks/GlobalQuickAddModal";
 
-const AppContent = () => {
+export const AppContent = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { activeRoom } = useRoom();
@@ -85,7 +85,12 @@ const AppContent = () => {
     }
   }, [location.search, location.pathname, hideSidebar, navigate]);
 
-  // Listener global de atajos de teclado (Ctrl+K, Ctrl+,, Ctrl+Space, ?, c)
+  const openGlobalQuickAdd = useCallback(() => {
+    setQuickAddPrefill(null);
+    setIsQuickAddOpen(true);
+  }, []);
+
+  // Listener global de atajos de teclado (Ctrl+K, Ctrl+,, Ctrl+Space / Alt+Space / Ctrl+Shift+A, ?, c / q)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -103,8 +108,16 @@ const AppContent = () => {
         return;
       }
 
-      // Ctrl+Space para ventana flotante de Captura Rápida (Todoist Desktop quick_add)
-      if (e.ctrlKey && (e.code === "Space" || e.key === " ")) {
+      // Atajos Globales para ventana flotante de Captura Rápida (Todoist Desktop quick_add)
+      // Ctrl+Space, Alt+Space, o Ctrl+Shift+A / Cmd+Shift+A
+      const isAltSpace =
+        e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "Space" || e.key === " ");
+      const isCtrlSpace =
+        (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.code === "Space" || e.key === " ");
+      const isCtrlShiftA =
+        (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "a" || e.key === "A");
+
+      if (isCtrlSpace || isAltSpace || isCtrlShiftA) {
         if (!hideSidebar) {
           e.preventDefault();
           setQuickAddPrefill(null);
@@ -130,17 +143,16 @@ const AppContent = () => {
         return;
       }
 
-      // 'c' para abrir Captura Rápida Global sin desmontar la vista activa
+      // 'c' o 'q' para abrir Captura Rápida Global sin desmontar la vista activa (Todoist canonical single-key)
       if (
         !e.ctrlKey &&
         !e.metaKey &&
         !e.altKey &&
-        (e.key === "c" || e.key === "C")
+        (e.key === "c" || e.key === "C" || e.key === "q" || e.key === "Q")
       ) {
         if (!hideSidebar) {
           e.preventDefault();
-          setQuickAddPrefill(null);
-          setIsQuickAddOpen(true);
+          openGlobalQuickAdd();
         }
         return;
       }
@@ -148,7 +160,7 @@ const AppContent = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate, hideSidebar, settings.general.enableSingleKeyShortcuts]);
+  }, [navigate, hideSidebar, settings.general.enableSingleKeyShortcuts, openGlobalQuickAdd]);
 
   const toggleSidebarCollapse = () => {
     setIsSidebarCollapsed((prev) => {
@@ -156,11 +168,6 @@ const AppContent = () => {
       localStorage.setItem("sidebar_collapsed", String(next));
       return next;
     });
-  };
-
-  const openGlobalQuickAdd = () => {
-    setQuickAddPrefill(null);
-    setIsQuickAddOpen(true);
   };
 
   return (

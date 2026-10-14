@@ -250,5 +250,59 @@ describe("OfflineSyncEngine (Todoist-inspired Optimistic UI & Offline Queue)", (
       vi.useRealTimers();
     }
   });
+
+  it("debe escuchar onDesktopWakeup en attachSystemWakeupMonitor cuando está en entorno Desktop", async () => {
+    vi.useFakeTimers();
+    let wakeupCb: (() => void) | null = null;
+    const mockUnsub = vi.fn();
+
+    window.prioritaskDesktop = {
+      isDesktop: true,
+      platform: "win32",
+      version: "1.0.0",
+      safeStorage: {
+        isAvailable: async () => true,
+        encryptString: async (s: string) => s,
+        decryptString: async (s: string) => s,
+      },
+      ipc: {
+        sendRequestSync: () => {},
+        onWakeup: (cb: () => void) => {
+          wakeupCb = cb;
+          return mockUnsub;
+        },
+        onAddTask: () => () => {},
+        quickAddAddTask: () => {},
+        setMainLogicWindow: () => {},
+      },
+    };
+
+    try {
+      const engine = new OfflineSyncEngine();
+      const spyEnvelope = vi
+        .spyOn(engine, "handleBridgeEnvelope")
+        .mockResolvedValue();
+
+      const detach = attachSystemWakeupMonitor(engine, {
+        settleDelayMs: 500,
+      });
+
+      expect(wakeupCb).not.toBeNull();
+      wakeupCb!();
+
+      expect(spyEnvelope).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(spyEnvelope).toHaveBeenCalledTimes(1);
+      expect(spyEnvelope.mock.calls[0][0].method).toBe("sendRequestSync");
+
+      detach();
+      expect(mockUnsub).toHaveBeenCalled();
+    } finally {
+      delete window.prioritaskDesktop;
+      vi.useRealTimers();
+    }
+  });
 });
+
 
