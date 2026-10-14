@@ -86,3 +86,6 @@ usuarios_db_export.json
 
 # Security audit outputs
 audit-reports/
+
+# Analysis and reverse engineering notes
+notes/

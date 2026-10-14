@@ -86,3 +86,9 @@ graph TD
 3. **Control de Acceso e IDOR:** Cada consulta a la base de datos debe validar de manera estricta el usuario/hogar solicitante.
 4. **Verificación de Grafo:** El Gatekeeper siempre valida que `detect_changes({scope: "all"})` no presente regresiones ni roturas no autorizadas.
 
+---
+
+## Estándar de Evidencia en Diagnósticos y Auditorías
+Todo informe generado por los agentes (`Orchestrator`, `QA Sentinel`, `Code Reviewer`, `Security Auditor`) durante análisis de impacto, debugging o ingeniería inversa debe clasificar sus hallazgos usando la taxonomía definida en `.agents/skills/reverse-engineer-anything/PROTOCOL.md`:
+`[CONFIRMED: ruta:línea]`, `[INFERRED: motivo]`, `[HYPOTHESIS: test]` y `[CONTRADICTION: A vs B]`.
+
