@@ -119,13 +119,28 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
     return routeRoomId || contextRoomId || "";
   }, [prefill?.roomId, routeRoomId, contextRoomId]);
 
+  const resolvedInitialRoomId = useMemo(() => {
+    if (initialContextualRoomId) {
+      return initialContextualRoomId;
+    }
+    try {
+      const stored = sessionStorage.getItem("prioritask_last_quick_add_room_id");
+      if (stored && rooms.some((r) => r.id === stored)) {
+        return stored;
+      }
+    } catch {
+      // sessionStorage no disponible en entornos aislados
+    }
+    return "";
+  }, [initialContextualRoomId, rooms]);
+
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [categoria, setCategoria] = useState("LIMPIEZA");
   const [peso, setPeso] = useState<number>(2);
   const [dueDate, setDueDate] = useState<string>("");
   const [recurrenceExpr, setRecurrenceExpr] = useState<string>("");
-  const [targetRoomId, setTargetRoomId] = useState<string>(initialContextualRoomId);
+  const [targetRoomId, setTargetRoomId] = useState<string>(resolvedInitialRoomId);
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>("");
   const [manualOverrides, setManualOverrides] = useState<ManualOverrides>({});
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
@@ -138,9 +153,11 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBurstPulse, setIsBurstPulse] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const priorityMenuRef = useRef<HTMLDivElement>(null);
   const recurrenceMenuRef = useRef<HTMLDivElement>(null);
 
@@ -174,7 +191,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
     setDueDate(prefill?.date || "");
     setPeso(prefill?.priority ?? 2);
     setCategoria(prefill?.categoria || "LIMPIEZA");
-    setTargetRoomId(initialContextualRoomId);
+    setTargetRoomId(resolvedInitialRoomId);
     setSelectedAssigneeId("");
     setRecurrenceExpr("");
     setManualOverrides({
@@ -189,7 +206,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
     setShowRecurrenceMenu(false);
     setDismissedTrigger(false);
     setActiveSuggestionIdx(0);
-  }, [isOpen, prefill, initialContextualRoomId]);
+  }, [isOpen, prefill, resolvedInitialRoomId]);
 
   const effectiveRoomObj = useMemo(() => {
     return (
@@ -294,7 +311,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
       if (nlpResult.roomId !== undefined) {
         setTargetRoomId(nlpResult.roomId);
       } else if (prev.roomId !== undefined) {
-        setTargetRoomId(initialContextualRoomId);
+        setTargetRoomId(resolvedInitialRoomId);
       }
     }
 
@@ -323,7 +340,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
     nlpResult.assigneeId,
     manualOverrides,
     prefill,
-    initialContextualRoomId,
+    resolvedInitialRoomId,
   ]);
 
   const handleEscapeOrClose = useCallback(() => {
@@ -408,7 +425,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
       setRecurrenceExpr("");
       setManualOverrides((p) => ({ ...p, recurrence: false }));
     } else if (tok.type === "room") {
-      setTargetRoomId(initialContextualRoomId);
+      setTargetRoomId(resolvedInitialRoomId);
       setManualOverrides((p) => ({ ...p, room: false }));
     } else if (tok.type === "assignee") {
       setSelectedAssigneeId("");
@@ -608,6 +625,11 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
 
       if (keepOpen) {
         resetQuickAdd();
+        setIsBurstPulse(true);
+        setTimeout(() => {
+          setIsBurstPulse(false);
+          titleInputRef.current?.focus();
+        }, 350);
       } else {
         resetQuickAdd();
         onClose();
@@ -638,6 +660,11 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
         );
         if (keepOpen) {
           resetQuickAdd();
+          setIsBurstPulse(true);
+          setTimeout(() => {
+            setIsBurstPulse(false);
+            titleInputRef.current?.focus();
+          }, 350);
         } else {
           resetQuickAdd();
           onClose();
@@ -709,6 +736,36 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
       }
     }
 
+    // Atajo Alt+P / Alt+p: abre/cierra el menú flotante de prioridad rápida (Todoist quick priority)
+    if (e.altKey && (e.key === "p" || e.key === "P")) {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowRecurrenceMenu(false);
+      setShowPriorityMenu((prev) => !prev);
+      return;
+    }
+
+    // Atajo Alt+D / Alt+d: activa o enfoca el selector de fecha rápida (Todoist quick date)
+    if (e.altKey && (e.key === "d" || e.key === "D")) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!dueDate) {
+        setDueDate(todayStr);
+        setManualOverrides((p) => ({ ...p, date: true }));
+      }
+      if (dateInputRef.current) {
+        dateInputRef.current.focus();
+        if (typeof dateInputRef.current.showPicker === "function") {
+          try {
+            dateInputRef.current.showPicker();
+          } catch {
+            // Ignorar si el navegador bloquea apertura programática
+          }
+        }
+      }
+      return;
+    }
+
     // Envío en ráfaga con Ctrl+Enter o Cmd+Enter (resetQuickAdd sin cerrar modal)
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
@@ -735,7 +792,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
     >
       <div
         ref={modalRef}
-        className="global-quick-add-dialog"
+        className={`global-quick-add-dialog ${isBurstPulse ? "todoist-burst-pulse" : ""}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -958,6 +1015,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
                 <LuCalendar size={13} />
                 <span>{formatQuickDateLabel(dueDate)}</span>
                 <input
+                  ref={dateInputRef}
                   type="date"
                   min={todayStr}
                   value={dueDate}
@@ -970,6 +1028,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
                   }}
                   className="todoist-hidden-date-input"
                   aria-label="Selector de fecha rápida"
+                  data-testid="global-quick-add-date-input"
                 />
               </label>
               {dueDate && (
@@ -1187,8 +1246,17 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
                 className="global-quick-add-room-select"
                 value={targetRoomId}
                 onChange={(e) => {
-                  setTargetRoomId(e.target.value);
+                  const newRoomId = e.target.value;
+                  setTargetRoomId(newRoomId);
                   setManualOverrides((p) => ({ ...p, room: true }));
+                  try {
+                    sessionStorage.setItem(
+                      "prioritask_last_quick_add_room_id",
+                      newRoomId
+                    );
+                  } catch {
+                    // sessionStorage no disponible
+                  }
                 }}
                 aria-label="Seleccionar hogar o sala destino"
                 data-testid="global-quick-add-room-select"
@@ -1210,7 +1278,8 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
                 disabled={isSubmitting}
                 data-testid="global-quick-add-cancel-btn"
               >
-                Cancelar
+                <span>Cancelar</span>
+                <kbd className="todoist-kbd-hint ms-1">Esc</kbd>
               </button>
               <button
                 type="button"
@@ -1222,6 +1291,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
               >
                 <LuLayers size={13} />
                 <span className="d-none d-md-inline">Crear y seguir</span>
+                <kbd className="todoist-kbd-hint ms-1">Ctrl+↵</kbd>
               </button>
               <button
                 type="submit"
@@ -1231,6 +1301,7 @@ export const GlobalQuickAddModal: React.FC<GlobalQuickAddModalProps> = ({
               >
                 <span>{isSubmitting ? "Añadiendo..." : "Añadir tarea"}</span>
                 <LuCornerDownLeft size={13} aria-hidden="true" />
+                <kbd className="todoist-kbd-hint ms-1">↵</kbd>
               </button>
             </div>
           </div>

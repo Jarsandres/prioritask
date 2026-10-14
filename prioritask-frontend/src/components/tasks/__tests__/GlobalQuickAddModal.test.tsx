@@ -386,4 +386,61 @@ describe("GlobalQuickAddModal Component (Todoist Desktop quick_add)", () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("responde a los atajos internos Alt+P (alternar menú de prioridad) y Alt+D (activar selector de fecha rápida)", async () => {
+    renderGlobalQuickAdd();
+    const titleInput = screen.getByTestId("global-quick-add-title-input");
+
+    // Menú de prioridad inicialmente cerrado
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    // Pulsar Alt+P abre el menú de prioridad
+    fireEvent.keyDown(titleInput, { key: "p", altKey: true });
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(screen.getByText("Urgente")).toBeInTheDocument();
+
+    // Pulsar Alt+P de nuevo cierra el menú
+    fireEvent.keyDown(titleInput, { key: "p", altKey: true });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    // Pulsar Alt+D sin fecha previa asigna Hoy
+    const todayStr = new Date().toISOString().split("T")[0];
+    const dateInput = screen.getByTestId("global-quick-add-date-input") as HTMLInputElement;
+    expect(dateInput.value).toBe("");
+
+    fireEvent.keyDown(titleInput, { key: "d", altKey: true });
+    expect(dateInput.value).toBe(todayStr);
+  });
+
+  it("muestra las indicaciones visuales con <kbd> accesibles en los botones de acción del pie", () => {
+    renderGlobalQuickAdd();
+
+    const cancelBtn = screen.getByTestId("global-quick-add-cancel-btn");
+    const burstBtn = screen.getByTestId("global-quick-add-burst-btn");
+    const submitBtn = screen.getByTestId("global-quick-add-submit-btn");
+
+    expect(cancelBtn.querySelector(".todoist-kbd-hint")).toHaveTextContent("Esc");
+    expect(burstBtn.querySelector(".todoist-kbd-hint")).toHaveTextContent("Ctrl+↵");
+    expect(submitBtn.querySelector(".todoist-kbd-hint")).toHaveTextContent("↵");
+  });
+
+  it("persiste la sala seleccionada en sessionStorage y la recupera al abrir en vistas sin contexto", () => {
+    sessionStorage.clear();
+    const { unmount } = renderGlobalQuickAdd({}, "/dashboard", { roomId: null, activeRoom: null });
+
+    const roomSelect = screen.getByTestId("global-quick-add-room-select") as HTMLSelectElement;
+    expect(roomSelect.value).toBe("");
+
+    // Cambiar a room-salon
+    fireEvent.change(roomSelect, { target: { value: "room-salon" } });
+    expect(sessionStorage.getItem("prioritask_last_quick_add_room_id")).toBe("room-salon");
+
+    unmount();
+
+    // Volver a abrir el modal en una vista neutral: debe hidratar room-salon desde sessionStorage
+    renderGlobalQuickAdd({}, "/dashboard", { roomId: null, activeRoom: null });
+    const rehydratedSelect = screen.getByTestId("global-quick-add-room-select") as HTMLSelectElement;
+    expect(rehydratedSelect.value).toBe("room-salon");
+  });
 });
+
