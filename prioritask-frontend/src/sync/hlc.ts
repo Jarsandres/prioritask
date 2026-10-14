@@ -63,7 +63,7 @@ export function parseHlc(hlc: string): ParsedHLC {
   const firstColon = hlc.indexOf(":");
   const secondColon = firstColon === -1 ? -1 : hlc.indexOf(":", firstColon + 1);
 
-  if (firstColon === -1 || secondColon === -1) {
+  if (firstColon === -1 || secondColon === -1 || !isValidHlc(hlc)) {
     return {
       physicalMs: 0,
       counter: 0,
