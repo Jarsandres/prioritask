@@ -5,9 +5,11 @@ import Select from "react-select";
 import { useTaskUpdate } from "../context/TaskUpdateContext";
 import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
+import { useRoom } from "../context/RoomContext";
 import { getCurrentRoomId } from "../utils/room";
 import { toggleMemberTaskAssignmentLocal } from "../utils/kudosStore";
 import { getModernSelectStyles } from "../utils/selectStyles";
+import { parseNaturalTaskInput } from "../utils/nlpTaskParser";
 import {
   parseRecurrenceExpression,
   formatRecurrenceRule,
@@ -85,6 +87,7 @@ const TaskForm = () => {
   const { notifyUpdate } = useTaskUpdate();
   const { theme } = useTheme();
   const { toast } = useToast();
+  const { rooms } = useRoom();
 
   const prefillAppliedRef = useRef(false);
   const prefillTagsHydratedRef = useRef(false);
@@ -247,6 +250,75 @@ const TaskForm = () => {
       return [];
     }
   }, [isRecurring, dueDate, dateError, today, activeRecurrenceRuleConfig]);
+
+  const nlpContext = useMemo(
+    () => ({
+      rooms: rooms.map((r) => ({ id: r.id, nombre: r.nombre })),
+      tags: tags.map((t) => ({ id: t.id, nombre: t.nombre })),
+    }),
+    [rooms, tags]
+  );
+
+  const nlpResult = useMemo(
+    () => parseNaturalTaskInput(titulo, new Date(), nlpContext),
+    [titulo, nlpContext]
+  );
+
+  const handleApplyTokens = () => {
+    if (!nlpResult.tokens.length) return;
+
+    if (nlpResult.dueDate) {
+      setDueDate(nlpResult.dueDate);
+      setDateError("");
+    }
+    if (typeof nlpResult.peso === "number") {
+      setPeso(nlpResult.peso);
+    }
+    if (nlpResult.categoria) {
+      setCategoria(nlpResult.categoria);
+    }
+    if (nlpResult.roomId) {
+      setPrefillRoomId(nlpResult.roomId);
+    }
+    if (nlpResult.assigneeId) {
+      setPrefillAssigneeId(nlpResult.assigneeId);
+    }
+    if (nlpResult.recurrenceExpr) {
+      setIsRecurring(true);
+      applyDslExpression(nlpResult.recurrenceExpr);
+    }
+    if (nlpResult.tagIds && nlpResult.tagIds.length > 0) {
+      const matched = tags.filter((t) => nlpResult.tagIds?.includes(t.id));
+      if (matched.length > 0) {
+        setSelectedTags((prev) => {
+          const existingIds = new Set(prev.map((item) => item.value));
+          const merged = [...prev];
+          for (const tg of matched) {
+            if (!existingIds.has(tg.id)) {
+              merged.push({ value: tg.id, label: tg.nombre });
+              existingIds.add(tg.id);
+            }
+          }
+          return merged;
+        });
+      }
+    }
+    if (nlpResult.tags && nlpResult.tags.length > 0) {
+      setPrefillTagNames((prev) =>
+        Array.from(new Set([...prev, ...(nlpResult.tags || [])]))
+      );
+    }
+
+    setTitulo(nlpResult.cleanTitle);
+    toast.success("Tokens aplicados al formulario");
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Tab" && !e.shiftKey && nlpResult.tokens.length > 0) {
+      e.preventDefault();
+      handleApplyTokens();
+    }
+  };
 
   const handleDueDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -543,10 +615,94 @@ const TaskForm = () => {
               }}
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
+              onKeyDown={handleTitleKeyDown}
               placeholder="Ej. Limpiar la cocina a fondo"
               required
               disabled={isSubmitting}
             />
+
+            {/* Barra sutil de asistencia de tokens NLP */}
+            {nlpResult.tokens.length > 0 && (
+              <div
+                className="d-flex flex-wrap align-items-center justify-content-between gap-2 p-2 mt-2 rounded-3 border"
+                style={{
+                  backgroundColor: "var(--bg-subtle)",
+                  borderColor: "var(--border-default)",
+                  fontSize: "12px",
+                }}
+                data-testid="nlp-assistant-bar"
+                role="region"
+                aria-label="Asistente de tokens detectados"
+              >
+                <div className="d-flex flex-wrap align-items-center gap-1">
+                  <span className="text-muted fw-semibold me-1 d-flex align-items-center gap-1">
+                    <LuSparkles size={13} className="text-primary" />
+                    <span>Detectado:</span>
+                  </span>
+                  {nlpResult.tokens.map((tok, idx) => {
+                    let badgeText = tok.label;
+                    if (tok.type === "priority") {
+                      const cleanPrio = tok.label.includes("·")
+                        ? tok.label.split("·")[1].trim()
+                        : tok.label;
+                      badgeText = `Prioridad: ${cleanPrio}`;
+                    } else if (tok.type === "date") {
+                      badgeText = `Vence: ${tok.label}`;
+                    } else if (tok.type === "room") {
+                      const cleanRoom = tok.label
+                        .replace(/^[~#]/, "")
+                        .replace(/^["']|["']$/g, "")
+                        .trim();
+                      badgeText = `Sala: ${cleanRoom}`;
+                    } else if (tok.type === "category") {
+                      badgeText = `Categoría: ${tok.label.replace(/^#/, "")}`;
+                    } else if (tok.type === "time") {
+                      badgeText = `Hora: ${tok.label}`;
+                    } else if (tok.type === "tag") {
+                      badgeText = `Etiqueta: ${tok.label}`;
+                    } else if (tok.type === "assignee") {
+                      badgeText = `Asignado: ${tok.label.replace(/^\+/, "").replace(/^["']|["']$/g, "")}`;
+                    } else if (tok.type === "recurrence") {
+                      badgeText = `Rutina: ${tok.label}`;
+                    }
+
+                    return (
+                      <span
+                        key={`${tok.type}-${tok.raw}-${idx}`}
+                        className="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+                        style={{
+                          backgroundColor: "var(--bg-card, #ffffff)",
+                          color: "var(--text-main, #1e293b)",
+                          border: "1px solid var(--border-default, #cbd5e1)",
+                          fontWeight: 500,
+                          fontSize: "11px",
+                        }}
+                        data-testid={`nlp-token-badge-${tok.type}`}
+                      >
+                        {badgeText}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 px-2 py-1"
+                  style={{
+                    borderRadius: "8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                  }}
+                  onClick={handleApplyTokens}
+                  data-testid="apply-nlp-tokens-btn"
+                  aria-label="Aplicar tokens al formulario"
+                  title="Aplicar tokens detectados al formulario (o pulsa Tab)"
+                >
+                  <LuSparkles size={12} />
+                  <span>✨ Aplicar tokens al formulario</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Descripción */}

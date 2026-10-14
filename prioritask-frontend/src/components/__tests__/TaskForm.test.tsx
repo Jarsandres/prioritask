@@ -254,4 +254,53 @@ describe("TaskForm Component", () => {
       });
     });
   });
+
+  it("muestra la barra asistente de tokens NLP cuando se introducen tokens en el título y permite aplicarlos con el botón", async () => {
+    renderTaskForm();
+
+    const titleInput = screen.getByLabelText(/Título de la tarea/i) as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: "Comprar leche en 3 días p1 #limpieza" } });
+
+    const assistantBar = await screen.findByTestId("nlp-assistant-bar");
+    expect(assistantBar).toBeInTheDocument();
+
+    expect(screen.getByTestId("nlp-token-badge-date")).toHaveTextContent("Vence: En 3 días");
+    expect(screen.getByTestId("nlp-token-badge-priority")).toHaveTextContent("Prioridad: Urgente");
+    expect(screen.getByTestId("nlp-token-badge-category")).toHaveTextContent("Categoría: Limpieza");
+
+    const applyBtn = screen.getByTestId("apply-nlp-tokens-btn");
+    expect(applyBtn).toBeInTheDocument();
+    fireEvent.click(applyBtn);
+
+    expect(titleInput.value).toBe("Comprar leche");
+
+    const hiddenPesoInput = document.querySelector('input[name="peso"]') as HTMLInputElement;
+    expect(hiddenPesoInput.value).toBe("5");
+
+    const catSelect = screen.getByLabelText(/Categoría/i) as HTMLSelectElement;
+    expect(catSelect.value).toBe("LIMPIEZA");
+
+    const dateInput = screen.getByLabelText(/Fecha de vencimiento/i) as HTMLInputElement;
+    expect(dateInput.value).not.toBe("");
+  });
+
+  it("aplica los tokens del título al pulsar la tecla Tab en el campo de título", async () => {
+    renderTaskForm();
+
+    const titleInput = screen.getByLabelText(/Título de la tarea/i) as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: "Revisar caldera mañana p2" } });
+
+    expect(screen.getByTestId("nlp-assistant-bar")).toBeInTheDocument();
+
+    fireEvent.keyDown(titleInput, { key: "Tab" });
+
+    expect(titleInput.value).toBe("Revisar caldera");
+
+    const hiddenPesoInput = document.querySelector('input[name="peso"]') as HTMLInputElement;
+    expect(hiddenPesoInput.value).toBe("4");
+
+    const dateInput = screen.getByLabelText(/Fecha de vencimiento/i) as HTMLInputElement;
+    expect(dateInput.value).not.toBe("");
+  });
 });
+
