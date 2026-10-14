@@ -23,6 +23,11 @@ export interface ParsedHLC {
 
 const MAX_COUNTER = 0xffff;
 export const MAX_HLC_FUTURE_DRIFT_MS = 300_000;
+export const HLC_REGEX = /^\d{13}:[0-9a-fA-F]{4}:[a-zA-Z0-9_-]{1,36}$/;
+
+export function isValidHlc(hlc: unknown): hlc is HLCString {
+  return typeof hlc === "string" && HLC_REGEX.test(hlc);
+}
 
 function generateDefaultNodeId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -56,23 +61,12 @@ export function parseHlc(hlc: string): ParsedHLC {
   }
 
   const firstColon = hlc.indexOf(":");
-  if (firstColon === -1) {
-    const fallbackMs = Number(hlc);
-    return {
-      physicalMs: Number.isFinite(fallbackMs) ? fallbackMs : 0,
-      counter: 0,
-      nodeId: "",
-      raw: hlc,
-    };
-  }
+  const secondColon = firstColon === -1 ? -1 : hlc.indexOf(":", firstColon + 1);
 
-  const secondColon = hlc.indexOf(":", firstColon + 1);
-  if (secondColon === -1) {
-    const physicalMs = Number.parseInt(hlc.slice(0, firstColon), 10);
-    const counter = Number.parseInt(hlc.slice(firstColon + 1), 16);
+  if (firstColon === -1 || secondColon === -1) {
     return {
-      physicalMs: Number.isFinite(physicalMs) ? physicalMs : 0,
-      counter: Number.isFinite(counter) ? counter : 0,
+      physicalMs: 0,
+      counter: 0,
       nodeId: "",
       raw: hlc,
     };
@@ -159,6 +153,10 @@ export class HybridLogicalClock {
    * local y que el HLC remoto recibido.
    */
   receive(remoteHlc: string, wallTimeMs: number = Date.now()): HLCString {
+    if (!isValidHlc(remoteHlc)) {
+      throw new Error("Formato de HLC inválido");
+    }
+
     const physicalNow = Math.floor(wallTimeMs);
     const remote = parseHlc(remoteHlc);
 
