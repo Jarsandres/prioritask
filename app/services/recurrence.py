@@ -15,6 +15,8 @@ def calculate_next_due(
     frequency: RecurrenceFrequency,
     interval: int = 1,
     anchor_day_of_month: int | None = None,
+    by_weekdays: list[int] | None = None,
+    is_last_day_of_month: bool = False,
 ) -> datetime:
     """Calculates the next due date based on frequency, interval, and optional monthly anchor day."""
     if interval < 1:
@@ -23,7 +25,12 @@ def calculate_next_due(
     if frequency == RecurrenceFrequency.DAILY:
         return current_due + timedelta(days=interval)
 
+    if frequency == RecurrenceFrequency.WORKDAYS:
+        return _add_workdays(current_due, interval)
+
     if frequency == RecurrenceFrequency.WEEKLY:
+        if by_weekdays:
+            return _step_by_weekdays(current_due, interval, by_weekdays)
         return current_due + timedelta(days=interval * 7)
 
     if frequency == RecurrenceFrequency.MONTHLY:
@@ -31,15 +38,65 @@ def calculate_next_due(
         target_year = total_months // 12
         target_month = (total_months % 12) + 1
         max_day = calendar.monthrange(target_year, target_month)[1]
+        if is_last_day_of_month:
+            target_day = max_day
+        else:
+            desired_day = (
+                max(1, min(31, anchor_day_of_month))
+                if anchor_day_of_month is not None
+                else current_due.day
+            )
+            target_day = min(desired_day, max_day)
+        return current_due.replace(year=target_year, month=target_month, day=target_day)
+
+    if frequency == RecurrenceFrequency.YEARLY:
+        target_year = current_due.year + interval
+        max_day = calendar.monthrange(target_year, current_due.month)[1]
         desired_day = (
             max(1, min(31, anchor_day_of_month))
             if anchor_day_of_month is not None
             else current_due.day
         )
         target_day = min(desired_day, max_day)
-        return current_due.replace(year=target_year, month=target_month, day=target_day)
+        return current_due.replace(year=target_year, day=target_day)
 
     raise ValueError(f"Frecuencia no soportada: {frequency}")
+
+
+def _add_workdays(current_due: datetime, workdays: int) -> datetime:
+    """Avanza `workdays` días laborables (lunes a viernes)."""
+    cursor = current_due
+    remaining = workdays
+    while remaining > 0:
+        cursor = cursor + timedelta(days=1)
+        if cursor.weekday() < 5:  # 0=Lunes .. 4=Viernes
+            remaining -= 1
+    return cursor
+
+
+def _step_by_weekdays(
+    current_due: datetime, interval_weeks: int, by_weekdays: list[int]
+) -> datetime:
+    """Avanza a los días configurados (convención JS: 0=Dom..6=Sáb) respetando `interval_weeks`."""
+
+    def js_dow_to_iso(js: int) -> int:
+        return 7 if js == 0 else js
+
+    sorted_iso = sorted({js_dow_to_iso(d) for d in by_weekdays if 0 <= d <= 6})
+    if not sorted_iso:
+        return current_due + timedelta(days=interval_weeks * 7)
+
+    current_js = (current_due.weekday() + 1) % 7
+    current_iso = js_dow_to_iso(current_js)
+
+    next_iso = next((d for d in sorted_iso if d > current_iso), None)
+    if next_iso is not None:
+        return current_due + timedelta(days=next_iso - current_iso)
+
+    first_iso = sorted_iso[0]
+    days_until_next_week = 7 - current_iso + first_iso
+    extra_weeks = (interval_weeks - 1) * 7
+    return current_due + timedelta(days=days_until_next_week + extra_weeks)
 
 
 def _normalize_utc(dt: datetime) -> datetime:
@@ -79,6 +136,9 @@ async def advance_recurring_task(
     if rule is None:
         return None
 
+    by_weekdays = getattr(rule, "by_weekdays", None)
+    is_last_day = bool(getattr(rule, "is_last_day_of_month", False))
+
     now_utc = _normalize_utc(completed_at) if completed_at is not None else datetime.now(UTC)
     rule_mode = getattr(rule, "mode", RecurrenceMode.FIXED) or RecurrenceMode.FIXED
 
@@ -90,12 +150,16 @@ async def advance_recurring_task(
             rule.frequency,
             rule.interval,
             anchor_day_of_month=anchor_day,
+            by_weekdays=by_weekdays,
+            is_last_day_of_month=is_last_day,
         )
         subsequent_due = calculate_next_due(
             cloned_due_date,
             rule.frequency,
             rule.interval,
             anchor_day_of_month=anchor_day,
+            by_weekdays=by_weekdays,
+            is_last_day_of_month=is_last_day,
         )
     else:
         # En modo FIXED ("every"), el nuevo vencimiento sigue la rejilla fija de calendario
@@ -108,6 +172,8 @@ async def advance_recurring_task(
             rule.frequency,
             rule.interval,
             anchor_day_of_month=anchor_day,
+            by_weekdays=by_weekdays,
+            is_last_day_of_month=is_last_day,
         )
 
     if rule.end_date is not None:

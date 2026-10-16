@@ -91,9 +91,11 @@ def test_room_read_enrichment_backward_compatibility():
 
 def test_recurrence_frequency_enum():
     assert RecurrenceFrequency.DAILY == "DAILY"
+    assert RecurrenceFrequency.WORKDAYS == "WORKDAYS"
     assert RecurrenceFrequency.WEEKLY == "WEEKLY"
     assert RecurrenceFrequency.MONTHLY == "MONTHLY"
-    assert len(RecurrenceFrequency) == 3
+    assert RecurrenceFrequency.YEARLY == "YEARLY"
+    assert len(RecurrenceFrequency) == 5
 
 
 def test_recurrence_rule_model():

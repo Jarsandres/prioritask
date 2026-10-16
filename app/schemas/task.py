@@ -52,6 +52,24 @@ class RecurrenceRuleInput(BaseModel):
         default=True,
         description="Reinicia automáticamente el checklist de subtareas al avanzar.",
     )
+    by_weekdays: list[int] | None = Field(
+        default=None,
+        description="Días de la semana (0=Dom..6=Sáb) para reglas WEEKLY.",
+    )
+    is_last_day_of_month: bool = Field(
+        default=False,
+        description="Fuerza el último día del mes en reglas MONTHLY.",
+    )
+
+    @field_validator("by_weekdays")
+    @classmethod
+    def validate_by_weekdays(cls, value):
+        if value is None:
+            return None
+        cleaned = sorted({int(day) for day in value})
+        if any(day < 0 or day > 6 for day in cleaned):
+            raise ValueError("by_weekdays debe contener días 0..6 (0=Domingo)")
+        return cleaned
 
     @field_validator("end_date", mode="before")
     def validate_end_date(cls, value):
@@ -73,6 +91,8 @@ class RecurrenceRuleRead(BaseModel):
     next_due: datetime
     end_date: datetime | None = None
     anchor_day_of_month: int | None = None
+    by_weekdays: list[int] | None = None
+    is_last_day_of_month: bool = False
     reset_subtasks: bool = True
 
     model_config = ConfigDict(from_attributes=True)

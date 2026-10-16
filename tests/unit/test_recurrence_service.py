@@ -289,3 +289,70 @@ async def test_advance_recurring_task_floating_mode_and_subtask_reset(session: A
     assert [s.titulo for s in cloned_subtasks] == ["Desengrasar campana", "Limpiar horno"]
     assert all(s.completada is False for s in cloned_subtasks)
 
+
+def test_calculate_next_due_workdays():
+    # 2026-01-02 es viernes -> +1 día laborable = lunes 2026-01-05
+    base_fri = datetime(2026, 1, 2, 10, 0, 0, tzinfo=UTC)
+    assert calculate_next_due(base_fri, RecurrenceFrequency.WORKDAYS, interval=1) == datetime(
+        2026, 1, 5, 10, 0, 0, tzinfo=UTC
+    )
+    # +5 días laborables -> viernes 2026-01-09
+    assert calculate_next_due(base_fri, RecurrenceFrequency.WORKDAYS, interval=5) == datetime(
+        2026, 1, 9, 10, 0, 0, tzinfo=UTC
+    )
+
+
+def test_calculate_next_due_weekly_by_weekdays():
+    # Lunes(1) y jueves(4), desde miércoles 2026-01-07 -> jueves 2026-01-08
+    assert calculate_next_due(
+        datetime(2026, 1, 7, 10, 0, 0, tzinfo=UTC),
+        RecurrenceFrequency.WEEKLY,
+        interval=1,
+        by_weekdays=[1, 4],
+    ) == datetime(2026, 1, 8, 10, 0, 0, tzinfo=UTC)
+
+    # Desde jueves 2026-01-08 -> lunes 2026-01-12
+    assert calculate_next_due(
+        datetime(2026, 1, 8, 10, 0, 0, tzinfo=UTC),
+        RecurrenceFrequency.WEEKLY,
+        interval=1,
+        by_weekdays=[1, 4],
+    ) == datetime(2026, 1, 12, 10, 0, 0, tzinfo=UTC)
+
+    # Intervalo de 2 semanas: desde jueves 2026-01-08 -> lunes 2026-01-19
+    assert calculate_next_due(
+        datetime(2026, 1, 8, 10, 0, 0, tzinfo=UTC),
+        RecurrenceFrequency.WEEKLY,
+        interval=2,
+        by_weekdays=[1, 4],
+    ) == datetime(2026, 1, 19, 10, 0, 0, tzinfo=UTC)
+
+
+def test_calculate_next_due_monthly_last_day():
+    # Desde 2026-01-15 + 1 mes -> último día de febrero 2026 = 2026-02-28
+    assert calculate_next_due(
+        datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
+        RecurrenceFrequency.MONTHLY,
+        interval=1,
+        is_last_day_of_month=True,
+    ) == datetime(2026, 2, 28, 10, 0, 0, tzinfo=UTC)
+
+    # Desde 2026-01-31 -> último día de febrero = 2026-02-28
+    assert calculate_next_due(
+        datetime(2026, 1, 31, 10, 0, 0, tzinfo=UTC),
+        RecurrenceFrequency.MONTHLY,
+        interval=1,
+        is_last_day_of_month=True,
+    ) == datetime(2026, 2, 28, 10, 0, 0, tzinfo=UTC)
+
+
+def test_calculate_next_due_yearly():
+    base = datetime(2026, 6, 15, 10, 0, 0, tzinfo=UTC)
+    assert calculate_next_due(base, RecurrenceFrequency.YEARLY, interval=1) == datetime(
+        2027, 6, 15, 10, 0, 0, tzinfo=UTC
+    )
+    # Año bisiesto: 2028-02-29 + 1 año -> 2029-02-28 (clamp)
+    assert calculate_next_due(
+        datetime(2028, 2, 29, 10, 0, 0, tzinfo=UTC), RecurrenceFrequency.YEARLY, interval=1
+    ) == datetime(2029, 2, 28, 10, 0, 0, tzinfo=UTC)
+
