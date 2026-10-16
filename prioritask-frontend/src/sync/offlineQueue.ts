@@ -1,6 +1,7 @@
 import api from "../api";
-import type { Task, TaskStatus } from "../types/task";
+import type { Subtask, Task, TaskStatus } from "../types/task";
 import { HybridLogicalClock, compareHlc } from "./hlc";
+import { isDesktopAvailable, onDesktopWakeup } from "../services/desktopBridge";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Esquema de Datos: Comandos de Sincronización, Sobre IPC y Cola Local
@@ -16,7 +17,10 @@ export type SyncCommandType =
   | "task_complete"
   | "task_uncomplete"
   | "task_schedule_reminder"
-  | "task_delete";
+  | "task_delete"
+  | "subtask_create"
+  | "tag_create"
+  | "tag_attach";
 
 /**
  * Estado del ciclo de vida de un comando dentro de la cola local.
@@ -69,6 +73,21 @@ export interface TaskDeleteArgs {
   id: string;
 }
 
+export interface SubtaskCreateArgs {
+  task_id: string;
+  titulo: string;
+  orden?: number;
+}
+
+export interface TagCreateArgs {
+  nombre: string;
+}
+
+export interface TagAttachArgs {
+  task_id: string;
+  tag_id: string;
+}
+
 export type SyncCommandArgsMap = {
   task_create: TaskCreateArgs;
   task_update: TaskUpdateArgs;
@@ -76,6 +95,29 @@ export type SyncCommandArgsMap = {
   task_uncomplete: TaskStatusToggleArgs;
   task_schedule_reminder: TaskScheduleReminderArgs;
   task_delete: TaskDeleteArgs;
+  subtask_create: SubtaskCreateArgs;
+  tag_create: TagCreateArgs;
+  tag_attach: TagAttachArgs;
+};
+
+/** Comandos que crean entidades con identidad temporal propia. */
+export const CREATE_COMMAND_TYPES: readonly SyncCommandType[] = [
+  "task_create",
+  "subtask_create",
+  "tag_create",
+];
+
+/** Claves de `args` que referencian entidades y deben reescribirse vía `temp_id_mapping`. */
+export const REFERENCE_ARGS_BY_TYPE: Partial<
+  Record<SyncCommandType, readonly string[]>
+> = {
+  task_update: ["id", "task_id"],
+  task_complete: ["id", "task_id"],
+  task_uncomplete: ["id", "task_id"],
+  task_schedule_reminder: ["id", "task_id"],
+  task_delete: ["id", "task_id"],
+  subtask_create: ["task_id"],
+  tag_attach: ["task_id", "tag_id"],
 };
 
 /**
@@ -161,7 +203,12 @@ export type CommandSyncResult =
   | {
       error_code: number;
       error: string;
-      error_tag: "CONFLICT_STALE_TIMESTAMP" | "ENTITY_NOT_FOUND" | "VALIDATION_ERROR";
+      error_tag:
+        | "CONFLICT_STALE_TIMESTAMP"
+        | "ENTITY_NOT_FOUND"
+        | "VALIDATION_ERROR"
+        | "INVALID_TEMP_ID"
+        | "TEMP_ID_COLLISION";
       retryable: boolean;
       server_record?: Task;
     };
@@ -504,7 +551,18 @@ export function attachSystemWakeupMonitor(
     }
   }, checkIntervalMs);
 
+  let unsubscribeDesktopWakeup: (() => void) | null = null;
+  if (isDesktopAvailable()) {
+    unsubscribeDesktopWakeup = onDesktopWakeup(() => {
+      triggerWakeupSync();
+    });
+  }
+
   return () => {
+    if (unsubscribeDesktopWakeup) {
+      unsubscribeDesktopWakeup();
+      unsubscribeDesktopWakeup = null;
+    }
     if (settleTimer !== null) {
       clearTimeout(settleTimer);
       settleTimer = null;
@@ -724,6 +782,73 @@ export function createSimulatedSyncTransport(
           continue;
         }
 
+        if (cmd.type === "subtask_create") {
+          const args = cmd.args as SubtaskCreateArgs;
+          const resolvedParent = temp_id_mapping[args.task_id] ?? args.task_id;
+          const parent = serverStore.get(resolvedParent);
+          if (!parent) {
+            sync_status[cmd.uuid] = {
+              error_code: 404,
+              error: `La tarea ${resolvedParent} no existe en el servidor.`,
+              error_tag: "ENTITY_NOT_FOUND",
+              retryable: false,
+            };
+            continue;
+          }
+          const tempId = cmd.temp_id ?? generateTempTaskId();
+          const realId = `srv_subtask_${++tokenCounter}_${cmd.uuid.slice(0, 6)}`;
+          temp_id_mapping[tempId] = realId;
+          const isoTimestamp = new Date(cmd.timestamp).toISOString();
+          const subtask: Subtask = {
+            id: realId,
+            task_id: resolvedParent,
+            titulo: args.titulo,
+            completada: false,
+            orden: args.orden ?? 0,
+            created_at: isoTimestamp,
+            updated_at: isoTimestamp,
+          };
+          serverStore.set(resolvedParent, {
+            ...parent,
+            subtasks: [...(parent.subtasks ?? []), subtask],
+          });
+          sync_status[cmd.uuid] = "ok";
+          continue;
+        }
+
+        if (cmd.type === "tag_create") {
+          const tempId = cmd.temp_id ?? generateTempTaskId();
+          const realId = `srv_tag_${++tokenCounter}_${cmd.uuid.slice(0, 6)}`;
+          temp_id_mapping[tempId] = realId;
+          sync_status[cmd.uuid] = "ok";
+          continue;
+        }
+
+        if (cmd.type === "tag_attach") {
+          const args = cmd.args as TagAttachArgs;
+          const resolvedTask = temp_id_mapping[args.task_id] ?? args.task_id;
+          const resolvedTag = temp_id_mapping[args.tag_id] ?? args.tag_id;
+          const task = serverStore.get(resolvedTask);
+          if (!task) {
+            sync_status[cmd.uuid] = {
+              error_code: 404,
+              error: `La tarea ${resolvedTask} no existe en el servidor.`,
+              error_tag: "ENTITY_NOT_FOUND",
+              retryable: false,
+            };
+            continue;
+          }
+          const existingTags = task.tags ?? [];
+          if (!existingTags.some((t) => t.id === resolvedTag)) {
+            serverStore.set(resolvedTask, {
+              ...task,
+              tags: [...existingTags, { id: resolvedTag, nombre: "" }],
+            });
+          }
+          sync_status[cmd.uuid] = "ok";
+          continue;
+        }
+
         if (cmd.type === "task_delete") {
           const args = cmd.args as TaskDeleteArgs;
           const resolvedId = temp_id_mapping[args.id] ?? args.id;
@@ -886,7 +1011,7 @@ export class OfflineSyncEngine {
     const uuid = options?.uuid ?? generateSyncUuid();
     const hlcTimestamp = options?.hlcTimestamp ?? this.hlc.now(timestamp);
     const tempId =
-      type === "task_create"
+      CREATE_COMMAND_TYPES.includes(type)
         ? options?.tempId ?? generateTempTaskId()
         : undefined;
 
@@ -1155,6 +1280,20 @@ export class OfflineSyncEngine {
           continue;
         }
 
+        // Referencia temporal irresoluble: conservar el comando para reintentar tras
+        // reintroducir el comando de creación padre, en lugar de descartar la mutación hija.
+        if (result.error_tag === "INVALID_TEMP_ID") {
+          const originalCmd = this.queueState.pendingCommands.find(
+            (c) => c.uuid === cmd.uuid
+          );
+          if (originalCmd) {
+            originalCmd.status = "pending";
+            originalCmd.retryCount += 1;
+            originalCmd.lastError = result.error;
+          }
+          continue;
+        }
+
         // Error permanente (ej. 404/422): revertir cambio optimista usando el snapshot y desencolar
         this.rollbackOptimisticCommand(cmd.uuid);
         failedCommandUuids.push(cmd.uuid);
@@ -1361,6 +1500,79 @@ export class OfflineSyncEngine {
       return null;
     }
 
+    if (command.type === "subtask_create") {
+      const args = command.args as SubtaskCreateArgs;
+      const parentId = this.resolveEntityId(args.task_id);
+      const parent = this.taskStore.get(parentId);
+      const entityId = this.resolveEntityId(command.temp_id ?? generateTempTaskId());
+
+      if (recordSnapshot && !this.queueState.snapshots[command.uuid]) {
+        this.queueState.snapshots[command.uuid] = {
+          commandUuid: command.uuid,
+          entityId,
+          previousState: parent ? structuredClone(parent) : null,
+        };
+      }
+
+      if (parent) {
+        const isoTimestamp = new Date(command.timestamp).toISOString();
+        const optimisticSubtask: Subtask = {
+          id: entityId,
+          task_id: parentId,
+          titulo: args.titulo,
+          completada: false,
+          orden: args.orden ?? 0,
+          created_at: isoTimestamp,
+          updated_at: isoTimestamp,
+        };
+        const updated: Task = {
+          ...parent,
+          subtasks: [...(parent.subtasks ?? []), optimisticSubtask],
+          subtasks_count:
+            (parent.subtasks_count ?? parent.subtasks?.length ?? 0) + 1,
+        };
+        this.taskStore.set(parentId, updated);
+      }
+      return null;
+    }
+
+    if (command.type === "tag_create") {
+      const entityId = this.resolveEntityId(command.temp_id ?? generateTempTaskId());
+      if (recordSnapshot && !this.queueState.snapshots[command.uuid]) {
+        this.queueState.snapshots[command.uuid] = {
+          commandUuid: command.uuid,
+          entityId,
+          previousState: null,
+        };
+      }
+      return null;
+    }
+
+    if (command.type === "tag_attach") {
+      const args = command.args as TagAttachArgs;
+      const taskId = this.resolveEntityId(args.task_id);
+      const tagId = this.resolveEntityId(args.tag_id);
+      const task = this.taskStore.get(taskId);
+      if (recordSnapshot && !this.queueState.snapshots[command.uuid]) {
+        this.queueState.snapshots[command.uuid] = {
+          commandUuid: command.uuid,
+          entityId: taskId,
+          previousState: task ? structuredClone(task) : null,
+        };
+      }
+      if (task) {
+        const existingTags = task.tags ?? [];
+        if (!existingTags.some((t) => t.id === tagId)) {
+          const updated: Task = {
+            ...task,
+            tags: [...existingTags, { id: tagId, nombre: "" }],
+          };
+          this.taskStore.set(taskId, updated);
+        }
+      }
+      return null;
+    }
+
     return null;
   }
 
@@ -1372,6 +1584,26 @@ export class OfflineSyncEngine {
         ...existing,
         id: realId,
       });
+    }
+
+    // Reasignar referencias hijas (subtareas) cuyo padre o id cambió.
+    for (const [taskId, task] of Array.from(this.taskStore.entries())) {
+      if (!task.subtasks) continue;
+      let mutated = false;
+      const nextSubtasks = task.subtasks.map((s) => {
+        if (s.id === tempId) {
+          mutated = true;
+          return { ...s, id: realId };
+        }
+        if (s.task_id === tempId) {
+          mutated = true;
+          return { ...s, task_id: realId };
+        }
+        return s;
+      });
+      if (mutated) {
+        this.taskStore.set(taskId, { ...task, subtasks: nextSubtasks });
+      }
     }
 
     for (const snap of Object.values(this.queueState.snapshots)) {
@@ -1386,9 +1618,16 @@ export class OfflineSyncEngine {
 
   private rewriteCommandWithResolvedIds(cmd: SyncCommand): SyncCommand {
     const cloned = structuredClone(cmd);
-    if (cloned.type !== "task_create" && "id" in cloned.args) {
-      const targetId = (cloned.args as { id: string }).id;
-      (cloned.args as { id: string }).id = this.resolveEntityId(targetId);
+    if (cloned.type === "task_create") {
+      return cloned;
+    }
+    const referenceKeys = REFERENCE_ARGS_BY_TYPE[cloned.type] ?? [];
+    const args = cloned.args as unknown as Record<string, unknown>;
+    for (const key of referenceKeys) {
+      const value = args[key];
+      if (typeof value === "string") {
+        args[key] = this.resolveEntityId(value);
+      }
     }
     return cloned;
   }

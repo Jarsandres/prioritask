@@ -93,10 +93,36 @@ describe("HybridLogicalClock (HLC)", () => {
   it("rejects remote HLC timestamps exceeding maximum future drift threshold (+300s)", () => {
     const clock = new HybridLogicalClock("test_node", 1000);
     const wallTimeMs = 1_000_000;
-    const futureAttackerHlc = "9999999999999:0000:attacker";
+    expect(() =>
+      clock.receive("9999999999999:0000:attacker", wallTimeMs)
+    ).toThrow("El timestamp HLC excede la deriva futura máxima permitida");
+  });
 
-    expect(() => {
-      clock.receive(futureAttackerHlc, wallTimeMs);
-    }).toThrow("El timestamp HLC excede la deriva futura máxima permitida");
+  it("rejects invalid or non-canonical HLC format in receive()", () => {
+    const clock = new HybridLogicalClock("test_node", 1000);
+    expect(() => clock.receive("1700000000000")).toThrow(
+      "Formato de HLC inválido"
+    );
+    expect(() => clock.receive("1700000000000:0001")).toThrow(
+      "Formato de HLC inválido"
+    );
+    expect(() => clock.receive("invalid_str")).toThrow(
+      "Formato de HLC inválido"
+    );
+  });
+
+  it("parseHlc returns safe zeroes for malformed non-canonical strings", () => {
+    expect(parseHlc("invalid")).toEqual({
+      physicalMs: 0,
+      counter: 0,
+      nodeId: "",
+      raw: "invalid",
+    });
+    expect(parseHlc("1700000000000")).toEqual({
+      physicalMs: 0,
+      counter: 0,
+      nodeId: "",
+      raw: "1700000000000",
+    });
   });
 });

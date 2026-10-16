@@ -260,5 +260,114 @@ describe("nlpTaskParser — Natural Language Task Input Engine", () => {
     expect(plusSuggestions).not.toBeNull();
     expect(plusSuggestions?.suggestions[0].token).toBe('+"María José"');
   });
+
+  describe("Sprint 1 — Quick Add Token Parser Engine extensions", () => {
+    const context = {
+      rooms: [
+        { id: "room-cocina", nombre: "Cocina" },
+        { id: "room-cp", nombre: "Cocina Principal" },
+        { id: "room-salon", nombre: "Salón" },
+      ],
+      tags: [
+        { id: "tag-urgente", nombre: "Urgente" },
+        { id: "tag-casa", nombre: "Casa" },
+      ],
+    };
+
+    it("extrae 'en 3 días', prioridad p1 y habitación #Cocina", () => {
+      const res = parseNaturalTaskInput(
+        "Comprar regalo en 3 días p1 #Cocina",
+        baseDate,
+        context
+      );
+
+      expect(res.cleanTitle).toBe("Comprar regalo");
+      expect(res.dueDate).toBe("2025-10-18"); // 15 Oct + 3 días
+      expect(res.peso).toBe(5); // p1
+      expect(res.roomId).toBe("room-cocina");
+      expect(res.roomName).toBe("Cocina");
+      expect(res.tokens.some((t) => t.type === "date" && t.label === "En 3 días")).toBe(true);
+      expect(res.tokens.some((t) => t.type === "priority" && t.value === 5)).toBe(true);
+      expect(res.tokens.some((t) => t.type === "room" && t.value === "room-cocina")).toBe(true);
+    });
+
+    it("extrae 'en 2 semanas' y prioridad p2", () => {
+      const res = parseNaturalTaskInput(
+        "Revisar presupuesto en 2 semanas p2",
+        baseDate
+      );
+
+      expect(res.cleanTitle).toBe("Revisar presupuesto");
+      expect(res.dueDate).toBe("2025-10-29"); // 15 Oct + 14 días
+      expect(res.peso).toBe(4); // p2
+      expect(res.tokens.some((t) => t.type === "date" && t.label === "En 2 semanas")).toBe(true);
+    });
+
+    it("extrae 'fin de semana' calculando el próximo sábado y prioridad p3", () => {
+      const res = parseNaturalTaskInput(
+        "Pintar valla fin de semana p3",
+        baseDate
+      );
+
+      expect(res.cleanTitle).toBe("Pintar valla");
+      expect(res.dueDate).toBe("2025-10-18"); // Miércoles 15 Oct -> Sábado 18 Oct
+      expect(res.peso).toBe(3);
+      expect(res.tokens.some((t) => t.type === "date" && t.label === "Fin de semana")).toBe(true);
+    });
+
+    it("extrae formato numérico de fecha '24/10' y hora 'a las 18:30'", () => {
+      const res = parseNaturalTaskInput(
+        "Reunión de vecinos 24/10 a las 18:30",
+        baseDate
+      );
+
+      expect(res.cleanTitle).toBe("Reunión de vecinos");
+      expect(res.dueDate).toBe("2025-10-24");
+      expect(res.dueTime).toBe("18:30");
+      expect(res.tokens.some((t) => t.type === "date" && t.value === "2025-10-24")).toBe(true);
+      expect(res.tokens.some((t) => t.type === "time" && t.value === "18:30")).toBe(true);
+    });
+
+    it("resuelve #\"Cocina Principal\" con comillas y espacios", () => {
+      const res = parseNaturalTaskInput(
+        'Limpiar a fondo #"Cocina Principal"',
+        baseDate,
+        context
+      );
+
+      expect(res.cleanTitle).toBe("Limpiar a fondo");
+      expect(res.roomId).toBe("room-cp");
+      expect(res.roomName).toBe("Cocina Principal");
+      expect(res.tokens.some((t) => t.type === "room" && t.value === "room-cp")).toBe(true);
+    });
+
+    it("tolera puntuación adyacente en tokens de prioridad, categoría y etiquetas (ej. p1,, p2., @urgente,)", () => {
+      const resPrioComma = parseNaturalTaskInput(
+        "Comprar leche p1, mañana #limpieza.",
+        baseDate
+      );
+      expect(resPrioComma.cleanTitle).toBe("Comprar leche");
+      expect(resPrioComma.peso).toBe(5);
+      expect(resPrioComma.dueDate).toBe("2025-10-16");
+      expect(resPrioComma.categoria).toBe("LIMPIEZA");
+
+      const resPrioDot = parseNaturalTaskInput(
+        "Revisar presupuesto en 2 semanas p2.",
+        baseDate
+      );
+      expect(resPrioDot.cleanTitle).toBe("Revisar presupuesto");
+      expect(resPrioDot.peso).toBe(4);
+      expect(resPrioDot.dueDate).toBe("2025-10-29");
+
+      const resTagsPunct = parseNaturalTaskInput(
+        "Organizar estantería @urgente, @casa.",
+        baseDate,
+        context
+      );
+      expect(resTagsPunct.cleanTitle).toBe("Organizar estantería");
+      expect(resTagsPunct.tags).toEqual(["urgente", "casa"]);
+    });
+  });
 });
+
 

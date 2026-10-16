@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { LuWifiOff, LuWifi, LuRefreshCw, LuTrash2 } from "react-icons/lu";
 import useNetworkStatus from "../../hooks/useNetworkStatus";
+import { useAutoSyncLifecycle } from "../../hooks/useAutoSyncLifecycle";
 import {
   getPendingMutations,
   removeMutation,
@@ -101,30 +102,25 @@ export const OfflineBanner = () => {
     }
   }, [isOnline, isOffline, pendingCount, syncOfflineQueue]);
 
-  // Escuchar cuando el navegador vuelve a estar online
+  // Ciclo de vida para sincronización automática con debounce de 500ms (online, visibility, sleep watchdog)
+  const { triggerSync } = useAutoSyncLifecycle({
+    onSync: syncOfflineQueue,
+    debounceMs: 500,
+  });
+
+  // Coordinar aviso visual y sincronización cuando se restablece la conexión tras haber estado offline
   useEffect(() => {
-    const handleWindowOnline = () => {
-      syncOfflineQueue();
-    };
-
-    window.addEventListener("online", handleWindowOnline);
-
     if (wasOffline && isOnline) {
       setShowRestored(true);
-      syncOfflineQueue();
+      triggerSync();
       const timer = setTimeout(() => {
         setShowRestored(false);
       }, 3500);
       return () => {
         clearTimeout(timer);
-        window.removeEventListener("online", handleWindowOnline);
       };
     }
-
-    return () => {
-      window.removeEventListener("online", handleWindowOnline);
-    };
-  }, [wasOffline, isOnline, syncOfflineQueue]);
+  }, [wasOffline, isOnline, triggerSync]);
 
   const handleManualSync = async () => {
     if (isOffline) {

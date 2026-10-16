@@ -6,6 +6,7 @@ import {
   isTransientNetworkError,
   attachSystemWakeupMonitor,
 } from "../offlineQueue";
+import type { CommandSyncResult, SyncTransportExecutor } from "../offlineQueue";
 import { formatHlc } from "../hlc";
 import type { Task } from "../../types/task";
 
@@ -140,6 +141,84 @@ describe("OfflineSyncEngine (Todoist-inspired Optimistic UI & Offline Queue)", (
     expect(engine.getTaskById("task_100")?.estado).toBe("TODO");
   });
 
+  it("chains task_create -> subtask_create with a temp parent and maps both ids on flush", async () => {
+    const storage = new IndexedDBQueueStorageAdapter();
+    await storage.clear();
+
+    const { transport, serverStore } = createSimulatedSyncTransport([]);
+    const engine = new OfflineSyncEngine({ storage, transport });
+    await engine.initialize([]);
+
+    const { command: createCmd } = await engine.dispatchMutation(
+      "task_create",
+      { titulo: "Padre offline", categoria: "Hogar", peso: 1 },
+      { timestamp: 1000 }
+    );
+    const parentTemp = createCmd.temp_id!;
+
+    const { command: subCmd } = await engine.dispatchMutation(
+      "subtask_create",
+      { task_id: parentTemp, titulo: "Hija offline", orden: 1 },
+      { timestamp: 1050 }
+    );
+    const subtaskTemp = subCmd.temp_id!;
+
+    // Optimista: la subtarea ya cuelga del padre temporal en el store local
+    expect(engine.getTaskById(parentTemp)?.subtasks?.[0]?.titulo).toBe("Hija offline");
+
+    const flush = await engine.flushQueue();
+    expect(flush.syncedCommandUuids).toHaveLength(2);
+
+    const realParent = flush.tempIdMappingsApplied[parentTemp];
+    const realSubtask = flush.tempIdMappingsApplied[subtaskTemp];
+    expect(realParent).toBeDefined();
+    expect(realSubtask).toBeDefined();
+
+    // La FK hija apunta al padre real tanto en el servidor simulado como en el store local
+    expect(serverStore.get(realParent)?.subtasks?.[0]?.task_id).toBe(realParent);
+    expect(engine.getTaskById(realParent)?.subtasks?.[0]?.task_id).toBe(realParent);
+  });
+
+  it("keeps a child mutation queued when its parent temp id stays unresolved", async () => {
+    const storage = new IndexedDBQueueStorageAdapter();
+    await storage.clear();
+
+    const invalidTempTransport: SyncTransportExecutor = async (batch) => {
+      const sync_status: Record<string, CommandSyncResult> = {};
+      for (const c of batch.commands) {
+        sync_status[c.uuid] = {
+          error_code: 422,
+          error: "Identificador temporal no resoluble",
+          error_tag: "INVALID_TEMP_ID",
+          retryable: false,
+        };
+      }
+      return {
+        sync_token: "tok-invalid-temp",
+        full_sync: false,
+        sync_status,
+        temp_id_mapping: {},
+        items: [],
+      };
+    };
+
+    const engine = new OfflineSyncEngine({
+      storage,
+      transport: invalidTempTransport,
+    });
+    await engine.initialize([]);
+
+    await engine.dispatchMutation(
+      "subtask_create",
+      { task_id: "temp_missing_parent", titulo: "Hija sin padre" },
+      { timestamp: 10 }
+    );
+
+    const flush = await engine.flushQueue();
+    expect(flush.failedCommandUuids).toHaveLength(0);
+    expect(flush.remainingPendingCount).toBe(1);
+  });
+
   it("stamps field_hlc, resolves per-field HLC conflicts, and supports task_schedule_reminder via createReminder", async () => {
     const storage = new IndexedDBQueueStorageAdapter();
     await storage.clear();
@@ -250,5 +329,59 @@ describe("OfflineSyncEngine (Todoist-inspired Optimistic UI & Offline Queue)", (
       vi.useRealTimers();
     }
   });
+
+  it("debe escuchar onDesktopWakeup en attachSystemWakeupMonitor cuando está en entorno Desktop", async () => {
+    vi.useFakeTimers();
+    let wakeupCb: (() => void) | null = null;
+    const mockUnsub = vi.fn();
+
+    window.prioritaskDesktop = {
+      isDesktop: true,
+      platform: "win32",
+      version: "1.0.0",
+      safeStorage: {
+        isAvailable: async () => true,
+        encryptString: async (s: string) => s,
+        decryptString: async (s: string) => s,
+      },
+      ipc: {
+        sendRequestSync: () => {},
+        onWakeup: (cb: () => void) => {
+          wakeupCb = cb;
+          return mockUnsub;
+        },
+        onAddTask: () => () => {},
+        quickAddAddTask: () => {},
+        setMainLogicWindow: () => {},
+      },
+    };
+
+    try {
+      const engine = new OfflineSyncEngine();
+      const spyEnvelope = vi
+        .spyOn(engine, "handleBridgeEnvelope")
+        .mockResolvedValue();
+
+      const detach = attachSystemWakeupMonitor(engine, {
+        settleDelayMs: 500,
+      });
+
+      expect(wakeupCb).not.toBeNull();
+      wakeupCb!();
+
+      expect(spyEnvelope).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(spyEnvelope).toHaveBeenCalledTimes(1);
+      expect(spyEnvelope.mock.calls[0][0].method).toBe("sendRequestSync");
+
+      detach();
+      expect(mockUnsub).toHaveBeenCalled();
+    } finally {
+      delete window.prioritaskDesktop;
+      vi.useRealTimers();
+    }
+  });
 });
+
 

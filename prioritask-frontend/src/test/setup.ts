@@ -29,5 +29,13 @@ if (typeof window !== "undefined") {
   if (!window.HTMLElement.prototype.scrollIntoView) {
     window.HTMLElement.prototype.scrollIntoView = () => {};
   }
+
+  if (window.crypto && !window.crypto.subtle && typeof globalThis !== "undefined" && globalThis.crypto?.subtle) {
+    Object.defineProperty(window.crypto, "subtle", {
+      value: globalThis.crypto.subtle,
+      configurable: true,
+      writable: true,
+    });
+  }
 }
 

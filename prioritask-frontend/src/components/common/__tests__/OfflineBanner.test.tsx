@@ -107,20 +107,70 @@ describe("OfflineBanner Component", () => {
       window.dispatchEvent(new Event("online"));
     });
 
-    await waitFor(() => {
-      expect(apiRequestSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          url: "/tasks/10/status",
-          method: "PATCH",
-          data: { estado: "DONE" },
-        })
-      );
+    // useAutoSyncLifecycle debouncea 500ms antes de ejecutar la sincronización
+    await waitFor(
+      () => {
+        expect(apiRequestSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            url: "/tasks/10/status",
+            method: "PATCH",
+            data: { estado: "DONE" },
+          })
+        );
+      },
+      { timeout: 2500 }
+    );
+
+    await waitFor(
+      async () => {
+        const remaining = await offlineQueue.getPendingMutations();
+        expect(remaining).toHaveLength(0);
+      },
+      { timeout: 2500 }
+    );
+  });
+
+  it("sincroniza automáticamente las mutaciones pendientes cuando la pestaña vuelve a ser visible", async () => {
+    vi.spyOn(useNetworkStatusModule, "default").mockReturnValue({
+      isOnline: true,
+      isOffline: false,
+      wasOffline: false,
     });
 
-    await waitFor(async () => {
-      const remaining = await offlineQueue.getPendingMutations();
-      expect(remaining).toHaveLength(0);
+    await offlineQueue.enqueueMutation({
+      id: "sync_task_vis",
+      url: "/tasks/20/status",
+      method: "PATCH",
+      data: { estado: "DONE" },
     });
+
+    const apiRequestSpy = vi.spyOn(api, "request").mockResolvedValueOnce({
+      data: { id: "20", estado: "DONE" },
+    });
+
+    renderBanner();
+
+    Object.defineProperty(document, "visibilityState", {
+      value: "visible",
+      configurable: true,
+    });
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await waitFor(
+      () => {
+        expect(apiRequestSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            url: "/tasks/20/status",
+            method: "PATCH",
+            data: { estado: "DONE" },
+          })
+        );
+      },
+      { timeout: 2500 }
+    );
   });
 
   it("permite descartar la cola de mutaciones con el botón 'Descartar'", async () => {

@@ -47,9 +47,33 @@ const SHORTCUTS: ShortcutItem[] = [
     category: "Tareas",
   },
   {
-    keys: ["c"],
+    keys: ["q", "/", "c"],
     description:
       "Abrir ventana flotante de Captura Rápida (Quick Add) sin abandonar la pantalla",
+    category: "Tareas",
+  },
+  {
+    keys: ["Alt", "Espacio"],
+    description:
+      "Atajo alternativo para Captura Rápida (Quick Add)",
+    category: "Tareas",
+  },
+  {
+    keys: ["Ctrl", "Shift", "A"],
+    description:
+      "Atajo alternativo en escritorio para Captura Rápida (Quick Add)",
+    category: "Tareas",
+  },
+  {
+    keys: ["Alt", "D"],
+    description:
+      "Activar o enfocar selector de fecha rápida dentro de Quick Add",
+    category: "Tareas",
+  },
+  {
+    keys: ["Alt", "P"],
+    description:
+      "Abrir o alternar menú de prioridad rápida (P1-P5) dentro de Quick Add",
     category: "Tareas",
   },
   {
@@ -81,11 +105,6 @@ const SHORTCUTS: ShortcutItem[] = [
   {
     keys: ["Shift", "Clic"],
     description: "Seleccionar un rango continuo de tareas para acciones en lote",
-    category: "Tareas",
-  },
-  {
-    keys: ["Ctrl", "Shift", "A"],
-    description: "Seleccionar o deseleccionar todas las tareas visibles",
     category: "Tareas",
   },
   {
