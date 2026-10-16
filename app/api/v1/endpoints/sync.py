@@ -233,6 +233,19 @@ def _detect_temp_id_collisions(commands: list[SyncCommandIn]) -> set[str]:
     return colliding
 
 
+def _resolve_command_references(
+    cmd: SyncCommandIn, temp_id_mapping: dict[str, str]
+) -> None:
+    """Reescribe las claves referenciales de ``cmd.args`` usando el registro declarativo.
+
+    Los comandos de creación no se tocan: su identidad la genera el servidor y el placeholder
+    debe conservarse para poblar el mapeo.
+    """
+    reference_keys = _REFERENCE_FIELDS.get(cmd.type)
+    if reference_keys:
+        cmd.args = resolve_references(cmd.args, reference_keys, temp_id_mapping)
+
+
 @router.post(
     "/batch",
     response_model=SyncBatchResponse,
@@ -265,7 +278,9 @@ async def sync_batch(
             sync_status[cmd.uuid] = "ok"
             if cmd.temp_id and existing_cmd.task_id:
                 temp_id_mapping[cmd.temp_id] = str(existing_cmd.task_id)
-            raw_arg_temp = cmd.args.get("temp_id") or cmd.args.get("id")
+            raw_arg_temp = (
+                cmd.args.get("temp_id") or cmd.args.get("id") or cmd.args.get("task_id")
+            )
             if isinstance(raw_arg_temp, str) and existing_cmd.task_id:
                 temp_id_mapping[raw_arg_temp] = str(existing_cmd.task_id)
             continue
@@ -278,6 +293,8 @@ async def sync_batch(
                 retryable=False,
             )
             continue
+
+        _resolve_command_references(cmd, temp_id_mapping)
 
         if cmd.type == "task_create":
             savepoint = None
@@ -396,7 +413,9 @@ async def sync_batch(
 
                 if cmd.temp_id:
                     temp_id_mapping[cmd.temp_id] = str(new_task.id)
-                arg_temp = cmd.args.get("temp_id") or cmd.args.get("id")
+                arg_temp = (
+                    cmd.args.get("temp_id") or cmd.args.get("id") or cmd.args.get("task_id")
+                )
                 if isinstance(arg_temp, str) and arg_temp != str(new_task.id):
                     temp_id_mapping[arg_temp] = str(new_task.id)
 

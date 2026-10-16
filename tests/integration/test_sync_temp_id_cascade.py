@@ -122,3 +122,45 @@ async def test_duplicate_temp_id_across_creates_is_rejected(
     for uuid in (first_uuid, second_uuid):
         assert data["sync_status"][uuid]["error_tag"] == "TEMP_ID_COLLISION"
     assert duplicated_temp not in data["temp_id_mapping"]
+
+
+@pytest.mark.asyncio
+async def test_idempotent_replay_reconstructs_mapping_from_args_task_id(
+    async_client: AsyncClient,
+    user_a_headers: dict[str, str],
+    room_owner_a,
+):
+    """H4: un ``task_create`` que declara su placeholder en ``args.task_id`` también se mapea."""
+    temp_alias = f"temp_{uuid4().hex}"
+    create_uuid = str(uuid4())
+    batch = {
+        "sync_token": "*",
+        "room_id": str(room_owner_a.id),
+        "commands": [
+            {
+                "uuid": create_uuid,
+                "type": "task_create",
+                "args": {
+                    "task_id": temp_alias,
+                    "titulo": "Alias Idempotente",
+                    "room_id": str(room_owner_a.id),
+                },
+                "timestamp": 1700000000000,
+            }
+        ],
+    }
+
+    first = await async_client.post(
+        "/api/v1/sync/batch", headers=user_a_headers, json=batch
+    )
+    assert first.status_code == 200, first.text
+    real_id = first.json()["temp_id_mapping"][temp_alias]
+    assert not real_id.startswith("temp_")
+
+    # Reenvío exactamente el mismo lote (reintento de red)
+    second = await async_client.post(
+        "/api/v1/sync/batch", headers=user_a_headers, json=batch
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["sync_status"][create_uuid] == "ok"
+    assert second.json()["temp_id_mapping"][temp_alias] == real_id

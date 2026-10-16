@@ -1,7 +1,11 @@
+from uuid import uuid4
+
 from app.api.v1.endpoints.sync import (
     _REFERENCE_FIELDS,
+    _resolve_command_references,
     resolve_references,
 )
+from app.schemas.sync import SyncCommandIn
 
 
 class TestResolveReferencesRegistry:
@@ -51,3 +55,38 @@ class TestResolveReferences:
         args = {"id": "temp_parent", "nested": {"task_id": "temp_parent"}}
         resolve_references(args, ("id", "task_id"), {"temp_parent": "p-uuid"})
         assert args == {"id": "temp_parent", "nested": {"task_id": "temp_parent"}}
+
+
+class TestResolveCommandReferences:
+    def test_rewrites_reference_args_in_place(self):
+        real = str(uuid4())
+        cmd = SyncCommandIn(
+            uuid="c1",
+            type="task_update",
+            args={"id": "temp_p", "peso": 3.0},
+            timestamp=1,
+        )
+        _resolve_command_references(cmd, {"temp_p": real})
+        assert cmd.args == {"id": real, "peso": 3.0}
+
+    def test_leaves_create_commands_untouched(self):
+        cmd = SyncCommandIn(
+            uuid="c2",
+            temp_id="temp_new",
+            type="task_create",
+            args={"task_id": "temp_new", "titulo": "Nueva"},
+            timestamp=1,
+        )
+        _resolve_command_references(cmd, {"temp_new": "real-id"})
+        # El create conserva su propio placeholder: la identidad la genera el servidor.
+        assert cmd.args["task_id"] == "temp_new"
+
+    def test_leaves_unmapped_reference_for_later_rejection(self):
+        cmd = SyncCommandIn(
+            uuid="c3",
+            type="task_delete",
+            args={"id": "temp_missing"},
+            timestamp=1,
+        )
+        _resolve_command_references(cmd, {})
+        assert cmd.args["id"] == "temp_missing"

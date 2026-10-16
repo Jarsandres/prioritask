@@ -15,11 +15,13 @@
 - [x] `ruff check` → OK
 
 ## Phase 1: Cascada backend (nivel tarea)
-- [ ] Task 4 — Refactor de `_resolve_task_uuid` sobre el PRR + error semántico (S/M) · risk LOW
-- [ ] Task 5 — Paridad de reconstrucción idempotente (`args.task_id`) (XS)
+- [x] Task 4 — Refactor de `_resolve_task_uuid` sobre el PRR + error semántico (S/M) · risk LOW
+- [x] Task 5 — Paridad de reconstrucción idempotente (`args.task_id`) (XS)
 
 ### Checkpoint: Cascada nivel tarea
-- [ ] `python -m pytest tests/unit/test_sync_endpoint_unit.py tests/integration/test_sync_batch.py -q`
+- [x] `python -m pytest tests/unit/test_sync_endpoint_unit.py tests/integration/test_sync_batch.py tests/unit/test_sync_reference_resolution.py tests/integration/test_sync_temp_id_cascade.py -q` → 37 passed
+- [x] `ruff check` → OK
+- [ ] Regresión completa `python -m pytest -q` (en ejecución)
 
 ## Phase 2: Comandos hijos (cierra X1)
 - [ ] Task 6 — `subtask_create` con FK padre resuelta por PRR (M)
