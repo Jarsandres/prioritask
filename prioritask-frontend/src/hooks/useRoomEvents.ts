@@ -360,9 +360,18 @@ export const useRoomEvents = (
       }
     }
 
-    const apiBase = (
-      import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1"
-    ).replace(/\/+$/, "");
+    // H1: fallback local solo en desarrollo; el build de producción no hornea
+    // `localhost` y exige VITE_API_URL (rama DEV eliminada en build).
+    const configuredApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+    const rawApiBase =
+      configuredApiUrl ??
+      (import.meta.env.DEV ? "http://localhost:8000/api/v1" : "");
+    if (!rawApiBase) {
+      throw new Error(
+        "VITE_API_URL no está definida para el build de producción"
+      );
+    }
+    const apiBase = rawApiBase.replace(/\/+$/, "");
     const streamUrl = `${apiBase}/rooms/${encodeURIComponent(
       roomId
     )}/events?token=${encodeURIComponent(token)}`;

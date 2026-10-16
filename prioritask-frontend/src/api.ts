@@ -2,8 +2,18 @@ import axios from "axios";
 import type { TokenResponse, RefreshTokenRequest } from "./types/auth";
 import { enqueueMutation } from "./services/offlineQueue";
 
+// Endpoint obligatorio (H1): en desarrollo se permite el fallback local, pero
+// el bundle de producción no hornea `localhost` (la rama `import.meta.env.DEV`
+// se elimina por dead-code elimination) y exige que VITE_API_URL esté definida.
+const API_URL =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? "http://localhost:8000/api/v1" : "");
+if (!API_URL) {
+  throw new Error("VITE_API_URL no está definida para el build de producción");
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1",
+  baseURL: API_URL,
 });
 
 // Añadir token a cada petición

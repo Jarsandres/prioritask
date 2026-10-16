@@ -75,6 +75,10 @@ jobs:
         run: |
           npm run build
 
+      - name: Verify production bundle
+        working-directory: prioritask-frontend
+        run: npm run verify:bundle
+
   e2e-ci:
     runs-on: ubuntu-latest
     env:
