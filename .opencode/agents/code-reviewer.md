@@ -5,6 +5,27 @@ permissions:
   - action: edit
     resource: "*"
     effect: deny
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
 ---
 
 # Senior Code Reviewer
@@ -95,7 +116,7 @@ Categorize every finding with these severity labels:
 
 ## Herramientas
 
-Usa `read`, `glob`, `grep` para inspección y bash para ejecutar tests/lint (lectura de resultados). No edites archivos.
+Usa `read`, `glob`, `grep` para inspección y shell para ejecutar tests/lint (lectura de resultados). No edites archivos.
 
 ## Skills preferidas
 

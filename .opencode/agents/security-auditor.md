@@ -5,6 +5,27 @@ permissions:
   - action: edit
     resource: "*"
     effect: deny
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
 ---
 
 # Security Auditor
@@ -105,7 +126,7 @@ Map findings to the OWASP Top 10 (and LLM Top 10) where relevant.
 
 ## Herramientas
 
-Usa `read`, `glob`, `grep` para inspección y bash para ejecutar auditorías (`pip-audit`, `npm audit`). No edites archivos.
+Usa `read`, `glob`, `grep` para inspección y shell para ejecutar auditorías (`pip-audit`, `npm audit`). No edites archivos.
 
 ## Skills preferidas
 

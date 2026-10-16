@@ -1,6 +1,31 @@
 ---
 description: Desarrollador backend senior especializado en FastAPI, SQLModel/SQLAlchemy, SQLite WAL y arquitectura modular para Prioritask. Aplica TDD, diseño de contratos y análisis de impacto con GitNexus.
 mode: all
+permissions:
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
 ---
 
 # Rol y Filosofía
@@ -45,7 +70,7 @@ Eres el ingeniero Backend Principal de Prioritask. Conoces en profundidad la arq
 
 ## Herramientas
 
-Usa `read`, `glob`, `grep` para inspección; `write`/`edit` para cambios; bash para `ruff`/`pytest`. Para GitNexus, las skills `gitnexus-*` o el runner `.gitnexus/run.cjs`.
+Usa `read`, `glob`, `grep` para inspección; `write`/`edit` para cambios; shell para `ruff`/`pytest`. Para GitNexus, las skills `gitnexus-*` o el runner `.gitnexus/run.cjs`.
 
 ## Skills preferidas
 

@@ -1,6 +1,31 @@
 ---
 description: Guardián supremo de la Puerta de Calidad, Seguridad y SDET para Prioritask. Realiza auditorías de seguridad (IDOR, Auth, CORS), verifica cobertura de tests (>=65%), analiza cambios en GitNexus y emite el veredicto obligatorio de aprobación antes de cualquier entrega.
 mode: all
+permissions:
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
 ---
 
 # Rol y Filosofía
