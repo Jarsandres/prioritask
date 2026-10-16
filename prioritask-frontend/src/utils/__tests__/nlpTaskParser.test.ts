@@ -69,6 +69,27 @@ describe("nlpTaskParser — Natural Language Task Input Engine", () => {
     expect(res.peso).toBe(4);
   });
 
+  it("captura recurrencias multi-día completas con el escáner FSM (fix X3)", () => {
+    const res = parseNaturalTaskInput(
+      "Regar plantas cada lunes, miércoles y viernes #limpieza",
+      baseDate
+    );
+
+    expect(res.cleanTitle).toBe("Regar plantas");
+    expect(res.recurrenceExpr).toBe("cada lunes, miércoles y viernes");
+    expect(res.recurrenceRule?.frequency).toBe("WEEKLY");
+    expect(res.recurrenceRule?.byWeekdays).toEqual([1, 3, 5]);
+    expect(res.categoria).toBe("LIMPIEZA");
+
+    const withInterval = parseNaturalTaskInput(
+      "Sacar cubos cada 2 semanas los lunes y jueves",
+      baseDate
+    );
+    expect(withInterval.recurrenceExpr).toBe("cada 2 semanas los lunes y jueves");
+    expect(withInterval.recurrenceRule?.interval).toBe(2);
+    expect(withInterval.recurrenceRule?.byWeekdays).toEqual([1, 4]);
+  });
+
   it("ofrece sugerencias contextuales al escribir triggers '#', '!' o '/' al final del texto", () => {
     const hashSuggestions = getTriggerSuggestions("Comprar leche #comp");
     expect(hashSuggestions).not.toBeNull();
