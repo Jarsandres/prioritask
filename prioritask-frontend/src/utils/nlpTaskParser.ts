@@ -4,6 +4,10 @@ import {
   toISODateString,
   type RecurrenceRuleConfig,
 } from "./recurrenceEngine";
+import {
+  irToRecurrenceRuleConfig,
+  scanRecurrenceClause,
+} from "./recurrenceLexer";
 
 export type NlpTokenType =
   | "date"
@@ -280,27 +284,25 @@ export function parseNaturalTaskInput(
   let assigneeId: string | undefined;
   let assigneeName: string | undefined;
 
-  // 1. Detectar expresiones de recurrencia al estilo Todoist ("cada! 7 días", "cada semana", "every! 3 days", etc.)
-  const recurrenceRegex =
-    /\b((?:cada!|cada|every!|every)\s+(?:\d+\s+)?(?:d[ií]as?|semanas?|mes(?:es)?|a[ñn]os?|d[ií]a\s+laborable|workdays?|days?|weeks?|months?|years?|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bados?|domingos?))\b/i;
-  const recMatch = recurrenceRegex.exec(working);
-  if (recMatch) {
-    const candidateExpr = recMatch[1].trim();
-    const parsed = parseRecurrenceExpression(candidateExpr);
-    if (parsed) {
-      recurrenceExpr = candidateExpr;
-      recurrenceRule = parsed;
-      tokens.push({
-        type: "recurrence",
-        raw: recMatch[1],
-        label: formatRecurrenceRule(parsed),
-        value: candidateExpr,
-      });
-      working =
-        working.slice(0, recMatch.index) +
-        " " +
-        working.slice(recMatch.index + recMatch[0].length);
-    }
+  // 1. Detectar expresiones de recurrencia con el escáner single-pass (FSM).
+  //    Captura la cláusula completa, incluidas listas multi-día ("cada lunes y jueves"),
+  //    corrigiendo la limitación previa del regex de match único.
+  const recScan = scanRecurrenceClause(working);
+  if (recScan.matched && recScan.ir) {
+    const candidateExpr = recScan.text;
+    const parsed =
+      parseRecurrenceExpression(candidateExpr) ??
+      irToRecurrenceRuleConfig(recScan.ir);
+    recurrenceExpr = candidateExpr;
+    recurrenceRule = parsed;
+    tokens.push({
+      type: "recurrence",
+      raw: candidateExpr,
+      label: formatRecurrenceRule(parsed),
+      value: candidateExpr,
+    });
+    working =
+      working.slice(0, recScan.start) + " " + working.slice(recScan.end);
   }
 
   // 2. Detectar fechas compuestas y relativas
