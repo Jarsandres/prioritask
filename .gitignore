@@ -6,6 +6,11 @@ __pycache__/
 # Cython debug symbols
 cython_debug/
 
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/
+
 # Pytest
 .cache/
 .pytest_cache/
