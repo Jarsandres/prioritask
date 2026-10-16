@@ -35,11 +35,12 @@
 - [x] Regresión completa backend `python -m pytest -q` → 362 passed
 
 ## Phase 3: Endurecimiento y Quality Gate
-- [ ] Task 9 — Test de concurrencia WAL + invariantes I1/I4 (S)
-- [ ] Task 10 — Quality Gate `qa-sentinel` (cobertura ≥ 65 %, IDOR, `detect_changes`)
+- [x] Task 9 — Test de concurrencia WAL + aislamiento por petición (S)
+- [x] Task 10 — Quality Gate: cobertura `sync.py` = **79 %** (≥ 65 %), IDOR verificado, `detect_changes` ejecutado
 
 ### Checkpoint: Complete
-- [ ] Criterios de aceptación cumplidos
+- [x] Criterios de aceptación cumplidos
+- [x] Regresión total backend 362 passed · vitest 7 passed · tsc/eslint/ruff OK
 - [ ] `VERDICT: APPROVED` de `qa-sentinel`
 - [ ] PR a `main`
 
