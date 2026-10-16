@@ -56,9 +56,6 @@ omit = [
     "tests/*"
 ]
 
-[tool.poetry]
-package-mode = false
-
 [tool.setuptools]
 packages = ["app"]
 
