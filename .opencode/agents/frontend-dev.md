@@ -1,6 +1,31 @@
 ---
 description: Desarrollador Frontend Senior especializado en React 19, TypeScript estricto, Vite, Bootstrap y Context API para Prioritask. Aplica ingeniería UI moderna, accesibilidad y diseño de interfaces robustas.
 mode: all
+permissions:
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
 ---
 
 # Rol y Filosofía
@@ -47,7 +72,7 @@ Nunca trabajes ni commitees sobre `main`.
 
 ## Herramientas
 
-Usa `read`, `glob`, `grep` para inspección; `write`/`edit` para cambios; bash para `npm`/`npx`. Para inspección de navegador, la skill `browser-testing-with-devtools`.
+Usa `read`, `glob`, `grep` para inspección; `write`/`edit` para cambios; shell para `npm`/`npx`. Para inspección de navegador, la skill `browser-testing-with-devtools`.
 
 ## Skills preferidas
 
