@@ -309,6 +309,8 @@ def _build_recurrence_rule_for_task(
         effective_rule.frequency,
         effective_rule.interval,
         anchor_day_of_month=anchor_day,
+        by_weekdays=effective_rule.by_weekdays,
+        is_last_day_of_month=effective_rule.is_last_day_of_month,
     )
     return RecurrenceRule(
         task_id=task.id,
@@ -316,6 +318,8 @@ def _build_recurrence_rule_for_task(
         interval=effective_rule.interval,
         mode=effective_rule.mode,
         anchor_day_of_month=anchor_day,
+        by_weekdays=effective_rule.by_weekdays,
+        is_last_day_of_month=effective_rule.is_last_day_of_month,
         reset_subtasks=effective_rule.reset_subtasks,
         next_due=initial_next_due,
         end_date=effective_rule.end_date,
@@ -580,12 +584,16 @@ async def _sync_task_recurrence_rule(
             rule_in.frequency,
             rule_in.interval,
             anchor_day_of_month=anchor_day,
+            by_weekdays=rule_in.by_weekdays,
+            is_last_day_of_month=rule_in.is_last_day_of_month,
         )
         if task.recurrence_rule is not None:
             task.recurrence_rule.frequency = rule_in.frequency
             task.recurrence_rule.interval = rule_in.interval
             task.recurrence_rule.mode = rule_in.mode
             task.recurrence_rule.anchor_day_of_month = anchor_day
+            task.recurrence_rule.by_weekdays = rule_in.by_weekdays
+            task.recurrence_rule.is_last_day_of_month = rule_in.is_last_day_of_month
             task.recurrence_rule.reset_subtasks = rule_in.reset_subtasks
             task.recurrence_rule.end_date = rule_in.end_date
             task.recurrence_rule.next_due = next_due

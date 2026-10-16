@@ -25,8 +25,10 @@ class RoomMemberRole(str, Enum):
 
 class RecurrenceFrequency(str, Enum):
     DAILY = "DAILY"
+    WORKDAYS = "WORKDAYS"
     WEEKLY = "WEEKLY"
     MONTHLY = "MONTHLY"
+    YEARLY = "YEARLY"
 
 
 class RecurrenceMode(str, Enum):
