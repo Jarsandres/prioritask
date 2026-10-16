@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "verify:bundle": "node scripts/verify-bundle.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "tailwind-init": "tailwindcss init -p",
@@ -16,7 +17,6 @@
     "@tanstack/react-virtual": "^3.14.13",
     "axios": "^1.20.0",
     "bootstrap": "^5.3.6",
-    "lodash": "^4.18.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-icons": "^5.5.0",
