@@ -34,6 +34,54 @@ from app.services.gamification import award_task_points
 
 router = APIRouter(prefix="/sync", tags=["Gestión de tareas"])
 
+# Comandos que CREAN una entidad con identidad propia -> su ``temp_id`` alimenta el mapeo.
+_CREATE_COMMANDS: frozenset[str] = frozenset({"task_create"})
+
+# Comandos que REFERENCIAN entidades -> claves de ``args`` a reescribir vía ``temp_id_mapping``.
+# Los valores anidados (dict/list) se recorren recursivamente.
+_REFERENCE_FIELDS: dict[str, tuple[str, ...]] = {
+    "task_update": ("id", "task_id"),
+    "task_delete": ("id", "task_id"),
+    "task_complete": ("id", "task_id"),
+    "task_uncomplete": ("id", "task_id"),
+    "task_schedule_reminder": ("id", "task_id"),
+}
+
+
+def resolve_references(
+    args: dict[str, Any],
+    reference_keys: tuple[str, ...],
+    temp_id_mapping: dict[str, str],
+) -> dict[str, Any]:
+    """Devuelve una copia de ``args`` con las claves referenciales reescritas vía el mapeo.
+
+    La reescritura es recursiva, de modo que estructuras anidadas
+    (p. ej. ``{"etiquetas": [{"tag_id": "temp_x"}]}``) también se resuelven. Las claves no
+    declaradas como referenciales y los valores ausentes del mapeo se conservan tal cual, y el
+    diccionario de entrada nunca se muta.
+    """
+    resolved: dict[str, Any] = {}
+    for key, value in args.items():
+        is_reference = key in reference_keys
+        if isinstance(value, dict):
+            resolved[key] = resolve_references(value, reference_keys, temp_id_mapping)
+        elif isinstance(value, list):
+            resolved[key] = [
+                resolve_references(item, reference_keys, temp_id_mapping)
+                if isinstance(item, dict)
+                else (
+                    temp_id_mapping.get(item, item)
+                    if is_reference and isinstance(item, str)
+                    else item
+                )
+                for item in value
+            ]
+        elif is_reference and isinstance(value, str):
+            resolved[key] = temp_id_mapping.get(value, value)
+        else:
+            resolved[key] = value
+    return resolved
+
 
 def _parse_datetime_utc(value: Any) -> datetime | None:
     if value is None or value == "":
@@ -130,14 +178,59 @@ def _extract_candidate_fields(cmd: SyncCommandIn) -> dict[str, Any]:
     return candidates
 
 
+class _InvalidTempIdError(Exception):
+    """El comando referencia un ``temp_id`` que no pudo resolverse dentro del lote."""
+
+    def __init__(self, temp_id: str) -> None:
+        self.temp_id = temp_id
+        super().__init__(f"Identificador temporal no resoluble: {temp_id}")
+
+
+def _is_temp_id(value: str) -> bool:
+    return value.startswith("temp_")
+
+
 def _resolve_task_uuid(
     cmd: SyncCommandIn, temp_id_mapping: dict[str, str]
 ) -> UUID:
     raw_id = cmd.args.get("id") or cmd.args.get("task_id") or cmd.temp_id
     if not raw_id:
         raise ValueError("Falta el identificador de la tarea")
-    resolved_str = temp_id_mapping.get(str(raw_id), str(raw_id))
-    return UUID(resolved_str)
+    raw_str = str(raw_id)
+    resolved_str = temp_id_mapping.get(raw_str, raw_str)
+    try:
+        return UUID(resolved_str)
+    except ValueError as exc:
+        if _is_temp_id(raw_str):
+            raise _InvalidTempIdError(raw_str) from exc
+        raise ValueError(f"Identificador de tarea inválido: {raw_str}") from exc
+
+
+def _detect_temp_id_collisions(commands: list[SyncCommandIn]) -> set[str]:
+    """Devuelve los ``uuid`` de comandos que declaran un ``temp_id`` duplicado en el lote.
+
+    Solo se consideran los comandos que crean entidades (aportan identidad temporal). Un mismo
+    valor declarado por dos creaciones distintas es una colisión determinista, no un "último
+    gana" silencioso.
+    """
+    owners: dict[str, list[str]] = {}
+    for cmd in commands:
+        if cmd.type not in _CREATE_COMMANDS:
+            continue
+        declared: set[str] = set()
+        for candidate in (cmd.temp_id, cmd.args.get("temp_id"), cmd.args.get("id")):
+            if isinstance(candidate, str) and candidate:
+                declared.add(candidate)
+        for key in declared:
+            owners.setdefault(key, []).append(cmd.uuid)
+
+    colliding = {
+        command_uuid
+        for command_uuids in owners.values()
+        if len(command_uuids) > 1
+        for command_uuid in command_uuids
+    }
+    return colliding
 
 
 @router.post(
@@ -155,6 +248,7 @@ async def sync_batch(
     temp_id_mapping: dict[str, str] = {}
     pending_events: list[tuple[UUID, str, dict[str, Any]]] = []
     touched_tasks: dict[UUID, Task] = {}
+    colliding_command_uuids = _detect_temp_id_collisions(payload.commands)
 
     for cmd in payload.commands:
         existing_cmd = await session.get(ProcessedSyncCommand, cmd.uuid)
@@ -174,6 +268,15 @@ async def sync_batch(
             raw_arg_temp = cmd.args.get("temp_id") or cmd.args.get("id")
             if isinstance(raw_arg_temp, str) and existing_cmd.task_id:
                 temp_id_mapping[raw_arg_temp] = str(existing_cmd.task_id)
+            continue
+
+        if cmd.uuid in colliding_command_uuids:
+            sync_status[cmd.uuid] = SyncCommandError(
+                error_code=422,
+                error="Identificador temporal duplicado en el lote",
+                error_tag="TEMP_ID_COLLISION",
+                retryable=False,
+            )
             continue
 
         if cmd.type == "task_create":
@@ -339,6 +442,14 @@ async def sync_batch(
         if cmd.type == "task_delete":
             try:
                 task_uuid = _resolve_task_uuid(cmd, temp_id_mapping)
+            except _InvalidTempIdError as exc:
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=422,
+                    error=str(exc),
+                    error_tag="INVALID_TEMP_ID",
+                    retryable=False,
+                )
+                continue
             except ValueError as exc:
                 sync_status[cmd.uuid] = SyncCommandError(
                     error_code=422,
@@ -404,6 +515,14 @@ async def sync_batch(
         # Mutaciones sobre tareas existentes: task_update, task_complete, task_uncomplete, task_schedule_reminder
         try:
             task_uuid = _resolve_task_uuid(cmd, temp_id_mapping)
+        except _InvalidTempIdError as exc:
+            sync_status[cmd.uuid] = SyncCommandError(
+                error_code=422,
+                error=str(exc),
+                error_tag="INVALID_TEMP_ID",
+                retryable=False,
+            )
+            continue
         except ValueError as exc:
             sync_status[cmd.uuid] = SyncCommandError(
                 error_code=422,

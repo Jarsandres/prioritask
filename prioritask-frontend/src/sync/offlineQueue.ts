@@ -162,7 +162,12 @@ export type CommandSyncResult =
   | {
       error_code: number;
       error: string;
-      error_tag: "CONFLICT_STALE_TIMESTAMP" | "ENTITY_NOT_FOUND" | "VALIDATION_ERROR";
+      error_tag:
+        | "CONFLICT_STALE_TIMESTAMP"
+        | "ENTITY_NOT_FOUND"
+        | "VALIDATION_ERROR"
+        | "INVALID_TEMP_ID"
+        | "TEMP_ID_COLLISION";
       retryable: boolean;
       server_record?: Task;
     };

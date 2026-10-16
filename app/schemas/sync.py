@@ -36,6 +36,8 @@ SyncErrorTag = Literal[
     "ENTITY_NOT_FOUND",
     "VALIDATION_ERROR",
     "FORBIDDEN",
+    "INVALID_TEMP_ID",
+    "TEMP_ID_COLLISION",
 ]
 
 
