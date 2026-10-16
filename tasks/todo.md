@@ -24,12 +24,15 @@
 - [ ] Regresión completa `python -m pytest -q` (en ejecución)
 
 ## Phase 2: Comandos hijos (cierra X1)
-- [ ] Task 6 — `subtask_create` con FK padre resuelta por PRR (M)
-- [ ] Task 7 — `tag_create` + `tag_attach` (M)
-- [ ] Task 8 — Soporte de comandos hijos en motor offline frontend (M)
+- [x] Task 6 — `subtask_create` con FK padre resuelta por PRR (M)
+- [x] Task 7 — `tag_create` + `tag_attach` (M)
+- [x] Task 8 — Soporte de comandos hijos en motor offline frontend (M)
 
 ### Checkpoint: Hijos
-- [ ] Invariante I2: 0 huérfanos en `subtask`/`tasktag`
+- [x] Invariante I2: 0 huérfanos en `subtask`/`tasktag` (tests de integración)
+- [x] `npx vitest run src/sync/__tests__/offlineQueue.test.ts` → 7 passed
+- [x] `npx tsc -b` (typecheck frontend) → OK
+- [x] Regresión completa backend `python -m pytest -q` → 362 passed
 
 ## Phase 3: Endurecimiento y Quality Gate
 - [ ] Task 9 — Test de concurrencia WAL + invariantes I1/I4 (S)

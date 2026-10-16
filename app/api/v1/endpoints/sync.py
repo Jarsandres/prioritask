@@ -17,7 +17,15 @@ from app.api.v1.endpoints.tasks import (
     _get_task_with_access,
 )
 from app.db.session import get_session
-from app.models import CategoriaTarea, Room, RoomMember
+from app.models import (
+    CategoriaTarea,
+    Room,
+    RoomMember,
+    Subtask,
+    Tag,
+    TaskAction,
+    TaskTag,
+)
 from app.models.task import EstadoTarea, ProcessedSyncCommand, Task, TaskHistory
 from app.models.user import Usuario
 from app.schemas.sync import (
@@ -35,7 +43,28 @@ from app.services.gamification import award_task_points
 router = APIRouter(prefix="/sync", tags=["Gestión de tareas"])
 
 # Comandos que CREAN una entidad con identidad propia -> su ``temp_id`` alimenta el mapeo.
-_CREATE_COMMANDS: frozenset[str] = frozenset({"task_create"})
+_CREATE_COMMANDS: frozenset[str] = frozenset(
+    {"task_create", "subtask_create", "tag_create"}
+)
+
+# Claves de ``args`` que declaran el placeholder PROPIO de un comando de creación.
+# ``subtask_create`` NO usa aquí ``task_id``: en él, ``task_id`` referencia la tarea padre.
+_SELF_TEMP_ID_ARG_KEYS: dict[str, tuple[str, ...]] = {
+    "task_create": ("temp_id", "id", "task_id"),
+    "subtask_create": ("temp_id",),
+    "tag_create": ("temp_id",),
+}
+
+# Comandos de mutación/borrado sobre una tarea existente (reconstruyen el mapeo en idempotencia).
+_TASK_SCOPED_MUTATION_COMMANDS: frozenset[str] = frozenset(
+    {
+        "task_update",
+        "task_delete",
+        "task_complete",
+        "task_uncomplete",
+        "task_schedule_reminder",
+    }
+)
 
 # Comandos que REFERENCIAN entidades -> claves de ``args`` a reescribir vía ``temp_id_mapping``.
 # Los valores anidados (dict/list) se recorren recursivamente.
@@ -45,6 +74,8 @@ _REFERENCE_FIELDS: dict[str, tuple[str, ...]] = {
     "task_complete": ("id", "task_id"),
     "task_uncomplete": ("id", "task_id"),
     "task_schedule_reminder": ("id", "task_id"),
+    "subtask_create": ("task_id",),
+    "tag_attach": ("task_id", "tag_id"),
 }
 
 
@@ -190,6 +221,28 @@ def _is_temp_id(value: str) -> bool:
     return value.startswith("temp_")
 
 
+def _parse_scalar_uuid(resolved_str: str, raw_str: str) -> UUID:
+    """Convierte a ``UUID`` distinguiendo un temporal irresoluble de un identificador corrupto."""
+    try:
+        return UUID(resolved_str)
+    except ValueError as exc:
+        if _is_temp_id(raw_str):
+            raise _InvalidTempIdError(raw_str) from exc
+        raise ValueError(f"Identificador de tarea inválido: {raw_str}") from exc
+
+
+def _declared_self_temp_ids(cmd: SyncCommandIn) -> set[str]:
+    """Placeholders propios declarados por un comando de creación (no referencias a terceros)."""
+    declared: set[str] = set()
+    if isinstance(cmd.temp_id, str) and cmd.temp_id:
+        declared.add(cmd.temp_id)
+    for arg_key in _SELF_TEMP_ID_ARG_KEYS.get(cmd.type, ()):
+        value = cmd.args.get(arg_key)
+        if isinstance(value, str) and value:
+            declared.add(value)
+    return declared
+
+
 def _resolve_task_uuid(
     cmd: SyncCommandIn, temp_id_mapping: dict[str, str]
 ) -> UUID:
@@ -197,13 +250,23 @@ def _resolve_task_uuid(
     if not raw_id:
         raise ValueError("Falta el identificador de la tarea")
     raw_str = str(raw_id)
-    resolved_str = temp_id_mapping.get(raw_str, raw_str)
-    try:
-        return UUID(resolved_str)
-    except ValueError as exc:
-        if _is_temp_id(raw_str):
-            raise _InvalidTempIdError(raw_str) from exc
-        raise ValueError(f"Identificador de tarea inválido: {raw_str}") from exc
+    return _parse_scalar_uuid(temp_id_mapping.get(raw_str, raw_str), raw_str)
+
+
+def _resolve_scalar_reference(
+    raw_value: Any, temp_id_mapping: dict[str, str], label: str
+) -> UUID:
+    if not isinstance(raw_value, str) or not raw_value:
+        raise ValueError(f"Falta {label}")
+    return _parse_scalar_uuid(temp_id_mapping.get(raw_value, raw_value), raw_value)
+
+
+async def _rollback_savepoint(savepoint: Any) -> None:
+    """Revierte solo el SAVEPOINT del comando; sin savepoint no hay escrituras que deshacer."""
+    if savepoint is not None:
+        sp_rollback = savepoint.rollback()
+        if inspect.isawaitable(sp_rollback):
+            await sp_rollback
 
 
 def _detect_temp_id_collisions(commands: list[SyncCommandIn]) -> set[str]:
@@ -217,11 +280,7 @@ def _detect_temp_id_collisions(commands: list[SyncCommandIn]) -> set[str]:
     for cmd in commands:
         if cmd.type not in _CREATE_COMMANDS:
             continue
-        declared: set[str] = set()
-        for candidate in (cmd.temp_id, cmd.args.get("temp_id"), cmd.args.get("id")):
-            if isinstance(candidate, str) and candidate:
-                declared.add(candidate)
-        for key in declared:
+        for key in _declared_self_temp_ids(cmd):
             owners.setdefault(key, []).append(cmd.uuid)
 
     colliding = {
@@ -276,13 +335,17 @@ async def sync_batch(
                 continue
 
             sync_status[cmd.uuid] = "ok"
-            if cmd.temp_id and existing_cmd.task_id:
-                temp_id_mapping[cmd.temp_id] = str(existing_cmd.task_id)
-            raw_arg_temp = (
-                cmd.args.get("temp_id") or cmd.args.get("id") or cmd.args.get("task_id")
-            )
-            if isinstance(raw_arg_temp, str) and existing_cmd.task_id:
-                temp_id_mapping[raw_arg_temp] = str(existing_cmd.task_id)
+            if cmd.type == "task_create" and existing_cmd.task_id:
+                for declared in _declared_self_temp_ids(cmd):
+                    temp_id_mapping[declared] = str(existing_cmd.task_id)
+            elif cmd.type in _TASK_SCOPED_MUTATION_COMMANDS and existing_cmd.task_id:
+                raw_arg_temp = (
+                    cmd.args.get("temp_id")
+                    or cmd.args.get("id")
+                    or cmd.args.get("task_id")
+                )
+                if isinstance(raw_arg_temp, str):
+                    temp_id_mapping[raw_arg_temp] = str(existing_cmd.task_id)
             continue
 
         if cmd.uuid in colliding_command_uuids:
@@ -411,13 +474,9 @@ async def sync_batch(
                     new_task, ["etiquetas", "subtasks", "colaboradores", "recurrence_rule"]
                 )
 
-                if cmd.temp_id:
-                    temp_id_mapping[cmd.temp_id] = str(new_task.id)
-                arg_temp = (
-                    cmd.args.get("temp_id") or cmd.args.get("id") or cmd.args.get("task_id")
-                )
-                if isinstance(arg_temp, str) and arg_temp != str(new_task.id):
-                    temp_id_mapping[arg_temp] = str(new_task.id)
+                for declared in _declared_self_temp_ids(cmd):
+                    if declared != str(new_task.id):
+                        temp_id_mapping[declared] = str(new_task.id)
 
                 sync_status[cmd.uuid] = "ok"
                 touched_tasks[new_task.id] = new_task
@@ -446,6 +505,218 @@ async def sync_batch(
                 sync_status[cmd.uuid] = SyncCommandError(
                     error_code=422,
                     error="Ya existe una tarea activa con este título para el usuario.",
+                    error_tag="VALIDATION_ERROR",
+                    retryable=False,
+                )
+            except (ValueError, TypeError) as exc:
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=422,
+                    error=str(exc),
+                    error_tag="VALIDATION_ERROR",
+                    retryable=False,
+                )
+            continue
+
+        if cmd.type == "subtask_create":
+            savepoint = None
+            try:
+                titulo = cmd.args.get("titulo")
+                if not isinstance(titulo, str) or not (1 <= len(titulo.strip()) <= 255):
+                    raise ValueError(
+                        "El título de la subtarea debe tener entre 1 y 255 caracteres"
+                    )
+                raw_orden = cmd.args.get("orden", 0)
+                if isinstance(raw_orden, bool):
+                    raise TypeError("El orden de la subtarea debe ser un entero")
+                orden = int(raw_orden)
+
+                parent_uuid = _resolve_scalar_reference(
+                    cmd.args.get("task_id") or cmd.args.get("id"),
+                    temp_id_mapping,
+                    "la tarea padre de la subtarea",
+                )
+                task, _ = await _get_task_with_access(
+                    session, parent_uuid, current_user, allow_collaborator=True
+                )
+
+                savepoint = await session.begin_nested()
+                subtask = Subtask(
+                    task_id=task.id, titulo=titulo, orden=orden, completada=False
+                )
+                session.add(subtask)
+                await session.flush()
+
+                session.add(
+                    TaskHistory(
+                        task_id=task.id,
+                        user_id=current_user.id,
+                        action=TaskAction.SUBTASK_CREATED,
+                        changes=f"Subtarea '{subtask.titulo}' ({subtask.id}) creada",
+                    )
+                )
+                session.add(
+                    ProcessedSyncCommand(
+                        command_uuid=cmd.uuid,
+                        user_id=current_user.id,
+                        room_id=task.room_id,
+                        task_id=task.id,
+                        command_type=cmd.type,
+                        status="ok",
+                    )
+                )
+                await session.flush()
+                sp_commit = savepoint.commit()
+                if inspect.isawaitable(sp_commit):
+                    await sp_commit
+
+                for declared in _declared_self_temp_ids(cmd):
+                    temp_id_mapping[declared] = str(subtask.id)
+                sync_status[cmd.uuid] = "ok"
+            except _InvalidTempIdError as exc:
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=422,
+                    error=str(exc),
+                    error_tag="INVALID_TEMP_ID",
+                    retryable=False,
+                )
+            except HTTPException as exc:
+                await _rollback_savepoint(savepoint)
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=exc.status_code,
+                    error=str(exc.detail),
+                    error_tag="ENTITY_NOT_FOUND" if exc.status_code == 404 else "FORBIDDEN",
+                    retryable=False,
+                )
+            except IntegrityError:
+                await _rollback_savepoint(savepoint)
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=422,
+                    error="No se pudo crear la subtarea",
+                    error_tag="VALIDATION_ERROR",
+                    retryable=False,
+                )
+            except (ValueError, TypeError) as exc:
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=422,
+                    error=str(exc),
+                    error_tag="VALIDATION_ERROR",
+                    retryable=False,
+                )
+            continue
+
+        if cmd.type == "tag_create":
+            savepoint = None
+            try:
+                nombre = cmd.args.get("nombre")
+                if not isinstance(nombre, str) or not (2 <= len(nombre.strip()) <= 50):
+                    raise ValueError(
+                        "El nombre de la etiqueta debe tener entre 2 y 50 caracteres"
+                    )
+                savepoint = await session.begin_nested()
+                tag = Tag(nombre=nombre.strip(), user_id=current_user.id)
+                session.add(tag)
+                await session.flush()
+                session.add(
+                    ProcessedSyncCommand(
+                        command_uuid=cmd.uuid,
+                        user_id=current_user.id,
+                        room_id=None,
+                        task_id=None,
+                        command_type=cmd.type,
+                        status="ok",
+                    )
+                )
+                await session.flush()
+                sp_commit = savepoint.commit()
+                if inspect.isawaitable(sp_commit):
+                    await sp_commit
+
+                for declared in _declared_self_temp_ids(cmd):
+                    temp_id_mapping[declared] = str(tag.id)
+                sync_status[cmd.uuid] = "ok"
+            except IntegrityError:
+                await _rollback_savepoint(savepoint)
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=422,
+                    error="Duplicado: ya existe una etiqueta con ese nombre para este usuario.",
+                    error_tag="VALIDATION_ERROR",
+                    retryable=False,
+                )
+            except (ValueError, TypeError) as exc:
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=422,
+                    error=str(exc),
+                    error_tag="VALIDATION_ERROR",
+                    retryable=False,
+                )
+            continue
+
+        if cmd.type == "tag_attach":
+            savepoint = None
+            try:
+                task_uuid = _resolve_scalar_reference(
+                    cmd.args.get("task_id") or cmd.args.get("id"),
+                    temp_id_mapping,
+                    "la tarea para asignar la etiqueta",
+                )
+                tag_uuid = _resolve_scalar_reference(
+                    cmd.args.get("tag_id"),
+                    temp_id_mapping,
+                    "la etiqueta a asignar",
+                )
+                task, _ = await _get_task_with_access(
+                    session, task_uuid, current_user, allow_collaborator=False
+                )
+                tag = await session.get(Tag, tag_uuid)
+                if not tag or tag.user_id != current_user.id:
+                    raise HTTPException(
+                        status_code=404, detail="Etiqueta no encontrada"
+                    )
+
+                savepoint = await session.begin_nested()
+                existing_link = await session.exec(
+                    select(TaskTag).where(
+                        TaskTag.task_id == task.id, TaskTag.tag_id == tag.id
+                    )
+                )
+                if existing_link.first() is None:
+                    session.add(TaskTag(task_id=task.id, tag_id=tag.id))
+                session.add(
+                    ProcessedSyncCommand(
+                        command_uuid=cmd.uuid,
+                        user_id=current_user.id,
+                        room_id=task.room_id,
+                        task_id=task.id,
+                        command_type=cmd.type,
+                        status="ok",
+                    )
+                )
+                await session.flush()
+                sp_commit = savepoint.commit()
+                if inspect.isawaitable(sp_commit):
+                    await sp_commit
+
+                sync_status[cmd.uuid] = "ok"
+            except _InvalidTempIdError as exc:
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=422,
+                    error=str(exc),
+                    error_tag="INVALID_TEMP_ID",
+                    retryable=False,
+                )
+            except HTTPException as exc:
+                await _rollback_savepoint(savepoint)
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=exc.status_code,
+                    error=str(exc.detail),
+                    error_tag="ENTITY_NOT_FOUND" if exc.status_code == 404 else "FORBIDDEN",
+                    retryable=False,
+                )
+            except IntegrityError:
+                await _rollback_savepoint(savepoint)
+                sync_status[cmd.uuid] = SyncCommandError(
+                    error_code=422,
+                    error="No se pudo asignar la etiqueta",
                     error_tag="VALIDATION_ERROR",
                     retryable=False,
                 )

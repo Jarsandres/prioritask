@@ -29,6 +29,9 @@ SyncCommandType = Literal[
     "task_uncomplete",
     "task_schedule_reminder",
     "task_delete",
+    "subtask_create",
+    "tag_create",
+    "tag_attach",
 ]
 
 SyncErrorTag = Literal[
