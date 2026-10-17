@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from uuid import UUID, uuid4
 
 import pytest
@@ -705,6 +706,39 @@ async def test_import_failure_rolls_back_entire_batch(file_import_db, monkeypatc
         "task_tags": 0,
         "markers": 0,
     }, f"el lote dejó filas huérfanas: {counts}"
+
+
+@pytest.mark.asyncio
+async def test_persistence_failure_logs_type_without_user_content(
+    file_import_db, monkeypatch, caplog
+):
+    """Un fallo de persistencia no debe volcar contenido del usuario en los logs.
+
+    El mensaje de la excepción inyectada contiene un centinela sensible (simulando un
+    título/descripción que SQLAlchemy arrastraría en ``[parameters: ...]``). El log debe
+    registrar únicamente el TIPO de excepción y contexto no-PII.
+    """
+    factory, user = file_import_db
+    import app.services.todoist_import as svc
+
+    sentinel = "SECRETO_TITULO_USUARIO"
+
+    async def _boom(payload, state):  # firma idéntica a la real
+        raise RuntimeError(f"fallo al persistir subtareas: {sentinel}")
+
+    monkeypatch.setattr(svc, "_create_subtasks", _boom)
+
+    with caplog.at_level(logging.ERROR, logger=svc.__name__):
+        async with factory() as session:
+            with pytest.raises(svc.ImportPersistenceError):
+                await svc.run_todoist_import(
+                    raw_body=_atomic_payload_bytes(),
+                    session=session,
+                    current_user=user,
+                )
+
+    assert sentinel not in caplog.text, f"contenido del usuario filtrado en logs: {caplog.text}"
+    assert "RuntimeError" in caplog.text, f"falta el tipo de excepción: {caplog.text}"
 
 
 @pytest.mark.asyncio
