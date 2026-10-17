@@ -16,6 +16,7 @@ from app.services import todoist_import as import_service
 from app.services.auth import get_current_user
 from app.services.todoist_import import (
     ImportLimitExceededError,
+    ImportPersistenceError,
     InvalidPayloadError,
     PayloadTooLargeError,
 )
@@ -76,4 +77,10 @@ async def import_from_todoist(
     except (InvalidPayloadError, ImportLimitExceededError) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    except ImportPersistenceError as exc:
+        # El lote se revirtió por completo: el cliente puede reintentar sin riesgo de
+        # duplicados ni de datos a medias.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)
         ) from exc

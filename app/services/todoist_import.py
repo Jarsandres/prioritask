@@ -18,7 +18,6 @@ usuario autenticado y a salas propias; ninguna referencia externa resuelve una s
 from __future__ import annotations
 
 import hashlib
-import inspect
 import logging
 import os
 import re
@@ -96,6 +95,10 @@ class InvalidPayloadError(TodoistImportError):
 
 class ImportLimitExceededError(TodoistImportError):
     """El payload excede un límite de entidades o de profundidad de anidamiento."""
+
+
+class ImportPersistenceError(TodoistImportError):
+    """El lote no se pudo persistir: la transacción completa fue revertida (0 cambios)."""
 
 
 # ── Helpers puros (testables sin base de datos) ─────────────────────────────────
@@ -297,33 +300,45 @@ class _State:
                 TodoistImportIssue(entity=entity, external_id=external_id, title=title, reason=reason)
             )
 
-    def fail(self, entity: str, reason: str, *, external_id: str | None = None, title: str | None = None) -> None:
-        self.report.failed += 1
-        if len(self.report.failed_details) < MAX_DETAIL_EXAMPLES:
-            self.report.failed_details.append(
-                TodoistImportIssue(entity=entity, external_id=external_id, title=title, reason=reason)
-            )
 
+async def _add_pending(session: AsyncSession, obj: object) -> None:
+    """Añade ``obj`` al lote en curso y lo hace *flush* **sin** abrir un SAVEPOINT.
 
-async def _isolated_add(session: AsyncSession, obj: object) -> bool:
-    """Añade y hace *flush* de ``obj`` dentro de un SAVEPOINT.
-
-    Devuelve ``False`` (sin abortar la transacción completa) si una restricción de
-    unicidad rechaza la entidad. Reutiliza el patrón de SAVEPOINT del endpoint ``/sync``.
+    R2 (atomicidad): el grafo y el marcador de idempotencia comparten una única
+    transacción. En SQLite, ``RELEASE SAVEPOINT`` cuando la conexión no tiene una
+    transacción externa explícita **confirma** (COMMIT) los cambios ya escritos, lo que
+    dejaba salas/tareas persistidas sin marcador ante un fallo posterior. Por eso aquí
+    solo se hace ``flush``: cualquier ``IntegrityError`` invalida la transacción completa
+    y el llamador (``run_todoist_import``) revierte el lote entero.
     """
-    savepoint = await session.begin_nested()
+    session.add(obj)
+    await session.flush()
+
+
+async def _marker_exists(session: AsyncSession, import_key: str) -> bool:
+    """Indica si el marcador de idempotencia ya está confirmado en la base de datos.
+
+    Se consulta **después** de revertir el lote para distinguir un doble envío
+    concurrente (el ganador ya confirmó su marcador) de un conflicto de datos real.
+    """
     try:
-        session.add(obj)
-        await session.flush()
-    except IntegrityError:
-        rollback = savepoint.rollback()
-        if inspect.isawaitable(rollback):
-            await rollback
+        result = await session.exec(
+            select(ProcessedSyncCommand.command_uuid).where(
+                ProcessedSyncCommand.command_uuid == import_key
+            )
+        )
+        return result.first() is not None
+    except Exception:  # pragma: no cover - salvaguarda defensiva
+        logger.exception("Todoist import: no se pudo verificar el marcador tras el conflicto.")
         return False
-    commit = savepoint.commit()
-    if inspect.isawaitable(commit):
-        await commit
-    return True
+
+
+async def _rollback_quietly(session: AsyncSession) -> None:
+    """Revierte la transacción sin enmascarar la excepción original."""
+    try:
+        await session.rollback()
+    except Exception:  # pragma: no cover - salvaguarda defensiva
+        logger.exception("Todoist import: fallo al revertir la transacción del lote.")
 
 
 # ── Carga de estado existente ───────────────────────────────────────────────────
@@ -426,7 +441,7 @@ async def _create_rooms(payload: TodoistSyncPayload, state: _State) -> None:
 
     by_id = {p.id: p for p in projects}
 
-    async def create(project_id: str) -> bool:
+    async def create(project_id: str) -> None:
         project = by_id[project_id]
         raw_name = (project.name or "").strip()
         if not raw_name:
@@ -448,21 +463,10 @@ async def _create_rooms(payload: TodoistSyncPayload, state: _State) -> None:
             owner_id=state.current_user.id,
             parent_id=parent_uuid,
         )
-        try:
-            created = await _isolated_add(session, room)
-        except Exception:  # pragma: no cover - salvaguarda defensiva
-            logger.exception(
-                "Todoist import: fallo al persistir el hogar (external_id=%s).", project.id
-            )
-            state.fail("project", "Error al persistir el hogar.", external_id=project.id, title=name)
-            return False
-        if not created:  # pragma: no cover - la deduplicación evita esta rama
-            state.fail("project", "Colisión de nombre de hogar no resuelta.", external_id=project.id, title=name)
-            return False
+        await _add_pending(session, room)
 
         state.rooms[project.id] = room.id
         state.report.rooms_created += 1
-        return True
 
     # Orden topológico: padres antes que hijos (BFS desde las raíces).
     queue = list(roots)
@@ -502,10 +506,7 @@ async def _create_tags(payload: TodoistSyncPayload, state: _State) -> None:
         if len(clean) < len(raw_name.strip()):
             state.report.truncated += 1
         tag = Tag(nombre=clean, user_id=state.current_user.id)
-        created = await _isolated_add(session, tag)
-        if not created:  # pragma: no cover - colisión cubierta por el set en memoria
-            state.fail("label", "Colisión de nombre de etiqueta no resuelta.", title=clean)
-            continue
+        await _add_pending(session, tag)
         state.tags[clean] = tag.id
         state.report.tags_created += 1
 
@@ -588,10 +589,7 @@ async def _create_single_task(item: TodoistItem, state: _State) -> bool:
         user_id=state.current_user.id,
         room_id=room_id,
     )
-    created = await _isolated_add(session, task)
-    if not created:
-        state.fail("item", "Colisión de título no resuelta.", external_id=item.id, title=title)
-        return False
+    await _add_pending(session, task)
 
     state.tasks[item.id] = task.id
     state.report.tasks_created += 1
@@ -614,9 +612,8 @@ async def _attach_labels(item: TodoistItem, task_id: UUID, state: _State) -> Non
             continue
         seen_tags.add(tag_id)
         link = TaskTag(task_id=task_id, tag_id=tag_id)
-        created = await _isolated_add(session, link)
-        if created:
-            state.report.task_tags_created += 1
+        await _add_pending(session, link)
+        state.report.task_tags_created += 1
 
 
 async def _create_subtasks(payload: TodoistSyncPayload, state: _State) -> None:
@@ -648,10 +645,7 @@ async def _create_subtasks(payload: TodoistSyncPayload, state: _State) -> None:
             completada=bool(item.checked),
             orden=int(item.child_order or 0),
         )
-        created = await _isolated_add(state.session, subtask)
-        if not created:  # pragma: no cover - Subtask no tiene unicidad de título
-            state.fail("subtask", "No se pudo persistir la subtarea.", external_id=item.id, title=subtask_title)
-            continue
+        await _add_pending(state.session, subtask)
         state.report.subtasks_created += 1
 
 
@@ -685,6 +679,11 @@ async def run_todoist_import(
     ``Idempotency-Key`` o hash de contenido del cuerpo, namespaced por usuario), no se
     vuelve a escribir nada y se devuelve ``already_imported=True`` con contadores en cero.
     El marcador reutiliza ``ProcessedSyncCommand`` (misma PK única, ya migrada).
+
+    Atómico (R2): el grafo y el marcador se confirman en una única transacción. Si la
+    persistencia falla en cualquier punto se revierte el lote completo (0 filas en
+    ``Room``/``Task``/``Subtask``/``Tag``/``TaskTag`` y 0 marcadores) y se lanza
+    :class:`ImportPersistenceError`; un reintento posterior importa limpio.
     """
     if len(raw_body) > MAX_PAYLOAD_BYTES:
         raise PayloadTooLargeError(
@@ -712,23 +711,56 @@ async def run_todoist_import(
     state = _State(session=session, current_user=current_user)
     _report_unsupported_features(payload, state)
     _report_duplicate_ids(payload, state)
-    await _create_rooms(payload, state)
-    await _create_tags(payload, state)
-    await _create_tasks(payload, state)
-    await _create_subtasks(payload, state)
 
-    # Marca de idempotencia atómica con el lote: se persiste en la misma transacción que el
-    # grafo importado, de modo que un reintento nunca reescribe datos ya aplicados.
-    session.add(
-        ProcessedSyncCommand(
-            command_uuid=import_key,
-            user_id=current_user.id,
-            command_type="todoist_import",
-            status="ok",
+    # R2: el grafo importado y el marcador de idempotencia se escriben en UNA sola
+    # transacción (todo o nada). No se usan SAVEPOINTs por entidad: en SQLite,
+    # ``RELEASE SAVEPOINT`` sin transacción externa explícita hace COMMIT del lote,
+    # lo que dejaba salas/tareas persistidas sin su marcador si algo fallaba después.
+    try:
+        await _create_rooms(payload, state)
+        await _create_tags(payload, state)
+        await _create_tasks(payload, state)
+        await _create_subtasks(payload, state)
+
+        session.add(
+            ProcessedSyncCommand(
+                command_uuid=import_key,
+                user_id=current_user.id,
+                command_type="todoist_import",
+                status="ok",
+            )
         )
-    )
-
-    await session.commit()
+        await session.commit()
+    except IntegrityError as exc:
+        # Doble envío concurrente: otra petición con la misma clave confirmó su marcador
+        # (y su grafo) mientras esta construía el lote. Se revierte todo y se responde
+        # como reintento idempotente en lugar de propagar un 500.
+        await _rollback_quietly(session)
+        if await _marker_exists(session, import_key):
+            logger.info(
+                "Todoist import: petición concurrente ya confirmada; lote revertido "
+                "(user=%s, key=%s).",
+                current_user.id,
+                import_key,
+            )
+            return TodoistImportReport(already_imported=True)
+        logger.exception(
+            "Todoist import: violación de integridad; lote revertido (user=%s).", current_user.id
+        )
+        raise ImportPersistenceError(
+            "La importación no se pudo completar por un conflicto de datos; no se aplicó ningún cambio."
+        ) from exc
+    except Exception as exc:
+        # Un fallo de persistencia en cualquier punto aborta el lote completo (batched).
+        await _rollback_quietly(session)
+        logger.exception(
+            "Todoist import: fallo inesperado; lote revertido (user=%s, key=%s).",
+            current_user.id,
+            import_key,
+        )
+        raise ImportPersistenceError(
+            "La importación falló y no se aplicó ningún cambio. Reintenta la operación."
+        ) from exc
 
     logger.info(
         "Todoist import completado (user=%s): rooms=%d tasks=%d subtasks=%d tags=%d "
@@ -767,6 +799,7 @@ __all__ = [
     "MAX_NESTING_DEPTH",
     "MAX_PAYLOAD_BYTES",
     "ImportLimitExceededError",
+    "ImportPersistenceError",
     "InvalidPayloadError",
     "PayloadTooLargeError",
     "TodoistImportError",
