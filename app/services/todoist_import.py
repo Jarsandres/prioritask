@@ -328,8 +328,13 @@ async def _marker_exists(session: AsyncSession, import_key: str) -> bool:
             )
         )
         return result.first() is not None
-    except Exception:  # pragma: no cover - salvaguarda defensiva
-        logger.exception("Todoist import: no se pudo verificar el marcador tras el conflicto.")
+    except Exception as exc:  # pragma: no cover - salvaguarda defensiva
+        # Sin ``exc_info``: el traceback de SQLAlchemy puede incluir parámetros con
+        # contenido del usuario (títulos/descripciones). Solo se registra el tipo.
+        logger.error(
+            "Todoist import: no se pudo verificar el marcador tras el conflicto: %s",
+            type(exc).__name__,
+        )
         return False
 
 
@@ -337,8 +342,12 @@ async def _rollback_quietly(session: AsyncSession) -> None:
     """Revierte la transacción sin enmascarar la excepción original."""
     try:
         await session.rollback()
-    except Exception:  # pragma: no cover - salvaguarda defensiva
-        logger.exception("Todoist import: fallo al revertir la transacción del lote.")
+    except Exception as exc:  # pragma: no cover - salvaguarda defensiva
+        # Sin ``exc_info``: nunca se arrastra el mensaje crudo ni los parámetros SQL.
+        logger.error(
+            "Todoist import: fallo al revertir la transacción del lote: %s",
+            type(exc).__name__,
+        )
 
 
 # ── Carga de estado existente ───────────────────────────────────────────────────
@@ -744,8 +753,14 @@ async def run_todoist_import(
                 import_key,
             )
             return TodoistImportReport(already_imported=True)
-        logger.exception(
-            "Todoist import: violación de integridad; lote revertido (user=%s).", current_user.id
+        # Solo el tipo de excepción: el traceback de SQLAlchemy incluye la sección
+        # ``[parameters: ...]`` con títulos/descripciones del usuario (PII).
+        logger.error(
+            "Todoist import: violación de integridad; lote revertido "
+            "(user=%s, key=%s): %s",
+            current_user.id,
+            import_key,
+            type(exc).__name__,
         )
         raise ImportPersistenceError(
             "La importación no se pudo completar por un conflicto de datos; no se aplicó ningún cambio."
@@ -753,10 +768,13 @@ async def run_todoist_import(
     except Exception as exc:
         # Un fallo de persistencia en cualquier punto aborta el lote completo (batched).
         await _rollback_quietly(session)
-        logger.exception(
-            "Todoist import: fallo inesperado; lote revertido (user=%s, key=%s).",
+        # Solo el tipo de excepción: ``str(exc)``/traceback podrían contener datos
+        # del payload (títulos, descripciones) vía parámetros de SQLAlchemy.
+        logger.error(
+            "Todoist import: fallo inesperado; lote revertido (user=%s, key=%s): %s",
             current_user.id,
             import_key,
+            type(exc).__name__,
         )
         raise ImportPersistenceError(
             "La importación falló y no se aplicó ningún cambio. Reintenta la operación."
