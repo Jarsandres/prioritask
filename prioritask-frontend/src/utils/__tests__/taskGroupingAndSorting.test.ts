@@ -93,14 +93,14 @@ describe("taskGroupingAndSorting — Motor de Agrupación, Ordenación y Seccion
   });
 
   it("ordena correctamente por priority (P1->P4), due_date (sin fecha siempre al final EC-01), title (A->Z), created_at y manual", () => {
-    // 1. Priority: P1 (peso 4) primero, desempatando por due_date más próxima
+    // 1. Priority: mayor peso primero (P1=5 → P4), desempatando por due_date más próxima
     const byPriority = sortTasksCollection(sampleTasks, "priority", "asc");
     expect(byPriority.map((t) => t.id)).toEqual([
-      "t-today", // peso 4, con fecha 2026-10-12
-      "t-nodate", // peso 4, sin fecha
-      "t-tomorrow", // peso 3
-      "t-overdue", // peso 2
-      "t-upcoming", // peso 1
+      "t-today", // peso 4 (P2), con fecha 2026-10-12
+      "t-nodate", // peso 4 (P2), sin fecha
+      "t-tomorrow", // peso 3 (P3)
+      "t-overdue", // peso 2 (P4)
+      "t-upcoming", // peso 1 (P4)
     ]);
 
     // 2. Due Date: cronológico ascendente y tareas sin fecha SIEMPRE al final (EC-01)
@@ -186,11 +186,13 @@ describe("taskGroupingAndSorting — Motor de Agrupación, Ordenación y Seccion
       "priority-p3",
       "priority-p4",
     ]);
-    expect(priorityGroups[0].tasks.map((t) => t.id)).toEqual([
+    // Peso 4 pertenece a P2 (Alta); P1 queda vacío porque no hay peso 5.
+    expect(priorityGroups[0].tasks).toEqual([]);
+    expect(priorityGroups[1].tasks.map((t) => t.id)).toEqual([
       "t-today",
       "t-nodate",
     ]);
-    expect(priorityGroups[0].dropMutation?.patch).toEqual({ peso: 4 });
+    expect(priorityGroups[1].dropMutation?.patch).toEqual({ peso: 4 });
 
     // Category groups
     const categoryGroups = groupAndSortTasks(sampleTasks, {
@@ -216,6 +218,69 @@ describe("taskGroupingAndSorting — Motor de Agrupación, Ordenación y Seccion
       "status-DONE",
     ]);
     expect(statusGroups[2].completedCount).toBe(1);
+  });
+
+  it("agrupa con la escala canónica: peso 5 → P1, peso 4 → P2, peso 3 → P3 y peso 1..2 → P4", () => {
+    const scaleTasks: Task[] = [
+      {
+        id: "scale-p1",
+        titulo: "Urgente",
+        estado: "TODO",
+        categoria: "OTRO",
+        peso: 5,
+      },
+      {
+        id: "scale-p2",
+        titulo: "Alta",
+        estado: "TODO",
+        categoria: "OTRO",
+        peso: 4,
+      },
+      {
+        id: "scale-p3",
+        titulo: "Media",
+        estado: "TODO",
+        categoria: "OTRO",
+        peso: 3,
+      },
+      {
+        id: "scale-p4a",
+        titulo: "Baja 2",
+        estado: "TODO",
+        categoria: "OTRO",
+        peso: 2,
+      },
+      {
+        id: "scale-p4b",
+        titulo: "Baja 1",
+        estado: "TODO",
+        categoria: "OTRO",
+        peso: 1,
+      },
+    ];
+
+    const groups = groupAndSortTasks(scaleTasks, {
+      groupBy: "priority",
+      sortBy: "manual",
+    });
+
+    expect(groups.map((g) => g.id)).toEqual([
+      "priority-p1",
+      "priority-p2",
+      "priority-p3",
+      "priority-p4",
+    ]);
+    expect(groups[0].tasks.map((t) => t.id)).toEqual(["scale-p1"]);
+    expect(groups[1].tasks.map((t) => t.id)).toEqual(["scale-p2"]);
+    expect(groups[2].tasks.map((t) => t.id)).toEqual(["scale-p3"]);
+    expect(groups[3].tasks.map((t) => t.id)).toEqual([
+      "scale-p4a",
+      "scale-p4b",
+    ]);
+    expect(groups[0].dropMutation?.patch).toEqual({ peso: 5 });
+    expect(groups[1].dropMutation?.patch).toEqual({ peso: 4 });
+    expect(groups[2].dropMutation?.patch).toEqual({ peso: 3 });
+    expect(groups[3].dropMutation?.patch).toEqual({ peso: 1 });
   });
 
   it("gestiona secciones personalizadas por hogar y al eliminar una sección devuelve sus tareas a General sin borrarlas (RN-04 / EC-02)", () => {

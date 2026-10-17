@@ -12,6 +12,10 @@ import {
   LuRepeat,
 } from "react-icons/lu";
 import type { TaskStatus } from "../../types/task";
+import {
+  priorityBadgeLabel,
+  priorityEntryForWeight,
+} from "../../utils/priorityScale";
 
 export interface CategoryIconProps {
   category?: string;
@@ -47,23 +51,27 @@ export interface PriorityBadgeProps {
 }
 
 export const PriorityBadge = ({ peso, className = "" }: PriorityBadgeProps) => {
-  if (peso >= 4) {
+  const priority = priorityEntryForWeight(peso);
+  const label = priorityBadgeLabel(priority);
+
+  // P1 y P2 comparten el tono "alta" pero conservan etiquetas distintas.
+  if (priority.code === "p1" || priority.code === "p2") {
     return (
       <span className={`retro-badge retro-badge-high ${className}`.trim()}>
-        <LuFlame size={13} aria-hidden="true" /> Prioridad Alta
+        <LuFlame size={13} aria-hidden="true" /> {label}
       </span>
     );
   }
-  if (peso >= 2) {
+  if (priority.code === "p3") {
     return (
       <span className={`retro-badge retro-badge-medium ${className}`.trim()}>
-        <LuClock size={13} aria-hidden="true" /> Prioridad Media
+        <LuClock size={13} aria-hidden="true" /> {label}
       </span>
     );
   }
   return (
     <span className={`retro-badge retro-badge-low ${className}`.trim()}>
-      <LuCircleCheck size={13} aria-hidden="true" /> Prioridad Baja
+      <LuCircleCheck size={13} aria-hidden="true" /> {label}
     </span>
   );
 };

@@ -1,7 +1,16 @@
 import type { NavigateFunction } from "react-router-dom";
+import {
+  isPriorityCode,
+  priorityEntryForCode,
+  priorityFilterLabel,
+  type PriorityCode,
+} from "./priorityScale";
 
 export type SmartViewType = "today" | "upcoming" | "inbox" | "completed";
-export type PriorityFilterCode = "p1" | "p2" | "p3" | "p4";
+export type PriorityFilterCode = PriorityCode;
+
+// Re-export para conservar la API histórica de este módulo.
+export { weightToPriorityBadge } from "./priorityScale";
 
 export type NavigationTarget =
   | { view: { type: SmartViewType; roomId?: string | null } }
@@ -93,78 +102,21 @@ export function priorityCodeToWeightRange(priority: string): {
   label: string;
 } {
   const normalized = priority.trim().toLowerCase();
-  switch (normalized) {
-    case "p1":
-      return {
-        priority: "p1",
-        pesoMin: 5,
-        pesoMax: 5,
-        label: "P1 (Urgente)",
-      };
-    case "p2":
-      return {
-        priority: "p2",
-        pesoMin: 4,
-        pesoMax: 4,
-        label: "P2 (Alta)",
-      };
-    case "p3":
-      return {
-        priority: "p3",
-        pesoMin: 3,
-        pesoMax: 3,
-        label: "P3 (Media)",
-      };
-    case "p4":
-      return {
-        priority: "p4",
-        pesoMin: 1,
-        pesoMax: 2,
-        label: "P4 (Baja)",
-      };
-    default:
-      return {
-        priority: "",
-        pesoMin: null,
-        pesoMax: null,
-        label: "",
-      };
+  if (!isPriorityCode(normalized)) {
+    return {
+      priority: "",
+      pesoMin: null,
+      pesoMax: null,
+      label: "",
+    };
   }
-}
 
-/**
- * Convierte el peso numérico de una tarea (1..5) al badge visual de prioridad (P1..P4).
- */
-export function weightToPriorityBadge(peso?: number): {
-  code: PriorityFilterCode;
-  label: string;
-  colorClass: string;
-} {
-  if (typeof peso === "number" && peso >= 5) {
-    return {
-      code: "p1",
-      label: "P1",
-      colorClass: "command-palette-priority-p1",
-    };
-  }
-  if (peso === 4) {
-    return {
-      code: "p2",
-      label: "P2",
-      colorClass: "command-palette-priority-p2",
-    };
-  }
-  if (peso === 3) {
-    return {
-      code: "p3",
-      label: "P3",
-      colorClass: "command-palette-priority-p3",
-    };
-  }
+  const entry = priorityEntryForCode(normalized);
   return {
-    code: "p4",
-    label: "P4",
-    colorClass: "command-palette-priority-p4",
+    priority: entry.code,
+    pesoMin: entry.minWeight,
+    pesoMax: entry.maxWeight,
+    label: priorityFilterLabel(entry),
   };
 }
 

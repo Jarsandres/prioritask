@@ -18,6 +18,7 @@ import {
   type KudosEmoji,
   type QuickAssignee,
 } from "../../utils/kudosStore";
+import { isHighPriority } from "../../utils/priorityScale";
 import {
   LuCheck,
   LuCircleCheck,
@@ -168,8 +169,9 @@ const TaskCardComponent = ({
   const swipeOffset = touchStartX !== null && touchCurrentX !== null ? touchCurrentX - touchStartX : 0;
   const clampedOffset = Math.max(-100, Math.min(100, swipeOffset));
 
+  // Bucket visual intencional: P1|P2 comparten el anillo de alta prioridad.
   const priorityRingClass =
-    task.peso >= 4
+    isHighPriority(task.peso)
       ? "priority-ring-p1"
       : task.peso === 3
       ? "priority-ring-p2"
@@ -178,7 +180,7 @@ const TaskCardComponent = ({
       : "priority-ring-p4";
 
   const priorityCardClass =
-    task.peso >= 4
+    isHighPriority(task.peso)
       ? "priority-card-p1"
       : task.peso === 3
       ? "priority-card-p2"
@@ -621,7 +623,7 @@ const TaskCardComponent = ({
           <span className="ui-task-kudos-label">
             <LuAward size={13} className="text-warning" />
             <span>
-              {task.peso >= 4 || (attachmentsCount ?? 0) > 0
+              {isHighPriority(task.peso) || (attachmentsCount ?? 0) > 0
                 ? "¡Gran esfuerzo! Reconocer:"
                 : "Kudos:"}
             </span>
@@ -646,7 +648,7 @@ const TaskCardComponent = ({
                     onKudosReaction?.(task.id, opt.emoji, res.deltaPoints);
                   }}
                   title={`${opt.label} (${
-                    task.peso >= 4 || (attachmentsCount ?? 0) > 0
+                    isHighPriority(task.peso) || (attachmentsCount ?? 0) > 0
                       ? `+${opt.basePoints * 2} pts`
                       : `+${opt.basePoints} pts`
                   })`}

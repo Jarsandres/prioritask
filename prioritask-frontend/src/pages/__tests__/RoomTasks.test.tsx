@@ -147,17 +147,18 @@ describe("RoomTasks — Integración con useTasksState, Vista Lista Todoist y Ev
     });
 
     const item1 = screen.getByTestId("task-item-rt-1");
-    expect(item1).toHaveAttribute("data-priority", "p1");
+    // Peso 4 -> P2 (Alta), no P1: la escala canónica reserva P1 para peso 5.
+    expect(item1).toHaveAttribute("data-priority", "p2");
 
-    // Cambiar prioridad con atajo '3' -> P3 (peso 2)
-    fireEvent.keyDown(item1, { key: "3" });
+    // Cambiar prioridad con atajo '1' -> P1 (peso 5)
+    fireEvent.keyDown(item1, { key: "1" });
 
     await waitFor(() => {
       expect(screen.getByTestId("task-item-rt-1")).toHaveAttribute(
         "data-priority",
-        "p3"
+        "p1"
       );
-      expect(api.patch).toHaveBeenCalledWith("/tasks/rt-1", { peso: 2 });
+      expect(api.patch).toHaveBeenCalledWith("/tasks/rt-1", { peso: 5 });
       expect(screen.getByTestId("task-item-rt-1")).not.toHaveAttribute(
         "aria-busy",
         "true"

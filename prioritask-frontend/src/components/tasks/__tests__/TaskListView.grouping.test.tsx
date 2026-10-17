@@ -18,7 +18,7 @@ const sampleTasks: Task[] = [
     estado: "TODO",
     completed: false,
     categoria: "LIMPIEZA",
-    peso: 4,
+    peso: 5,
     due_date: "2026-10-12",
   },
   {
@@ -120,7 +120,7 @@ describe("TaskListView & FilterBar — Agrupación Dinámica, Secciones Colapsab
       expect.objectContaining({
         id: "priority-p1",
         dropMutation: expect.objectContaining({
-          patch: { peso: 4 },
+          patch: { peso: 5 },
         }),
       })
     );

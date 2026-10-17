@@ -2,9 +2,17 @@ import { useReducer, useCallback, useMemo, useRef } from "react";
 import api from "../api";
 import { enqueueMutation } from "../services/offlineQueue";
 import { savePersistedTaskOrder } from "../utils/taskGroupingAndSorting";
+import {
+  priorityCodeToWeight,
+  priorityEntryForCode,
+  priorityEntryForWeight,
+  priorityTaskLabel,
+  type PriorityCode,
+  type PriorityScaleEntry,
+} from "../utils/priorityScale";
 import type { Task, TaskStatus, Subtask } from "../types/task";
 
-export type TaskPriorityLevel = "p1" | "p2" | "p3" | "p4";
+export type TaskPriorityLevel = PriorityCode;
 export type TaskMutationKind = "completing" | "updating" | "deleting";
 export type FocusNavigationDirection = "next" | "prev" | "first" | "last";
 export type TaskOverlayType = "peek" | "delete-confirm" | "quick-add" | "context-menu" | null;
@@ -128,18 +136,15 @@ export interface NormalizedTasksState {
 }
 
 /**
- * Convierte el peso numérico de Prioritask (1-4+) al nivel de prioridad Todoist (p1-p4).
- * En Todoist (verificado con REA en `webpack/electron/electron.js` `function ai(e)`):
- * - peso >= 4 -> "p1" (Prioridad 1 / Urgente)
- * - peso === 3 -> "p2" (Prioridad 2 / Alta)
- * - peso === 2 -> "p3" (Prioridad 3 / Media)
- * - peso <= 1 -> "p4" (Prioridad 4 / Baja - Default)
+ * Convierte el peso numérico de Prioritask al nivel canónico (p1-p4).
+ * La escala vive en `utils/priorityScale.ts`:
+ * - peso 5 -> P1 (Urgente)
+ * - peso 4 -> P2 (Alta)
+ * - peso 3 -> P3 (Media)
+ * - peso 1..2 / undefined -> P4 (Baja)
  */
-export function pesoToPriorityLevel(peso: number): TaskPriorityLevel {
-  if (peso >= 4) return "p1";
-  if (peso === 3) return "p2";
-  if (peso === 2) return "p3";
-  return "p4";
+export function pesoToPriorityLevel(peso?: number): TaskPriorityLevel {
+  return priorityEntryForWeight(peso).code;
 }
 
 export interface PriorityLevelMetadata {
@@ -151,56 +156,29 @@ export interface PriorityLevelMetadata {
   shortcutKey: "1" | "2" | "3" | "4";
 }
 
+function toPriorityLevelMetadata(entry: PriorityScaleEntry): PriorityLevelMetadata {
+  return {
+    level: entry.code,
+    peso: entry.weight,
+    shortLabel: entry.shortLabel,
+    label: priorityTaskLabel(entry),
+    ringClass: entry.ringClass,
+    shortcutKey: entry.shortcutKey,
+  };
+}
+
 export const PRIORITY_LEVEL_METADATA: Record<TaskPriorityLevel, PriorityLevelMetadata> = {
-  p1: {
-    level: "p1",
-    peso: 4,
-    shortLabel: "P1",
-    label: "Prioridad 1 (Urgente)",
-    ringClass: "priority-ring-p1",
-    shortcutKey: "1",
-  },
-  p2: {
-    level: "p2",
-    peso: 3,
-    shortLabel: "P2",
-    label: "Prioridad 2 (Alta)",
-    ringClass: "priority-ring-p2",
-    shortcutKey: "2",
-  },
-  p3: {
-    level: "p3",
-    peso: 2,
-    shortLabel: "P3",
-    label: "Prioridad 3 (Media)",
-    ringClass: "priority-ring-p3",
-    shortcutKey: "3",
-  },
-  p4: {
-    level: "p4",
-    peso: 1,
-    shortLabel: "P4",
-    label: "Prioridad 4 (Baja)",
-    ringClass: "priority-ring-p4",
-    shortcutKey: "4",
-  },
+  p1: toPriorityLevelMetadata(priorityEntryForCode("p1")),
+  p2: toPriorityLevelMetadata(priorityEntryForCode("p2")),
+  p3: toPriorityLevelMetadata(priorityEntryForCode("p3")),
+  p4: toPriorityLevelMetadata(priorityEntryForCode("p4")),
 };
 
 /**
- * Convierte un nivel de prioridad Todoist ("p1"-"p4") al peso de dominio de Prioritask (4-1).
+ * Convierte un nivel canónico ("p1"-"p4") al peso que se aplica al seleccionarlo.
  */
 export function priorityLevelToPeso(level: TaskPriorityLevel): number {
-  switch (level) {
-    case "p1":
-      return 4;
-    case "p2":
-      return 3;
-    case "p3":
-      return 2;
-    case "p4":
-    default:
-      return 1;
-  }
+  return priorityCodeToWeight(level);
 }
 
 type TasksAction =
@@ -1273,7 +1251,7 @@ export function useTasksState(options: UseTasksStateOptions = {}) {
   );
 
   /**
-   * Cambia la prioridad usando el esquema Todoist ("p1".."p4") o peso directo (1..4) de forma optimista.
+   * Cambia la prioridad usando el nivel canónico ("p1".."p4") o peso directo (1..5) de forma optimista.
    */
   const setPriorityOptimistic = useCallback(
     async (
@@ -1289,7 +1267,7 @@ export function useTasksState(options: UseTasksStateOptions = {}) {
         typeof priorityOrPeso === "number"
           ? priorityOrPeso
           : priorityLevelToPeso(priorityOrPeso);
-      const clampedPeso = Math.max(1, Math.min(4, Math.round(rawPeso)));
+      const clampedPeso = Math.max(1, Math.min(5, Math.round(rawPeso)));
 
       return updateTaskOptimistic(
         taskId,
