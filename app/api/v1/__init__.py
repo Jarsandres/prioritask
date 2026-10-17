@@ -11,6 +11,7 @@ from .endpoints import (
     tags,
     tasks,
     tasks_ai,
+    todoist_import,
     users,
 )
 
@@ -27,5 +28,6 @@ api_router.include_router(attachments.router)
 api_router.include_router(tags.router)
 api_router.include_router(tasks_ai.router)
 api_router.include_router(users.router)
+api_router.include_router(todoist_import.router)
 
 

@@ -46,6 +46,10 @@ dev = [
 [tool.pytest.ini_options]
 addopts = "-q"
 
+[tool.coverage.run]
+# R3: mide el código ejecutado tras `await` de SQLAlchemy (asyncio/greenlet).
+concurrency = ["greenlet"]
+
 [tool.coverage.report]
 fail_under = 70
 omit = [
