@@ -1,0 +1,55 @@
+// ---------------------------------------------------------------------------
+// Bootstrap 5.3 — import selectivo (H4: recorte del CSS de Bootstrap)
+//
+// Reemplaza a `bootstrap/dist/css/bootstrap.min.css` (230 KB, todo el framework)
+// por únicamente los módulos que la aplicación usa de verdad. La auditoría de
+// uso está documentada en notes/05-production-bundle-security-audit.md y se
+// obtuvo cruzando las clases realmente presentes en `src/**/*.{tsx,ts,html}`
+// contra los selectores de bootstrap.min.css.
+//
+// Módulos OMITIDOS (0 usos confirmados en src): images, tables, dropdown,
+// navbar, accordion, breadcrumb, pagination, toasts, tooltip, popover,
+// carousel, offcanvas, placeholders.
+//
+// El orden replica el de `bootstrap/scss/bootstrap.scss`. `utilities/api`
+// debe ir SIEMPRE al final.
+// ---------------------------------------------------------------------------
+
+// 1. Funciones, variables y mapas (necesarios por el resto de módulos)
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/variables-dark";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+@import "bootstrap/scss/utilities";
+
+// 2. Layout & contenido
+@import "bootstrap/scss/root";
+@import "bootstrap/scss/reboot";
+@import "bootstrap/scss/type";
+@import "bootstrap/scss/containers";
+@import "bootstrap/scss/grid";
+
+// 3. Formularios (form-control, form-select, form-check, form-switch,
+//    form-label, invalid-feedback, input-group)
+@import "bootstrap/scss/forms";
+
+// 4. Componentes usados
+@import "bootstrap/scss/buttons";
+@import "bootstrap/scss/transitions";
+@import "bootstrap/scss/button-group";
+@import "bootstrap/scss/nav";
+@import "bootstrap/scss/card";
+@import "bootstrap/scss/badge";
+@import "bootstrap/scss/alert";
+@import "bootstrap/scss/progress";
+@import "bootstrap/scss/list-group";
+@import "bootstrap/scss/close";
+@import "bootstrap/scss/modal";
+@import "bootstrap/scss/spinners";
+
+// 5. Helpers (text-truncate, visually-hidden, ...)
+@import "bootstrap/scss/helpers";
+
+// 6. Utility API (bg-*, text-*, d-*, m/p-*, gap-*, rounded-*, shadow-*, ...)
+@import "bootstrap/scss/utilities/api";
