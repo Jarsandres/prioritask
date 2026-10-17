@@ -108,6 +108,10 @@ class TodoistImportReport(BaseModel):
     renamed: int = Field(default=0, description="Entidades renombradas para evitar colisiones de unicidad.")
     truncated: int = Field(default=0, description="Campos truncados a los límites del dominio.")
     clamped_due_dates: int = Field(default=0, description="Fechas de vencimiento pasadas normalizadas a 'ahora'.")
+    already_imported: bool = Field(
+        default=False,
+        description="True cuando la petición es un reintento idempotente ya procesado (no se escribió nada).",
+    )
     warnings: list[str] = Field(default_factory=list, description="Características de Todoist no soportadas en el MVP.")
     skipped_details: list[TodoistImportIssue] = Field(
         default_factory=list, description="Ejemplos de entidades omitidas (lista acotada)."

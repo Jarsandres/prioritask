@@ -5,9 +5,10 @@ usuario autenticado: se ignoran los identificadores de usuario/sala que vengan e
 archivo y todo se ata a ``current_user`` y a salas propias.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.rate_limit import rate_limit
 from app.db.session import get_session
 from app.models.user import Usuario
 from app.schemas.todoist_import import TodoistImportReport, TodoistSyncPayload
@@ -33,8 +34,11 @@ router = APIRouter(prefix="/import", tags=["Importación"])
         "usuario autenticado**; ignora cualquier identificador de usuario o sala del archivo. "
         "Devuelve un informe con contadores, entidades omitidas/fallidas y avisos de las "
         "características no soportadas (secciones, deadlines, recordatorios, timezone fijo, "
-        "filtros, recurrencia)."
+        "filtros, recurrencia). La operación es **idempotente**: un reintento con la misma "
+        "cabecera ``Idempotency-Key`` (o con un cuerpo byte-idéntico) no duplica datos y "
+        "devuelve ``already_imported=true``."
     ),
+    dependencies=[Depends(rate_limit(max_requests=5, window_seconds=60))],
     openapi_extra={
         "requestBody": {
             "required": True,
@@ -46,14 +50,24 @@ router = APIRouter(prefix="/import", tags=["Importación"])
 )
 async def import_from_todoist(
     request: Request,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        description="Clave opcional de idempotencia; un reintento con la misma clave se omite.",
+        max_length=128,
+    ),
     session: AsyncSession = Depends(get_session),
     current_user: Usuario = Depends(get_current_user),
 ) -> TodoistImportReport:
     # Se lee el cuerpo en crudo para poder aplicar el límite anti JSON-bomb antes de parsear.
+    # TODO(M3): rechazar tempranamente por ``Content-Length`` sin bufferizar hasta 20 MB (diferido).
     raw_body = await request.body()
     try:
         return await import_service.run_todoist_import(
-            raw_body, session=session, current_user=current_user
+            raw_body,
+            session=session,
+            current_user=current_user,
+            idempotency_key=idempotency_key,
         )
     except PayloadTooLargeError as exc:
         raise HTTPException(

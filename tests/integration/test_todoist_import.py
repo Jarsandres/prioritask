@@ -62,11 +62,13 @@ async def test_import_maps_projects_items_labels_and_subtasks(async_client, sess
     assert len(tasks) == 2
     by_title = {t.titulo: t for t in tasks}
     main = by_title["Preparar informe"]
-    assert main.peso == 4.0
+    # R1: Todoist 4 (muy urgente) → peso 5 (P1 Urgente) en la escala canónica 1..5.
+    assert main.peso == 5.0
     assert main.descripcion == "Detallado"
     assert main.due_date is not None
     assert main.room_id == rooms_by_name["Trabajo"].id
-    assert by_title["Comprar cafe"].peso == 1.0
+    # R1: Todoist 1 (natural) → peso 2 (P4 Baja), el nivel más bajo representable.
+    assert by_title["Comprar cafe"].peso == 2.0
 
     subtasks = (await session.exec(select(Subtask).where(Subtask.task_id == main.id))).all()
     assert len(subtasks) == 1
@@ -80,7 +82,8 @@ async def test_import_maps_projects_items_labels_and_subtasks(async_client, sess
 
 
 @pytest.mark.asyncio
-async def test_priority_uses_numeric_identity_mapping(async_client, session):
+async def test_priority_maps_to_canonical_peso_scale(async_client, session):
+    """R1: mapeo monotónico a la escala canónica 1..5 (P1=5), sin colisiones."""
     user, token = await create_user_and_token(async_client)
     uid = UUID(user["id"])
 
@@ -101,11 +104,29 @@ async def test_priority_uses_numeric_identity_mapping(async_client, session):
     tasks = (await session.exec(select(Task).where(Task.user_id == uid))).all()
     pesos = {t.titulo: t.peso for t in tasks}
     assert pesos == {
-        "Tarea uno": 1.0,
-        "Tarea dos": 2.0,
-        "Tarea tres": 3.0,
-        "Tarea cuatro": 4.0,
+        "Tarea uno": 2.0,
+        "Tarea dos": 3.0,
+        "Tarea tres": 4.0,
+        "Tarea cuatro": 5.0,
     }
+
+
+@pytest.mark.asyncio
+async def test_urgent_todoist_task_lands_in_p1_filter(async_client, session):
+    """R1 regresión: Todoist 4 debe ser visible en el filtro canónico "P1 (Urgente)" (peso>=5)."""
+    user, token = await create_user_and_token(async_client)
+    uid = UUID(user["id"])
+
+    payload = {
+        "projects": [{"id": "P1", "name": "R"}],
+        "items": [{"id": "U", "project_id": "P1", "content": "Urgente de verdad", "priority": 4}],
+    }
+
+    resp = await async_client.post(ENDPOINT, headers=_auth(token), json=payload)
+    assert resp.status_code == 200, resp.text
+
+    task = (await session.exec(select(Task).where(Task.user_id == uid))).one()
+    assert task.peso >= 5  # rango del filtro P1 (Urgente): pesoMin=pesoMax=5
 
 
 @pytest.mark.asyncio
@@ -258,9 +279,12 @@ async def test_report_flags_unsupported_features(async_client):
 
 
 @pytest.mark.asyncio
-async def test_invalid_normalizations_are_skipped_or_reported(async_client, session):
+async def test_invalid_normalizations_are_skipped_or_reported(async_client, session, monkeypatch):
     user, token = await create_user_and_token(async_client)
     uid = UUID(user["id"])
+    # La suite global activa ALLOW_PAST_DUE_DATES en otros módulos; aquí forzamos el
+    # comportamiento por defecto (re-anclaje a now()) para verificar el clamping.
+    monkeypatch.delenv("ALLOW_PAST_DUE_DATES", raising=False)
 
     payload = {
         "projects": [{"id": "P1", "name": "R"}],
@@ -285,6 +309,145 @@ async def test_invalid_normalizations_are_skipped_or_reported(async_client, sess
     assert len(truncated.titulo) == 100
     past = next(t for t in tasks if t.titulo == "Tarea pasada")
     assert past.due_date is not None
+
+
+@pytest.mark.asyncio
+async def test_past_due_date_is_preserved_when_allowed(async_client, session, monkeypatch):
+    """M6: con ALLOW_PAST_DUE_DATES activo se respeta la fecha pasada (estado "atrasada")."""
+    user, token = await create_user_and_token(async_client)
+    uid = UUID(user["id"])
+    monkeypatch.setenv("ALLOW_PAST_DUE_DATES", "1")
+
+    payload = {
+        "projects": [{"id": "P1", "name": "R"}],
+        "items": [{"id": "D", "project_id": "P1", "content": "Tarea atrasada", "due": {"date": "2000-01-01"}}],
+    }
+
+    resp = await async_client.post(ENDPOINT, headers=_auth(token), json=payload)
+    assert resp.status_code == 200, resp.text
+    report = resp.json()
+    assert report["tasks_created"] == 1
+    assert report["clamped_due_dates"] == 0
+
+    task = (await session.exec(select(Task).where(Task.user_id == uid))).one()
+    assert task.due_date is not None
+    assert task.due_date.year == 2000
+
+
+@pytest.mark.asyncio
+async def test_duplicate_external_ids_are_reported(async_client, session):
+    """M4: los IDs duplicados en el payload no colapsan en silencio."""
+    user, token = await create_user_and_token(async_client)
+    uid = UUID(user["id"])
+
+    payload = {
+        "projects": [{"id": "P1", "name": "R"}],
+        "items": [
+            {"id": "DUP", "project_id": "P1", "content": "Primera aparicion"},
+            {"id": "DUP", "project_id": "P1", "content": "Segunda aparicion"},
+        ],
+    }
+
+    resp = await async_client.post(ENDPOINT, headers=_auth(token), json=payload)
+    assert resp.status_code == 200, resp.text
+    report = resp.json()
+    assert report["tasks_created"] == 1  # el índice conserva la última aparición
+    assert report["skipped"] >= 1
+    assert any("duplicado" in w.lower() for w in report["warnings"])
+    assert any("duplicado" in d["reason"].lower() for d in report["skipped_details"])
+
+    tasks = (await session.exec(select(Task).where(Task.user_id == uid))).all()
+    assert [t.titulo for t in tasks] == ["Segunda aparicion"]
+
+
+@pytest.mark.asyncio
+async def test_second_identical_import_is_idempotent(async_client, session):
+    """R2: un doble envío byte-idéntico no duplica el grafo y se reporta como ya importado."""
+    user, token = await create_user_and_token(async_client)
+    uid = UUID(user["id"])
+
+    payload = {
+        "projects": [{"id": "P1", "name": "Trabajo"}],
+        "labels": [{"id": "L1", "name": "urgente"}],
+        "items": [
+            {"id": "I1", "project_id": "P1", "content": "Preparar informe", "priority": 4},
+        ],
+    }
+
+    first = await async_client.post(ENDPOINT, headers=_auth(token), json=payload)
+    assert first.status_code == 200, first.text
+    assert first.json()["rooms_created"] == 1
+    assert first.json()["tasks_created"] == 1
+    assert first.json()["already_imported"] is False
+
+    second = await async_client.post(ENDPOINT, headers=_auth(token), json=payload)
+    assert second.status_code == 200, second.text
+    report = second.json()
+    assert report["rooms_created"] == 0
+    assert report["tasks_created"] == 0
+    assert report["tags_created"] == 0
+    assert report["already_imported"] is True
+
+    rooms = (await session.exec(select(Room).where(Room.owner_id == uid))).all()
+    assert [r.nombre for r in rooms] == ["Trabajo"]
+    tasks = (await session.exec(select(Task).where(Task.user_id == uid))).all()
+    assert len(tasks) == 1
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_header_deduplicates_reformatted_body(async_client):
+    """R2: la cabecera Idempotency-Key deduplica aunque el cuerpo difiera en formato."""
+    _user, token = await create_user_and_token(async_client)
+    headers = {**_auth(token), "Idempotency-Key": "retry-abc-123"}
+
+    payload = {"projects": [{"id": "P1", "name": "Sala clave"}]}
+
+    first = await async_client.post(ENDPOINT, headers=headers, json=payload)
+    assert first.status_code == 200, first.text
+    assert first.json()["rooms_created"] == 1
+
+    # Cuerpo equivalente pero no byte-idéntico (espacios/orden): la clave explícita lo omite.
+    second = await async_client.post(
+        ENDPOINT,
+        headers={**_auth(token), "Idempotency-Key": "retry-abc-123"},
+        content=b'{ "projects" : [ { "id" : "P1", "name" : "Sala clave" } ] }',
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["already_imported"] is True
+    assert second.json()["rooms_created"] == 0
+
+
+@pytest.mark.asyncio
+async def test_different_payload_is_not_deduplicated(async_client, session):
+    """R2: la idempotencia es por contenido/clave, no un bloqueo global."""
+    _user, token = await create_user_and_token(async_client)
+
+    first = await async_client.post(
+        ENDPOINT, headers=_auth(token), json={"projects": [{"id": "P1", "name": "Uno"}]}
+    )
+    assert first.status_code == 200, first.text
+    second = await async_client.post(
+        ENDPOINT, headers=_auth(token), json={"projects": [{"id": "P2", "name": "Dos"}]}
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["already_imported"] is False
+    assert second.json()["rooms_created"] == 1
+
+
+@pytest.mark.asyncio
+async def test_idempotency_is_scoped_per_user(async_client):
+    """R2: dos usuarios que importan el mismo archivo no colisionan entre sí."""
+    _u1, t1 = await create_user_and_token(async_client)
+    _u2, t2 = await create_user_and_token(async_client)
+
+    payload = {"projects": [{"id": "P1", "name": "Compartido"}]}
+
+    r1 = await async_client.post(ENDPOINT, headers=_auth(t1), json=payload)
+    r2 = await async_client.post(ENDPOINT, headers=_auth(t2), json=payload)
+    assert r1.json()["rooms_created"] == 1
+    assert r1.json()["already_imported"] is False
+    assert r2.json()["rooms_created"] == 1
+    assert r2.json()["already_imported"] is False
 
 
 @pytest.mark.asyncio

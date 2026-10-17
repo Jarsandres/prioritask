@@ -1,6 +1,9 @@
 [run]
 source = app
 branch = False
+# R3: necesario para medir correctamente el código que corre tras `await` de SQLAlchemy
+# (asyncio/greenlet); sin esto la cobertura sub-mide los servicios async.
+concurrency = greenlet
 omit =
     app/db/migrations/*
     app/services/intelligence.py

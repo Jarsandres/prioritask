@@ -5,8 +5,9 @@ Mapeo aplicado (REA `notes/06-todoist-import-export-rea.md` §5):
 * ``projects`` → ``Room`` (propiedad del usuario autenticado). ``parent_id`` se resuelve
   **solo dentro del propio payload**.
 * ``items`` raíz → ``Task``. ``content``→``titulo``, ``description``→``descripcion``,
-  ``due.date``→``due_date`` y ``priority``→``peso`` (identidad numérica: Todoist 4→peso 4,
-  Todoist 1→peso 1, ver §5.2) con categoría ``OTRO``.
+  ``due.date``→``due_date`` y ``priority``→``peso`` (mapeo **monotónico** a la escala canónica
+  del dominio ``1..5`` con ``P1/Urgente = 5``: Todoist 4→peso 5 … Todoist 1→peso 2; ver §5.2)
+  con categoría ``OTRO``.
 * ``items`` con ``parent_id`` presente en el payload → ``Subtask`` de la tarea raíz.
 * ``labels`` (personales y compartidas referenciadas por los items) → ``Tag`` + ``TaskTag``.
 
@@ -16,8 +17,10 @@ usuario autenticado y a salas propias; ninguna referencia externa resuelve una s
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -28,7 +31,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models import CategoriaTarea, Room, Subtask, Tag, Task, TaskTag
+from app.models import (
+    CategoriaTarea,
+    ProcessedSyncCommand,
+    Room,
+    Subtask,
+    Tag,
+    Task,
+    TaskTag,
+)
 from app.models.enums import EstadoTarea
 from app.models.user import Usuario
 from app.schemas.todoist_import import (
@@ -89,22 +100,50 @@ class ImportLimitExceededError(TodoistImportError):
 
 # ── Helpers puros (testables sin base de datos) ─────────────────────────────────
 
+# Escala canónica de prioridad del dominio: ``peso`` continuo 1..5 con ``P1 = 5``
+# (``prioritask-frontend/src/utils/navigationRouter.test.ts`` y ``nlpTaskParser.ts``).
+# Todoist solo expresa 4 niveles (p1..p4), por lo que se mapean sobre los 4 niveles
+# semánticos P1..P4 de Prioritask (peso 5..2). El peso ``1`` (``P5``) queda reservado
+# como nivel propio de Prioritask no expresable en Todoist, y NO se usa aquí para
+# evitar colisiones con las tareas creadas por defecto (``peso=1.0``).
+_TODOIST_PRIORITY_TO_PESO: dict[int, float] = {1: 2.0, 2: 3.0, 3: 4.0, 4: 5.0}
+_LOWEST_PESO = _TODOIST_PRIORITY_TO_PESO[1]  # Todoist p4 "natural" / valor inválido
+_HIGHEST_PESO = _TODOIST_PRIORITY_TO_PESO[4]  # Todoist p1 "muy urgente"
+
 
 def priority_to_peso(priority: object) -> float:
-    """Mapea la prioridad de Todoist (1..4) al ``peso`` de Prioritask por identidad numérica.
+    """Mapea la prioridad de Todoist (1..4) al ``peso`` canónico de Prioritask (1..5).
 
-    §5.2 del REA: ``p1`` (Todoist ``4``) → peso ``4`` … ``p4`` (Todoist ``1``) → peso ``1``.
-    Valores inválidos se degradan a ``1.0`` y se recortan al rango ``[1, 4]``.
+    El mapeo es **monotónico y sin colisiones**, alineado con la escala canónica del
+    dominio (``P1/Urgente = 5``, ver ``navigationRouter.test.ts`` / ``nlpTaskParser.ts``):
+
+    ============  ============  =================
+    Todoist       ``peso``      Nivel Prioritask
+    ============  ============  =================
+    ``4`` (p1)    ``5.0``       P1 (Urgente)
+    ``3`` (p2)    ``4.0``       P2 (Alta)
+    ``2`` (p3)    ``3.0``       P3 (Media)
+    ``1`` (p4)    ``2.0``       P4 (Baja)
+    ============  ============  =================
+
+    Así una tarea urgente de Todoist (``4``) **sí** entra en el filtro "P1 (Urgente)".
+    Valores inválidos o fuera de rango se recortan: ``< 1`` → ``2.0`` (nivel más bajo
+    representable por Todoist) y ``> 4`` → ``5.0``.
     """
     try:
         value = int(priority)  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        return 1.0
+        return _LOWEST_PESO
     if value < 1:
-        return 1.0
+        return _LOWEST_PESO
     if value > 4:
-        return 4.0
-    return float(value)
+        return _HIGHEST_PESO
+    return _TODOIST_PRIORITY_TO_PESO[value]
+
+
+def _allow_past_due_dates() -> bool:
+    """Respeta fechas pasadas (estado "atrasada") cuando ``ALLOW_PAST_DUE_DATES`` está activo."""
+    return os.getenv("ALLOW_PAST_DUE_DATES", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def normalize_title(content: str | None) -> str | None:
@@ -339,6 +378,36 @@ def _report_unsupported_features(payload: TodoistSyncPayload, state: _State) -> 
         state.warn("Etiquetas en subtareas: no soportadas (Subtask no admite etiquetas), se ignoran.")
 
 
+def _report_duplicate_ids(payload: TodoistSyncPayload, state: _State) -> None:
+    """M4: contabiliza IDs externos duplicados (actualmente colapsados en silencio).
+
+    Al indexar por ``id`` en un diccionario, solo sobrevive la última aparición. Aquí se
+    hace explícita esa pérdida: cada duplicado suma a ``skipped`` y, si corresponde, añade
+    un aviso agregado por colección (sin loggear contenido sensible).
+    """
+    for collection, entity in (("projects", "project"), ("items", "item"), ("labels", "label")):
+        seen: set[str] = set()
+        duplicates = 0
+        for obj in getattr(payload, collection, []) or []:
+            external_id = getattr(obj, "id", None)
+            if not external_id:
+                continue
+            if external_id in seen:
+                duplicates += 1
+                state.skip(
+                    entity,
+                    "ID externo duplicado en el payload: se conserva la última aparición.",
+                    external_id=str(external_id),
+                )
+            else:
+                seen.add(external_id)
+        if duplicates:
+            state.warn(
+                f"Se detectaron {duplicates} entidades con ID duplicado en '{collection}'; "
+                "se conserva la última aparición de cada ID."
+            )
+
+
 async def _create_rooms(payload: TodoistSyncPayload, state: _State) -> None:
     session = state.session
     projects = [p for p in payload.projects if p.id and not p.is_deleted]
@@ -382,6 +451,9 @@ async def _create_rooms(payload: TodoistSyncPayload, state: _State) -> None:
         try:
             created = await _isolated_add(session, room)
         except Exception:  # pragma: no cover - salvaguarda defensiva
+            logger.exception(
+                "Todoist import: fallo al persistir el hogar (external_id=%s).", project.id
+            )
             state.fail("project", "Error al persistir el hogar.", external_id=project.id, title=name)
             return False
         if not created:  # pragma: no cover - la deduplicación evita esta rama
@@ -487,7 +559,13 @@ async def _create_single_task(item: TodoistItem, state: _State) -> bool:
     due_date = None
     if item.due is not None and item.due.date:
         due_date = parse_due_date(item.due.date)
-        if due_date is not None and due_date < datetime.now(UTC):
+        if (
+            due_date is not None
+            and due_date < datetime.now(UTC)
+            and not _allow_past_due_dates()
+        ):
+            # M6: sin ``ALLOW_PAST_DUE_DATES`` se re-ancla a ``now()`` (se pierde el
+            # estado "atrasada"). Con la bandera activa se conserva la fecha pasada.
             due_date = datetime.now(UTC)
             state.report.clamped_due_dates += 1
 
@@ -518,6 +596,9 @@ async def _create_single_task(item: TodoistItem, state: _State) -> bool:
     state.tasks[item.id] = task.id
     state.report.tasks_created += 1
     state.affected_rooms.add(room_id)
+
+    # TODO(M1): registrar el evento CREATED en TaskHistory para las tareas importadas
+    # (diferido a una iteración posterior; hoy solo se registra historial vía /sync).
 
     await _attach_labels(item, task.id, state)
     return True
@@ -574,13 +655,37 @@ async def _create_subtasks(payload: TodoistSyncPayload, state: _State) -> None:
         state.report.subtasks_created += 1
 
 
+def _import_idempotency_key(
+    raw_body: bytes, current_user: Usuario, idempotency_key: str | None
+) -> str:
+    """R2: deriva una clave de idempotencia estable y namespaced por usuario.
+
+    Material: la cabecera ``Idempotency-Key`` si el cliente la envía; en su defecto, el
+    **hash de contenido** del cuerpo (así un reintento byte-idéntico —fallo de red o doble
+    envío— produce la misma clave sin requerir cabecera). La clave se namespacia con el
+    ``user_id`` para que dos usuarios que importen el mismo archivo no colisionen.
+
+    El resultado mide ≤ 64 caracteres (límite de ``ProcessedSyncCommand.command_uuid``).
+    """
+    material = idempotency_key if idempotency_key else hashlib.sha256(raw_body).hexdigest()
+    digest = hashlib.sha256(f"{current_user.id}:{material}".encode()).hexdigest()
+    return f"ti-{digest[:61]}"
+
+
 async def run_todoist_import(
     raw_body: bytes,
     *,
     session: AsyncSession,
     current_user: Usuario,
+    idempotency_key: str | None = None,
 ) -> TodoistImportReport:
-    """Importa un volcado *Sync* de Todoist para ``current_user`` y devuelve el informe."""
+    """Importa un volcado *Sync* de Todoist para ``current_user`` y devuelve el informe.
+
+    Idempotente (R2): si ya se procesó una petición con la misma clave (cabecera
+    ``Idempotency-Key`` o hash de contenido del cuerpo, namespaced por usuario), no se
+    vuelve a escribir nada y se devuelve ``already_imported=True`` con contadores en cero.
+    El marcador reutiliza ``ProcessedSyncCommand`` (misma PK única, ya migrada).
+    """
     if len(raw_body) > MAX_PAYLOAD_BYTES:
         raise PayloadTooLargeError(
             f"El payload excede el tamaño máximo de {MAX_PAYLOAD_BYTES} bytes."
@@ -593,14 +698,53 @@ async def run_todoist_import(
 
     _validate_limits(payload)
 
+    import_key = _import_idempotency_key(raw_body, current_user, idempotency_key)
+    existing = await session.get(ProcessedSyncCommand, import_key)
+    if existing is not None:
+        # Reintento idempotente: no se reescribe el grafo (evita duplicados ROOMS 'X'/'X (2)').
+        logger.info(
+            "Todoist import: reintento idempotente ignorado (user=%s, key=%s).",
+            current_user.id,
+            import_key,
+        )
+        return TodoistImportReport(already_imported=True)
+
     state = _State(session=session, current_user=current_user)
     _report_unsupported_features(payload, state)
+    _report_duplicate_ids(payload, state)
     await _create_rooms(payload, state)
     await _create_tags(payload, state)
     await _create_tasks(payload, state)
     await _create_subtasks(payload, state)
 
+    # Marca de idempotencia atómica con el lote: se persiste en la misma transacción que el
+    # grafo importado, de modo que un reintento nunca reescribe datos ya aplicados.
+    session.add(
+        ProcessedSyncCommand(
+            command_uuid=import_key,
+            user_id=current_user.id,
+            command_type="todoist_import",
+            status="ok",
+        )
+    )
+
     await session.commit()
+
+    logger.info(
+        "Todoist import completado (user=%s): rooms=%d tasks=%d subtasks=%d tags=%d "
+        "task_tags=%d skipped=%d failed=%d renamed=%d truncated=%d clamped_due_dates=%d.",
+        current_user.id,
+        state.report.rooms_created,
+        state.report.tasks_created,
+        state.report.subtasks_created,
+        state.report.tags_created,
+        state.report.task_tags_created,
+        state.report.skipped,
+        state.report.failed,
+        state.report.renamed,
+        state.report.truncated,
+        state.report.clamped_due_dates,
+    )
 
     # Efecto secundario acotado: UN evento agregado por sala y sin gamificación por lote.
     for room_id in state.affected_rooms:

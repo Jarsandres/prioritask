@@ -18,15 +18,28 @@ from app.services.todoist_import import (
 
 @pytest.mark.parametrize(
     ("priority", "expected"),
-    [(1, 1.0), (2, 2.0), (3, 3.0), (4, 4.0), (0, 1.0), (-5, 1.0), (5, 4.0), (99, 4.0)],
+    [(1, 2.0), (2, 3.0), (3, 4.0), (4, 5.0), (0, 2.0), (-5, 2.0), (5, 5.0), (99, 5.0)],
 )
-def test_priority_to_peso_identity_mapping(priority, expected):
+def test_priority_to_peso_maps_to_canonical_scale(priority, expected):
+    """Escala canónica 1..5 con P1=5: Todoist 4→5, 3→4, 2→3, 1→2."""
     assert priority_to_peso(priority) == expected
 
 
+def test_priority_to_peso_is_monotonic_and_collision_free():
+    values = [priority_to_peso(p) for p in (1, 2, 3, 4)]
+    assert values == [2.0, 3.0, 4.0, 5.0]
+    assert values == sorted(values)
+    assert len(set(values)) == len(values)
+
+
+def test_priority_to_peso_sends_todoist_p1_to_top_peso():
+    """Una tarea urgente de Todoist (4) debe caer en el tope canónico (P1 = peso 5)."""
+    assert priority_to_peso(4) == 5.0
+
+
 @pytest.mark.parametrize("bad", [None, "abc", object()])
-def test_priority_to_peso_invalid_defaults_to_one(bad):
-    assert priority_to_peso(bad) == 1.0
+def test_priority_to_peso_invalid_defaults_to_lowest(bad):
+    assert priority_to_peso(bad) == 2.0
 
 
 def test_normalize_title_strips_and_rejects_short():
