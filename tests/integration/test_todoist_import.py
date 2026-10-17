@@ -1,14 +1,130 @@
 """Tests de integración del endpoint de importación de Todoist."""
 
-from uuid import UUID
+import asyncio
+import json
+from uuid import UUID, uuid4
 
 import pytest
-from sqlmodel import select
+import pytest_asyncio
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel import SQLModel, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models import Room, Subtask, Tag, Task, TaskTag
+from app.models import (
+    ProcessedSyncCommand,
+    Room,
+    Subtask,
+    Tag,
+    Task,
+    TaskTag,
+    Usuario,
+)
 from tests.utils import create_user_and_token
 
 ENDPOINT = "/api/v1/import/todoist"
+
+
+# Payload mínimo que EJERCITA las cinco tablas del grafo (sala, tarea, subtarea,
+# etiqueta y vínculo tarea-etiqueta) para poder verificar la atomicidad completa.
+_ATOMIC_PAYLOAD = {
+    "projects": [{"id": "P1", "name": "Sala atomica"}],
+    "labels": [{"id": "L1", "name": "integridad"}],
+    "items": [
+        {
+            "id": "I1",
+            "project_id": "P1",
+            "content": "Tarea atomica",
+            "labels": ["integridad"],
+        },
+        {
+            "id": "I2",
+            "project_id": "P1",
+            "content": "Subtarea atomica",
+            "parent_id": "I1",
+        },
+    ],
+}
+
+
+def _atomic_payload_bytes() -> bytes:
+    return json.dumps(_ATOMIC_PAYLOAD, separators=(",", ":")).encode("utf-8")
+
+
+@pytest_asyncio.fixture
+async def file_import_db(tmp_path):
+    """Engine SQLite **de fichero** con la misma configuración que producción.
+
+    El defecto de atomicidad (``RELEASE SAVEPOINT`` ⇒ COMMIT implícito) no se reproduce
+    con la BD de test en memoria compartida por ``StaticPool``: hace falta una conexión
+    real a fichero, que es donde el gate lo detectó.
+    """
+    from app.db.session import get_engine_kwargs
+
+    db_path = tmp_path / "todoist-import.db"
+    url = f"sqlite+aiosqlite:///{db_path.as_posix()}"
+    engine = create_async_engine(url, **get_engine_kwargs(url))
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _apply_pragmas(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
+        cursor.execute("PRAGMA journal_mode = WAL;")
+        cursor.execute("PRAGMA busy_timeout = 5000;")
+        cursor.close()
+
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as session:
+        user = Usuario(
+            id=uuid4(),
+            email=f"import-{uuid4().hex[:8]}@example.com",
+            hashed_password="not-used-in-service-tests",
+            is_active=True,
+        )
+        session.add(user)
+        await session.commit()
+
+    try:
+        yield factory, user
+    finally:
+        await engine.dispose()
+
+
+async def _import_row_counts(factory, user_id: UUID) -> dict[str, int]:
+    """Cuenta filas del grafo importado y de los marcadores de idempotencia."""
+    async with factory() as session:
+        rooms = (await session.exec(select(Room).where(Room.owner_id == user_id))).all()
+        tasks = (await session.exec(select(Task).where(Task.user_id == user_id))).all()
+        task_ids = [task.id for task in tasks]
+
+        if task_ids:
+            subtasks = (
+                await session.exec(select(Subtask).where(Subtask.task_id.in_(task_ids)))
+            ).all()
+            links = (
+                await session.exec(select(TaskTag).where(TaskTag.task_id.in_(task_ids)))
+            ).all()
+        else:
+            subtasks, links = [], []
+
+        tags = (await session.exec(select(Tag).where(Tag.user_id == user_id))).all()
+        markers = (
+            await session.exec(
+                select(ProcessedSyncCommand).where(ProcessedSyncCommand.user_id == user_id)
+            )
+        ).all()
+
+    return {
+        "rooms": len(rooms),
+        "tasks": len(tasks),
+        "subtasks": len(subtasks),
+        "tags": len(tags),
+        "task_tags": len(links),
+        "markers": len(markers),
+    }
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -550,3 +666,140 @@ async def test_invalid_json_returns_422(async_client):
 async def test_import_requires_authentication(async_client):
     resp = await async_client.post(ENDPOINT, json={})
     assert resp.status_code == 401
+
+
+# ── R2: atomicidad real (BD de fichero, sin SAVEPOINTs intermedios) ─────────────
+
+
+@pytest.mark.asyncio
+async def test_import_failure_rolls_back_entire_batch(file_import_db, monkeypatch):
+    """Un fallo en cualquier paso revierte el lote COMPLETO, incluido el marcador.
+
+    Con BD de fichero el defecto original (``RELEASE SAVEPOINT`` ⇒ COMMIT implícito)
+    persistía salas/tareas/etiquetas aunque la importación abortara después. Aquí el
+    fallo se inyecta en ``_create_subtasks``, es decir, DESPUÉS de que rooms, tags,
+    tasks y task_tags ya se hayan hecho *flush* en la transacción en curso.
+    """
+    factory, user = file_import_db
+    import app.services.todoist_import as svc
+
+    async def _boom(payload, state):  # firma idéntica a la real
+        raise RuntimeError("fallo simulado al persistir subtareas")
+
+    monkeypatch.setattr(svc, "_create_subtasks", _boom)
+
+    async with factory() as session:
+        with pytest.raises(svc.ImportPersistenceError):
+            await svc.run_todoist_import(
+                raw_body=_atomic_payload_bytes(),
+                session=session,
+                current_user=user,
+            )
+
+    counts = await _import_row_counts(factory, user.id)
+    assert counts == {
+        "rooms": 0,
+        "tasks": 0,
+        "subtasks": 0,
+        "tags": 0,
+        "task_tags": 0,
+        "markers": 0,
+    }, f"el lote dejó filas huérfanas: {counts}"
+
+
+@pytest.mark.asyncio
+async def test_retry_after_failure_imports_cleanly(file_import_db, monkeypatch):
+    """Tras revertir el lote, un reintento sin el fallo importa limpio y sin sufijos."""
+    factory, user = file_import_db
+    import app.services.todoist_import as svc
+
+    original = svc._create_subtasks
+
+    async def _boom(payload, state):
+        raise RuntimeError("fallo simulado al persistir subtareas")
+
+    monkeypatch.setattr(svc, "_create_subtasks", _boom)
+
+    async with factory() as session:
+        with pytest.raises(svc.ImportPersistenceError):
+            await svc.run_todoist_import(
+                raw_body=_atomic_payload_bytes(),
+                session=session,
+                current_user=user,
+            )
+
+    # Se retira el parche: el reintento debe encontrar la base de datos virgen.
+    monkeypatch.setattr(svc, "_create_subtasks", original)
+
+    async with factory() as session:
+        report = await svc.run_todoist_import(
+            raw_body=_atomic_payload_bytes(),
+            session=session,
+            current_user=user,
+        )
+
+    assert report.already_imported is False
+    assert report.rooms_created == 1
+    assert report.tasks_created == 1
+    assert report.subtasks_created == 1
+    assert report.tags_created == 1
+    assert report.task_tags_created == 1
+
+    counts = await _import_row_counts(factory, user.id)
+    assert counts == {
+        "rooms": 1,
+        "tasks": 1,
+        "subtasks": 1,
+        "tags": 1,
+        "task_tags": 1,
+        "markers": 1,
+    }, f"el grafo reintentado quedó incompleto: {counts}"
+
+    # El reintento no genera duplicados con sufijo " (2)" (no encontró filas previas).
+    async with factory() as session:
+        rooms = (await session.exec(select(Room).where(Room.owner_id == user.id))).all()
+        tasks = (await session.exec(select(Task).where(Task.user_id == user.id))).all()
+
+    assert [room.nombre for room in rooms] == ["Sala atomica"]
+    assert [task.titulo for task in tasks] == ["Tarea atomica"]
+    assert not any(name.endswith(" (2)") for name in (room.nombre for room in rooms))
+    assert not any(title.endswith(" (2)") for title in (task.titulo for task in tasks))
+
+
+@pytest.mark.asyncio
+async def test_concurrent_duplicate_submit_returns_already_imported(file_import_db):
+    """Dos envíos simultáneos con la misma clave: uno importa, el otro es idempotente.
+
+    Nunca debe propagarse una excepción (500): el perdedor de la carrera revierte su
+    lote y responde ``already_imported=True``.
+    """
+    factory, user = file_import_db
+    import app.services.todoist_import as svc
+
+    async def _submit():
+        async with factory() as session:
+            return await svc.run_todoist_import(
+                raw_body=_atomic_payload_bytes(),
+                session=session,
+                current_user=user,
+                idempotency_key="doble-envio-concurrente",
+            )
+
+    results = await asyncio.gather(_submit(), _submit(), return_exceptions=True)
+
+    errors = [r for r in results if isinstance(r, BaseException)]
+    assert not errors, f"un envío concurrente falló en vez de ser idempotente: {errors!r}"
+
+    already = [r.already_imported for r in results]
+    assert already.count(True) == 1, f"se esperaba exactamente un reintento idempotente: {already}"
+    assert already.count(False) == 1
+
+    counts = await _import_row_counts(factory, user.id)
+    assert counts == {
+        "rooms": 1,
+        "tasks": 1,
+        "subtasks": 1,
+        "tags": 1,
+        "task_tags": 1,
+        "markers": 1,
+    }, f"el doble envío duplicó el grafo: {counts}"
