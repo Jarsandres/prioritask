@@ -57,10 +57,14 @@ describe("TaskBulkActionsBar — Barra Flotante de Acciones en Lote y Pospuesto 
     fireEvent.click(screen.getByTestId("bulk-complete-btn"));
     expect(onBulkComplete).toHaveBeenCalledTimes(1);
 
-    // Cambiar prioridad en lote -> P1 (peso 4)
+    // Cambiar prioridad en lote -> P1 (peso 5) y P2 (peso 4), sin colapsarlos
     fireEvent.click(screen.getByTestId("bulk-priority-trigger"));
     fireEvent.click(screen.getByTestId("bulk-priority-p1"));
-    expect(onBulkPriority).toHaveBeenCalledWith(4, "p1");
+    expect(onBulkPriority).toHaveBeenCalledWith(5, "p1");
+
+    fireEvent.click(screen.getByTestId("bulk-priority-trigger"));
+    fireEvent.click(screen.getByTestId("bulk-priority-p2"));
+    expect(onBulkPriority).toHaveBeenCalledWith(4, "p2");
 
     // Posponer en lote -> +30 minutos y Mañana 09:00
     fireEvent.click(screen.getByTestId("bulk-snooze-trigger"));

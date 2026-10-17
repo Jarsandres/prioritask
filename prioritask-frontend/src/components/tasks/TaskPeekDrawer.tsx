@@ -20,6 +20,7 @@ import {
   toggleTaskKudo,
   type KudosEmoji,
 } from "../../utils/kudosStore";
+import { isHighPriority } from "../../utils/priorityScale";
 import {
   LuX,
   LuCheck,
@@ -203,8 +204,9 @@ export const TaskPeekDrawer: React.FC<TaskPeekDrawerProps> = ({
   }
 
   const isDone = estado === "DONE";
+  // Bucket visual intencional: P1|P2 comparten el anillo de alta prioridad.
   const priorityRingClass =
-    peso >= 4
+    isHighPriority(peso)
       ? "priority-ring-p1"
       : peso === 3
         ? "priority-ring-p2"

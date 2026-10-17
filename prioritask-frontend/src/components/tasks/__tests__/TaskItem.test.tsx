@@ -17,21 +17,40 @@ const baseTask: Task = {
 };
 
 describe("TaskItem — Accesibilidad WAI-ARIA, Prioridades Todoist P1-P4 y Atajos de Teclado", () => {
-  it("renderiza semántica accesible, badge de prioridad P1, anillo de prioridad y subtareas", () => {
+  it("renderiza semántica accesible, badge de prioridad P2 para peso 4, anillo de prioridad y subtareas", () => {
     render(<TaskItem task={baseTask} role="listitem" />);
 
     const item = screen.getByTestId("task-item-task-101");
     expect(item).toHaveAttribute("role", "listitem");
-    expect(item).toHaveAttribute("data-priority", "p1");
+    expect(item).toHaveAttribute("data-priority", "p2");
 
     const checkbox = screen.getByTestId("task-item-checkbox-task-101");
     expect(checkbox).toHaveAttribute("role", "checkbox");
     expect(checkbox).toHaveAttribute("aria-checked", "false");
-    expect(checkbox.className).toContain("priority-ring-p1");
+    expect(checkbox.className).toContain("priority-ring-p2");
 
-    expect(screen.getByTestId("task-item-p-chip-task-101")).toHaveTextContent("P1");
+    expect(screen.getByTestId("task-item-p-chip-task-101")).toHaveTextContent("P2");
     expect(screen.getByText("1/3")).toBeInTheDocument();
     expect(screen.getByText("Prioridad Alta")).toBeInTheDocument();
+  });
+
+  it("etiqueta peso 5 como P1 (Urgente) y no lo colapsa con P2", () => {
+    render(
+      <TaskItem
+        task={{ ...baseTask, id: "task-urgent", peso: 5 }}
+        role="listitem"
+      />
+    );
+
+    const item = screen.getByTestId("task-item-task-urgent");
+    expect(item).toHaveAttribute("data-priority", "p1");
+    expect(
+      screen.getByTestId("task-item-checkbox-task-urgent").className
+    ).toContain("priority-ring-p1");
+    expect(
+      screen.getByTestId("task-item-p-chip-task-urgent")
+    ).toHaveTextContent("P1");
+    expect(screen.getByText("Prioridad Urgente")).toBeInTheDocument();
   });
 
   it("aplica correctamente rovingTabIndex (0 cuando está enfocado, -1 cuando no)", () => {
@@ -84,17 +103,18 @@ describe("TaskItem — Accesibilidad WAI-ARIA, Prioridades Todoist P1-P4 y Atajo
     fireEvent.keyDown(item, { key: "Delete" });
     expect(onDelete).toHaveBeenCalledWith(baseTask);
 
-    // Teclas '2', '3', '4' -> cambio instantáneo de prioridad P2 (peso 3), P3 (peso 2), P4 (peso 1)
-    fireEvent.keyDown(item, { key: "2" });
-    expect(onPriorityChange).toHaveBeenCalledWith("task-101", 3, "p2");
+    // '1' -> P1 (peso 5) desde P2 (peso 4)
+    fireEvent.keyDown(item, { key: "1" });
+    expect(onPriorityChange).toHaveBeenCalledWith("task-101", 5, "p1");
 
+    // '2' cuando ya es P2 (peso 4) no dispara mutación redundante
+    onPriorityChange.mockClear();
+    fireEvent.keyDown(item, { key: "2" });
+    expect(onPriorityChange).not.toHaveBeenCalled();
+
+    // '4' -> P4 (peso 1)
     fireEvent.keyDown(item, { key: "4" });
     expect(onPriorityChange).toHaveBeenCalledWith("task-101", 1, "p4");
-
-    // Pulsar '1' cuando ya es P1 (peso 4) no dispara mutación redundante
-    onPriorityChange.mockClear();
-    fireEvent.keyDown(item, { key: "1" });
-    expect(onPriorityChange).not.toHaveBeenCalled();
 
     // Flechas -> navegación espacial roving tabindex
     fireEvent.keyDown(item, { key: "ArrowDown" });

@@ -33,17 +33,17 @@ const sampleTasks: Task[] = [
 ];
 
 describe("useTasksState — Normalized Store, Optimistic Mutations & UI Decoupling", () => {
-  it("mapea correctamente entre prioridades estilo Todoist (p1..p4) y peso Prioritask (4..1)", () => {
-    expect(pesoToPriorityLevel(4)).toBe("p1");
+  it("mapea la escala canónica (P1=5, P2=4, P3=3, P4=1..2) sin colapsar P1 y P2", () => {
     expect(pesoToPriorityLevel(5)).toBe("p1");
-    expect(pesoToPriorityLevel(3)).toBe("p2");
-    expect(pesoToPriorityLevel(2)).toBe("p3");
+    expect(pesoToPriorityLevel(4)).toBe("p2");
+    expect(pesoToPriorityLevel(3)).toBe("p3");
+    expect(pesoToPriorityLevel(2)).toBe("p4");
     expect(pesoToPriorityLevel(1)).toBe("p4");
     expect(pesoToPriorityLevel(0)).toBe("p4");
 
-    expect(priorityLevelToPeso("p1")).toBe(4);
-    expect(priorityLevelToPeso("p2")).toBe(3);
-    expect(priorityLevelToPeso("p3")).toBe(2);
+    expect(priorityLevelToPeso("p1")).toBe(5);
+    expect(priorityLevelToPeso("p2")).toBe(4);
+    expect(priorityLevelToPeso("p3")).toBe(3);
     expect(priorityLevelToPeso("p4")).toBe(1);
   });
 
@@ -134,7 +134,7 @@ describe("useTasksState — Normalized Store, Optimistic Mutations & UI Decoupli
     });
   });
 
-  it("actualiza prioridad con setPriorityOptimistic (clamping 1..4) y restaura en caso de error", async () => {
+  it("actualiza prioridad con setPriorityOptimistic (clamping 1..5) y restaura en caso de error", async () => {
     const { result } = renderHook(() =>
       useTasksState({ initialTasks: sampleTasks })
     );
@@ -142,13 +142,13 @@ describe("useTasksState — Normalized Store, Optimistic Mutations & UI Decoupli
     await act(async () => {
       await result.current.setPriorityOptimistic("t-3", "p1", async () => {});
     });
-    expect(result.current.byId["t-3"].peso).toBe(4);
+    expect(result.current.byId["t-3"].peso).toBe(5);
 
     // Clamping de valores fuera de rango
     await act(async () => {
       await result.current.setPriorityOptimistic("t-3", 99, async () => {});
     });
-    expect(result.current.byId["t-3"].peso).toBe(4);
+    expect(result.current.byId["t-3"].peso).toBe(5);
 
     // Rollback en caso de error
     await act(async () => {
@@ -156,7 +156,7 @@ describe("useTasksState — Normalized Store, Optimistic Mutations & UI Decoupli
         throw new Error("Sin conexión");
       });
     });
-    expect(result.current.byId["t-3"].peso).toBe(4);
+    expect(result.current.byId["t-3"].peso).toBe(5);
   });
 
   it("elimina con deleteTaskOptimistic y restaura en su índice exacto si la mutación falla", async () => {

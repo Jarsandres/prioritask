@@ -1,5 +1,12 @@
 import type { Task, TaskStatus } from "../types/task";
 import type { QuickAssignee } from "./kudosStore";
+import {
+  PRIORITY_SCALE,
+  priorityEntryForWeight,
+  prioritySectionDescription,
+  prioritySectionLabel,
+  type PriorityCode,
+} from "./priorityScale";
 
 export type TaskGroupByMode =
   | "none"
@@ -600,59 +607,25 @@ export function groupAndSortTasks(
   }
 
   if (groupBy === "priority") {
-    const p1: Task[] = [];
-    const p2: Task[] = [];
-    const p3: Task[] = [];
-    const p4: Task[] = [];
+    const buckets: Record<PriorityCode, Task[]> = {
+      p1: [],
+      p2: [],
+      p3: [],
+      p4: [],
+    };
 
     for (const t of tasks) {
-      if (t.peso >= 4) p1.push(t);
-      else if (t.peso === 3) p2.push(t);
-      else if (t.peso === 2) p3.push(t);
-      else p4.push(t);
+      buckets[priorityEntryForWeight(t.peso).code].push(t);
     }
 
-    const rawSections: Array<{
-      id: string;
-      label: string;
-      badgeColorClass: string;
-      bucket: Task[];
-      peso: number;
-      descriptionLabel: string;
-    }> = [
-      {
-        id: "priority-p1",
-        label: "P1 — Urgente",
-        badgeColorClass: "priority-ring-p1",
-        bucket: p1,
-        peso: 4,
-        descriptionLabel: "Prioridad P1 (Urgente)",
-      },
-      {
-        id: "priority-p2",
-        label: "P2 — Alta",
-        badgeColorClass: "priority-ring-p2",
-        bucket: p2,
-        peso: 3,
-        descriptionLabel: "Prioridad P2 (Alta)",
-      },
-      {
-        id: "priority-p3",
-        label: "P3 — Media",
-        badgeColorClass: "priority-ring-p3",
-        bucket: p3,
-        peso: 2,
-        descriptionLabel: "Prioridad P3 (Media)",
-      },
-      {
-        id: "priority-p4",
-        label: "P4 — Baja",
-        badgeColorClass: "priority-ring-p4",
-        bucket: p4,
-        peso: 1,
-        descriptionLabel: "Prioridad P4 (Baja)",
-      },
-    ];
+    const rawSections = PRIORITY_SCALE.map((entry) => ({
+      id: `priority-${entry.code}`,
+      label: prioritySectionLabel(entry),
+      badgeColorClass: entry.ringClass,
+      bucket: buckets[entry.code],
+      peso: entry.weight,
+      descriptionLabel: prioritySectionDescription(entry),
+    }));
 
     return rawSections.map((sec) => {
       const sorted = sortBucket(sec.bucket);

@@ -21,6 +21,7 @@ import {
   type QuickAssignee,
   type KudosEmoji,
 } from "../utils/kudosStore";
+import { isHighPriority } from "../utils/priorityScale";
 import type { Task, Room } from "../types/task";
 import {
   LuPlus,
@@ -357,8 +358,9 @@ const Dashboard = () => {
           <div className="d-flex flex-column gap-2" data-testid="dashboard-today-focus">
             {focusTasks.map((t) => {
               const peso = t.peso ?? 2;
+              // Bucket visual intencional: P1|P2 comparten el anillo de alta prioridad.
               const ringClass =
-                peso >= 4
+                isHighPriority(peso)
                   ? "priority-ring-p1"
                   : peso === 3
                     ? "priority-ring-p2"

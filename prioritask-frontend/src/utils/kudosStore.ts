@@ -3,6 +3,8 @@
 // Fase 4 UI Roadmap: Colaboración Doméstica Interactiva
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { isHighPriority } from "./priorityScale";
+
 export type KudosEmoji = "👏" | "🔥" | "❤️";
 
 export interface KudosOption {
@@ -166,8 +168,8 @@ export function toggleTaskKudo(
   };
   const option = KUDOS_OPTIONS.find((o) => o.emoji === emoji) || KUDOS_OPTIONS[0];
 
-  // Tareas pesadas (P1/P2 -> peso >= 4) o con evidencia fotográfica otorgan micro-bono extra
-  const multiplier = taskPeso >= 4 || hasEvidence ? 2 : 1;
+  // Bucket de alta prioridad (P1|P2) o evidencia fotográfica: micro-bono extra.
+  const multiplier = isHighPriority(taskPeso) || hasEvidence ? 2 : 1;
   const pointValue = option.basePoints * multiplier;
 
   const alreadyReacted = current.myReactions.includes(emoji);
